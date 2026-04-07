@@ -1,0 +1,51 @@
+# Local prepush gate for the LaunchKit repo.
+#
+# Lefthook installs a `.git/hooks/pre-push` shim during `npm
+# install` (via the `prepare` script in `package.json`). The shim
+# runs the chain below before any push is allowed to leave the
+# developer's machine.
+#
+# The chain mirrors `.github/workflows/ci.yml` exactly, so a green
+# local push is the same set of checks CI re-runs on the server.
+# Two layers, same rules.
+#
+# Why prepush and not precommit
+# -----------------------------
+#
+# - Precommit hooks fire on every commit. Running typecheck + lint
+#   + build + tests on every commit is too slow for the way most
+#   commits in this repo work (rapid iteration, frequent WIP
+#   commits during a refactor).
+# - Prepush fires once per push, which matches the natural unit of
+#   "code about to be visible to the team / CI." Failing here is
+#   the right time to fail.
+#
+# Skipping the hook
+# -----------------
+#
+# Don't. The CI workflow will run the same chain and reject the
+# push at the server anyway. If you have a one-off reason
+# (debugging a hook misconfiguration, for example), use:
+#
+#     LEFTHOOK=0 git push
+#
+# but expect to fix the underlying issue before the PR can land.
+
+pre-push:
+  # `parallel: false` so a typecheck failure short-circuits the
+  # rest of the chain. There is no value in running the lint and
+  # tests when types are broken — the resulting noise drowns the
+  # original error.
+  parallel: false
+  jobs:
+    - name: typecheck
+      run: npm run typecheck
+
+    - name: lint
+      run: npm run lint
+
+    - name: build
+      run: npm run build
+
+    - name: test
+      run: npm test

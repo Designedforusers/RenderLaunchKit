@@ -1,0 +1,111 @@
+# On-demand Claude code review for pull requests.
+#
+# This is the cloud half of LaunchKit's review workflow. The local
+# half — running the `code-reviewer` Claude Code subagent against
+# the diff before pushing — is the primary line of defense and
+# stays mandatory for every PR. See `CLAUDE.md` for the full
+# review philosophy.
+#
+# How to invoke
+# -------------
+#
+# Open a PR. Comment `@claude review` (or `@claude please review
+# this PR`) anywhere in the conversation. The action picks up the
+# comment, reads the PR diff, and posts a review back as a PR
+# comment. The action only fires on comments that contain the
+# literal string `@claude review`, not on every `@claude` mention,
+# so casual references in conversation do not burn API credits.
+#
+# Why "Option B" (on-demand) and not "Option A" (review every PR)
+# ----------------------------------------------------------------
+#
+# - PRs in this repo are already reviewed locally by the
+#   `code-reviewer` subagent before push (see CLAUDE.md). The
+#   cloud reviewer is a second opinion, not the only opinion.
+# - Auto-reviewing every PR doubles the LLM cost without adding
+#   information for PRs the local reviewer already cleared.
+# - On-demand keeps the human in the driver's seat: the reviewer
+#   runs when the author wants a fresh look, e.g. on a tricky
+#   refactor or when local review surfaced a gnarly issue worth
+#   sanity-checking.
+#
+# Required secrets
+# ----------------
+#
+# - `ANTHROPIC_API_KEY` — set under Settings → Secrets and
+#   variables → Actions. The cheapest setup path is `claude
+#   /install-github-app` from a local Claude Code session, which
+#   walks through the GitHub App install and the secret config
+#   in one step.
+
+name: Claude Review (on-demand)
+
+# Triggered exclusively by `issue_comment` events. Inline review-thread
+# comments (the `pull_request_review_comment` event) are intentionally
+# *not* a trigger: GitHub routes those events through a different
+# payload shape that does not include `github.event.issue`, so the
+# guard below would silently never fire on them. The simpler surface
+# — conversation-tab comments only — is also the surface every PR
+# author already uses, so the loss is theoretical.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    name: Review on @claude mention
+    runs-on: ubuntu-latest
+    # Only run on PR comments (not issue comments) that explicitly
+    # contain the `@claude review` trigger phrase. The double check
+    # — `issue.pull_request` truthy AND comment body contains the
+    # phrase — keeps the action from firing on every drive-by
+    # `@claude` mention or on plain issue threads. Note: `contains()`
+    # in GitHub Actions expressions is case-sensitive, so the trigger
+    # phrase must be lowercase `@claude review`.
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '@claude review')
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Pull enough history that the action can compute the
+          # diff against the PR base.
+          fetch-depth: 0
+
+      - name: Run Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are reviewing a pull request on the LaunchKit repo
+            (a public Render showcase of an LLM-driven pipeline).
+            The local `code-reviewer` Claude Code subagent has
+            already reviewed this PR before push, so a second
+            opinion should focus on:
+
+              1. Bugs the local reviewer might have missed —
+                 especially async race conditions, error-handling
+                 holes, and silent data loss paths.
+              2. Type-system soundness — the repo runs with all
+                 four strict TS flags on, so any new `any`,
+                 unsafe member access, or non-null assertion is
+                 a regression worth flagging.
+              3. Boundary validation — every external input
+                 (request body, jsonb column, LLM response, env
+                 var) should parse through a Zod schema. Flag
+                 any new boundary that skips validation.
+              4. CLAUDE.md alignment — the file documents the
+                 conventions this codebase follows. Call out any
+                 drift.
+
+            Be specific. Quote `file:line` for every issue. Lead
+            with blocking issues, then non-blocking nits, then a
+            brief "looks good" list.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

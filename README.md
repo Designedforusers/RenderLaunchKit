@@ -178,8 +178,8 @@ docker compose up -d
 cp .env.example .env
 # Edit .env with your API keys
 
-# Initialize the database
-psql $DATABASE_URL < migrations/0001_init.sql
+# Initialize the database — applies every Drizzle migration in order
+npm run db:push
 
 # Seed with demo data
 npm run seed

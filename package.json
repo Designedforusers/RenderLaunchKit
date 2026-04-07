@@ -29,7 +29,8 @@
     "test:agent": "npm run build && node --test --test-force-exit tests/agent-sdk-runner.test.mjs",
     "test": "npm run build && node --test --test-force-exit tests/*.test.mjs",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "tsc -b && tsc --noEmit -p apps/dashboard/tsconfig.json"
+    "typecheck": "tsc -b && tsc --noEmit -p apps/dashboard/tsconfig.json",
+    "prepare": "lefthook install || true"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -39,17 +40,18 @@
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "lefthook": "^1.13.6",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.18.0"
   },
   "dependencies": {
+    "@types/pg": "^8.11.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.0",
-    "pg": "^8.13.0",
-    "@types/pg": "^8.11.0"
+    "pg": "^8.13.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }

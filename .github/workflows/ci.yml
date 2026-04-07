@@ -1,0 +1,85 @@
+# Continuous integration for the LaunchKit monorepo.
+#
+# Runs on every push to `main` and on every pull request that targets
+# `main`. The job mirrors the local prepush chain (`lefthook.yml`):
+# typecheck → lint → build → tests. The build is part of CI rather
+# than an artifact step because the smoke tests in `tests/` consume
+# the worker `dist/` output and would otherwise have nothing to
+# exercise.
+#
+# Why this exists, in two sentences: the strict TypeScript flags and
+# the `--max-warnings=0` lint enforcement only matter if a regression
+# is caught before it lands on `main`. CI runs the same chain a
+# developer runs locally, so a green PR badge means the merge is
+# guaranteed to leave `main` in a typecheck/lint/build/test-clean
+# state.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same PR when a new commit lands.
+# We deliberately do *not* cancel runs on `main` — a sequential
+# merge to `main` should never abort the previous merge's
+# verification, even if a third merge lands seconds later. A
+# cancelled green run on `main` would look like a flaky CI setup,
+# which is exactly the wrong signal for a public showcase repo.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: typecheck · lint · build · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Single-commit fetch is enough — none of the steps below
+          # need history.
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Render runs the services on Node 22 LTS. CI mirrors that
+          # so a passing build here is the same Node the production
+          # services boot under.
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # `tsc -b` walks the workspace project references and emits
+        # the composite build artifacts that the lint and test steps
+        # depend on. The dashboard `tsc --noEmit -p` runs second
+        # because it does not participate in the solution build.
+        run: npm run typecheck
+
+      - name: Lint
+        # `eslint . --max-warnings=0` — every rule is at error
+        # severity (see PR #6) and any warning fails the job.
+        run: npm run lint
+
+      - name: Build
+        # Composite tsc for web/worker/cron + Vite for the dashboard
+        # SPA. The dashboard build also catches Tailwind / asset
+        # resolution issues that the typecheck would not see.
+        run: npm run build
+
+      - name: Test
+        # The smoke tests import compiled worker output, which is
+        # why this step runs after `build`. They also rely on
+        # `process.env.DATABASE_URL` and `REDIS_URL` having a value
+        # before the strict env parser fires; the test file sets
+        # both via `??=`, so the CI env can be left empty.
+        run: npm test
