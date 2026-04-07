@@ -1,0 +1,40 @@
+import { checkRepos } from './check-repos.js';
+import { aggregateLearnings } from './learn.js';
+import { cleanup } from './cleanup.js';
+
+async function main() {
+  console.log(`
+╔══════════════════════════════════════════╗
+║  LaunchKit Cron Service                  ║
+║  Schedule: every 6 hours                 ║
+║  Env: ${(process.env.NODE_ENV || 'development').padEnd(34)}║
+╚══════════════════════════════════════════╝
+  `);
+
+  const startTime = Date.now();
+
+  try {
+    // Run all cron tasks sequentially
+    console.log('[Cron] Starting scheduled tasks...');
+
+    // 1. Check repos for new activity
+    await checkRepos();
+
+    // 2. Aggregate learning insights
+    await aggregateLearnings();
+
+    // 3. Clean up stale data
+    await cleanup();
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[Cron] All tasks complete in ${duration}s`);
+  } catch (err) {
+    console.error('[Cron] Fatal error:', err);
+    process.exit(1);
+  }
+
+  // Exit cleanly — Render cron jobs should terminate
+  process.exit(0);
+}
+
+main();

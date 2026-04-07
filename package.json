@@ -1,0 +1,47 @@
+{
+  "name": "launchkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-Powered Go-To-Market Teammate — paste a GitHub repo, get a full launch kit",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build:shared && npm run build:apps",
+    "build:shared": "npm run build -w packages/shared",
+    "build:apps": "npm run build -w apps/web && npm run build -w apps/worker && npm run build -w apps/cron && npm run build -w apps/dashboard",
+    "dev": "concurrently -n web,worker,cron,dash -c blue,green,yellow,magenta \"npm run dev -w apps/web\" \"npm run dev -w apps/worker\" \"npm run dev -w apps/cron\" \"npm run dev -w apps/dashboard\"",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:worker": "npm run dev -w apps/worker",
+    "dev:cron": "npm run dev -w apps/cron",
+    "dev:dashboard": "npm run dev -w apps/dashboard",
+    "start:web": "node apps/web/dist/index.js",
+    "start:worker": "node apps/worker/dist/index.js",
+    "start:cron": "node apps/cron/dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "seed": "tsx seed.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.base.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "drizzle-kit": "^0.30.0",
+    "eslint": "^9.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.0",
+    "pg": "^8.13.0",
+    "@types/pg": "^8.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: launchkit
+      POSTGRES_USER: launchkit
+      POSTGRES_PASSWORD: launchkit
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    command: redis-server --maxmemory 100mb --maxmemory-policy allkeys-lru
+
+volumes:
+  pgdata:
