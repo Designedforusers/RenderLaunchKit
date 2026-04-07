@@ -69,6 +69,10 @@ jobs:
     permissions:
       pull-requests: write
       contents: read
+    # Same Node 24 opt-in as `ci.yml` — see the comment there for the
+    # rationale.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout
