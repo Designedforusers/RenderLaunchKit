@@ -1,0 +1,259 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  // Renovate config for the LaunchKit monorepo.
+  //
+  // Why this exists, in two sentences: an unmaintained-looking
+  // public showcase repo is a worse signal to the Render team than
+  // a slightly out-of-date one, and CVE drift is a real risk on a
+  // codebase with ~600 transitive dependencies. Renovate keeps the
+  // lockfile fresh and surfaces security advisories ahead of time
+  // without me having to remember to run `npm outdated`.
+  //
+  // The CI workflow added in #7 runs typecheck → lint → build →
+  // test on every PR, including Renovate PRs, so a broken update
+  // fails CI before it gets a green checkmark. That's the safety
+  // net that makes auto-merging patch updates reasonable.
+  //
+  // This file is `renovate.json5`, not `renovate.json`, so the
+  // comments below are first-class — Renovate's validator parses
+  // them as JSON5 with no warnings. The comments are intentional
+  // and load-bearing for human reviewers; if you remove them the
+  // rules become a wall of opaque package globs.
+
+  "extends": [
+    // The modern recommended preset (replaces the older
+    // `config:base`). Bundles `:dependencyDashboard`,
+    // `:semanticPrefixFixDepsChoreOthers`, `group:monorepos`,
+    // `group:recommended`, and a few other sensible defaults.
+    "config:recommended"
+  ],
+
+  // Pacific time so the schedule strings below match working hours
+  // for the maintainer.
+  "timezone": "America/Los_Angeles",
+
+  // Default schedule for everything that does not override it: only
+  // run Monday through Friday, before the workday starts. Saturday
+  // morning should not be twelve dependency-update emails.
+  "schedule": ["before 6am every weekday"],
+
+  // Tag every Renovate PR so they can be filtered in the PRs tab.
+  "labels": ["dependencies"],
+
+  // Cap the number of open Renovate PRs at any given moment. The
+  // dependency dashboard issue tracks the rest in a single comment,
+  // so nothing gets lost.
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+
+  // Bump the version range in `package.json` (not just the lockfile)
+  // so the resolved tree is reproducible across machines.
+  "rangeStrategy": "bump",
+
+  // Use the same `chore(deps): …` style as the rest of the repo's
+  // commit history. The three semantic-commit fields together
+  // build `chore(deps): update <package> to <version>` from
+  // Renovate's own formatter — do not also set
+  // `commitMessagePrefix` here, that would prepend a literal
+  // `chore(deps):` on top of the already-formatted message and
+  // produce `chore(deps): chore(deps): update …`.
+  "commitMessageAction": "update",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+
+  "packageRules": [
+    // ── Auto-merge: patch updates only ─────────────────────────────
+    //
+    // Patch updates from semver-respecting dependencies are
+    // auto-merged after CI is green. Minor and major still require
+    // human review because npm semver discipline is uneven across
+    // the ecosystem and a "minor" can quietly ship a behavior
+    // change that the typecheck won't catch.
+    {
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "rebase"
+    },
+
+    // ── Major updates: dashboard approval required ──────────────────
+    //
+    // Major updates land behind a manual checkbox on the
+    // dependency dashboard issue. This keeps the PR queue tidy and
+    // forces a deliberate "yes, I want to take this upgrade now"
+    // before the PR is opened.
+    {
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+
+    // ── Group: ESLint stack ────────────────────────────────────────
+    //
+    // The typescript-eslint, eslint-plugin-react, and core eslint
+    // packages release together and almost always need to move in
+    // lockstep. `globals` ships as part of the same release train
+    // (the flat config consumes it directly) so it lives in this
+    // group too. One PR a week, not seven.
+    {
+      "matchPackageNames": [
+        "/^eslint$/",
+        "/^@eslint\\//",
+        "/^eslint-plugin-/",
+        "/^@typescript-eslint\\//",
+        "/^typescript-eslint$/",
+        "/^globals$/"
+      ],
+      "groupName": "eslint stack",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: TypeScript + @types/node ────────────────────────────
+    //
+    // The compiler and the Node typings drive the same downstream
+    // typecheck pass; bumping one without the other is how `tsc -b`
+    // starts spitting confusing override errors.
+    {
+      "matchPackageNames": [
+        "/^typescript$/",
+        "/^@types\\/node$/"
+      ],
+      "groupName": "typescript + node types",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: Drizzle ─────────────────────────────────────────────
+    //
+    // `drizzle-orm`, `drizzle-kit`, and `drizzle-zod` must move
+    // together — `drizzle-kit` reads the schema via `drizzle-orm`
+    // and a major skew breaks the migration generator.
+    {
+      "matchPackageNames": [
+        "/^drizzle-/"
+      ],
+      "groupName": "drizzle",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: Anthropic SDKs ──────────────────────────────────────
+    //
+    // `@anthropic-ai/sdk` and `@anthropic-ai/claude-agent-sdk`
+    // share underlying API contracts and are usually published in
+    // the same release window. Worth grouping so they land
+    // together.
+    {
+      "matchPackageNames": [
+        "/^@anthropic-ai\\//"
+      ],
+      "groupName": "anthropic sdks",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: Remotion ────────────────────────────────────────────
+    //
+    // The `remotion`, `@remotion/*`, and Remotion CLI packages all
+    // ship as one release train and refuse to load against
+    // mismatched versions of each other.
+    {
+      "matchPackageNames": [
+        "/^remotion$/",
+        "/^@remotion\\//"
+      ],
+      "groupName": "remotion",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: React + react-dom + types ───────────────────────────
+    //
+    // `react-dom` is hard-pinned to a `react` major. Always group.
+    {
+      "matchPackageNames": [
+        "/^react$/",
+        "/^react-dom$/",
+        "/^react-router-dom$/",
+        "/^@types\\/react/"
+      ],
+      "groupName": "react",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: Hono ────────────────────────────────────────────────
+    //
+    // The web service depends on `hono` and several `@hono/*`
+    // adapters. Same release train.
+    {
+      "matchPackageNames": [
+        "/^hono$/",
+        "/^@hono\\//"
+      ],
+      "groupName": "hono",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: Vite + Tailwind toolchain ───────────────────────────
+    //
+    // The dashboard build chain — Vite, the Vite plugin for React,
+    // PostCSS, Autoprefixer, and Tailwind. They are not strictly
+    // coupled, but a Tailwind config change usually wants the
+    // matching PostCSS bump in the same PR.
+    {
+      "matchPackageNames": [
+        "/^vite$/",
+        "/^@vitejs\\//",
+        "/^tailwindcss$/",
+        "/^@tailwindcss\\//",
+        "/^postcss$/",
+        "/^autoprefixer$/"
+      ],
+      "groupName": "vite + tailwind toolchain",
+      "schedule": ["before 6am on monday"]
+    },
+
+    // ── Group: BullMQ + ioredis ────────────────────────────────────
+    //
+    // BullMQ rides on top of ioredis and a major skew between the
+    // two has historically been a source of subtle queue bugs.
+    {
+      "matchPackageNames": [
+        "/^bullmq$/",
+        "/^ioredis$/"
+      ],
+      "groupName": "bullmq + ioredis",
+      "schedule": ["before 6am on monday"]
+    }
+  ],
+
+  // ── Vulnerability alerts ─────────────────────────────────────────
+  //
+  // Security advisories override every schedule and grouping rule
+  // above and ship as their own PR on Renovate's next scheduled
+  // run after Mend's advisory database picks up the CVE. The
+  // `schedule` key is intentionally OMITTED so the default
+  // `["at any time"]` applies — setting `schedule: []` would
+  // resolve to "no valid windows" and silently disable the alerts
+  // entirely, which is exactly what we don't want. The `security`
+  // label flags these PRs in the PR list so they never sit unread.
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"]
+  },
+
+  // ── Lock file maintenance ────────────────────────────────────────
+  //
+  // Even when no version bumps are pending, refresh the lockfile
+  // weekly so the resolved transitive tree does not drift from
+  // what semver would resolve today. This catches subtle issues
+  // with stale resolutions long before they become a "why does
+  // this work locally but not in CI" mystery.
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+
+  // ── Things to never touch ────────────────────────────────────────
+  //
+  // The `node` engine pin in `package.json` is set deliberately to
+  // match Render's runtime. Renovate must not auto-bump it without
+  // human review of the deploy implications.
+  "ignoreDeps": ["node"]
+}

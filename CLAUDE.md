@@ -101,7 +101,34 @@ The workflows live in `.github/workflows/`. CI uses `cancel-in-progress: true` s
 
 - **No deployment.** Render handles deploys via the Blueprint in `render.yaml`. CI is a quality gate, not a delivery pipeline.
 - **No coverage gating.** The `tests/` directory contains smoke tests that exercise the import surface and the validators that the agentic loops rely on. Real end-to-end tests against the Agent SDK live in a separate deploy-time integration check, not in this repo.
-- **No auto-merge.** PRs are merged manually after human + AI review. Branch protection requires the CI check to pass before merge is allowed; nothing automates the actual click.
+- **No auto-merge** (with one exception). Most PRs are merged manually after human + AI review. The exception is Renovate patch updates: see § Dependency updates below.
+
+### Dependency updates (Renovate)
+
+`renovate.json5` at the repo root configures the Renovate GitHub App to keep `package.json` and `package-lock.json` fresh. The file is JSON5 (not JSON) so the rules can carry inline comments — Renovate's official validator accepts it natively. The setup is **intentionally aggressive on grouping** and **intentionally conservative on auto-merge**.
+
+**Grouped families.** Updates that travel together ship as one PR:
+- ESLint stack (`eslint`, `@typescript-eslint/*`, `eslint-plugin-*`, `@eslint/*`)
+- TypeScript + `@types/node`
+- Drizzle (`drizzle-orm`, `drizzle-kit`, `drizzle-zod`)
+- Anthropic SDKs (`@anthropic-ai/*`)
+- Remotion (`remotion`, `@remotion/*`)
+- React (`react`, `react-dom`, `react-router-dom`, `@types/react*`)
+- Hono (`hono`, `@hono/*`)
+- Vite + Tailwind toolchain
+- BullMQ + ioredis
+
+Each group gets one PR per week, opened Monday before 6am Pacific.
+
+**Auto-merge policy.** Only `patch`, `pin`, and `digest` updates auto-merge after CI passes. Every `minor` and `major` update requires a human pressing the merge button. Major updates additionally need a checkbox tick on the dependency dashboard issue before the PR is even opened — the queue stays tidy and major upgrades are deliberate.
+
+**Vulnerability alerts** override every schedule and grouping rule. A published CVE on a current dependency ships its own PR as soon as Renovate's next scheduled run after Mend's advisory database picks up the CVE — typically within a polling cycle of the advisory landing in the database, not on the weekly Monday cadence — labeled `security` so it never sits unread.
+
+**Lockfile maintenance** runs weekly. Even when no versions changed, the lockfile is refreshed so the resolved transitive tree does not silently drift from what semver would resolve today.
+
+**Setup.** Install the [Renovate GitHub App](https://github.com/apps/renovate) on the repo. Renovate auto-detects `renovate.json` and starts opening PRs on its next scheduled run. There is no API key or repo secret to configure — Renovate runs on Mend's infrastructure.
+
+**The dependency dashboard** is a single GitHub issue Renovate keeps up-to-date with every pending and pending-approval update. It is the canonical view of what's outstanding, not the PR list.
 
 ---
 
