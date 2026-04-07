@@ -88,6 +88,27 @@ export const projectProgressPublisher = {
     });
   },
 
+  /**
+   * Publish a model-narration event from the agent SDK runner.
+   *
+   * Distinct from `statusUpdate` because narration is the *primary*
+   * field (the model is telling the user what it is doing right now)
+   * while the phase is metadata. Burying narration text in
+   * `statusUpdate.detail` would silently make it the secondary field
+   * and require the dashboard to know which event variant to render.
+   *
+   * The dashboard's chat UI subscribes to `status_update` events and
+   * checks for the `narration` data field to render an inline
+   * "agent is..." line under the user's last message.
+   */
+  narration(projectId: string, phase: string, text: string) {
+    return publishProjectProgressEvent(projectId, {
+      type: 'status_update',
+      phase,
+      data: { narration: text },
+    });
+  },
+
   error(projectId: string, phase: string, message: string) {
     return publishProjectProgressEvent(projectId, {
       type: 'error',

@@ -27,12 +27,17 @@ export type AgentToolDefinition = SdkMcpToolDefinition<any>;
  * Deployment shape
  * ----------------
  *
- * The Agent SDK is a wrapper around the Claude Code CLI subprocess. The
- * worker Docker image must have `@anthropic-ai/claude-code` installed
- * globally so the binary is on the PATH at runtime — see render.yaml for
- * the build hook that installs it. Each `query()` call forks the binary
- * for the duration of the run; for our workload (research runs that take
- * 10–60 seconds end-to-end) the ~200 ms subprocess startup is invisible.
+ * The Agent SDK is a wrapper around the Claude Code CLI subprocess, but
+ * the binary ships INSIDE the npm package — see
+ * `node_modules/@anthropic-ai/claude-agent-sdk/manifest.json` for the
+ * per-platform builds (darwin-arm64, darwin-x64, linux-arm64, linux-x64,
+ * Alpine variants). `npm ci` is enough to land it on the worker; no
+ * global install or extra build step is required, and `render.yaml`
+ * stays as a plain `npm ci && npm run build`. `pathToClaudeCodeExecutable`
+ * is left at its default (the bundled binary). Each `query()` call
+ * forks the binary for the duration of the run; for our workload
+ * (research runs that take 10–60 seconds end-to-end) the ~200 ms
+ * subprocess startup is invisible against the LLM latency.
  *
  * Why the Agent SDK and not `client.beta.messages.toolRunner`
  * -----------------------------------------------------------
@@ -145,7 +150,14 @@ export interface AgentRunInput<TResult> {
 
 export interface AgentRunOutput<TResult> {
   result: TResult;
-  sessionId: string;
+  /**
+   * Session ID for resumption. `undefined` if the SDK did not emit a
+   * `system.init` event during the run — surfacing the absence of a
+   * resumable session at the type level prevents callers from silently
+   * persisting an empty string and getting a confusing 404 the next
+   * time they try to resume.
+   */
+  sessionId: string | undefined;
   totalCostUsd: number;
   durationMs: number;
   turnCount: number;
@@ -189,7 +201,7 @@ export async function runAgent<TResult>(
   );
   const allowedTools = [...builtInTools, ...mcpToolNames];
 
-  let sessionId = resumeSessionId ?? '';
+  let sessionId: string | undefined = resumeSessionId;
   let finalText = '';
   let totalCostUsd = 0;
   let durationMs = 0;
@@ -236,9 +248,13 @@ export async function runAgent<TResult>(
             // Stream the model's narration into the project's SSE
             // channel so the dashboard can display it as the agent
             // works. Truncated to a reasonable length so a chatty
-            // model doesn't flood the channel.
+            // model doesn't flood the channel. Uses the dedicated
+            // `narration` helper rather than `statusUpdate` so the
+            // model text lands in `data.narration` (the primary
+            // field) instead of `data.detail` (the secondary field
+            // that's used for human context on state changes).
             if (projectId && phase) {
-              await projectProgressPublisher.statusUpdate(
+              await projectProgressPublisher.narration(
                 projectId,
                 phase,
                 block.text.length > 280
