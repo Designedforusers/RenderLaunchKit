@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { Competitor } from '@launchkit/shared';
 import { useProjectDetailData } from '../hooks/useProjectData.js';
 import { useProjectEventStream } from '../hooks/useProjectEventStream.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
@@ -135,7 +136,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                     <div>
                       <h4 className="text-xs font-mono text-surface-500 uppercase mb-2">Competitors</h4>
                       <div className="space-y-2">
-                        {project.research.competitors.map((comp: any, i: number) => (
+                        {project.research.competitors.map((comp: Competitor, i: number) => (
                           <div key={i} className="p-3 bg-surface-800/50 rounded-lg">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">{comp.name}</span>

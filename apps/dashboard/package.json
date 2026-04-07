@@ -9,11 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@launchkit/shared": "*",
     "@launchkit/video": "*",
     "@remotion/player": "^4.0.446",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.1.0"
+    "react-router-dom": "^7.1.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

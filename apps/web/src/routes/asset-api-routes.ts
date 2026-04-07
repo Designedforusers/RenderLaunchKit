@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { eq } from 'drizzle-orm';
+import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
 import {
@@ -31,21 +32,16 @@ import {
 
 const assetApiRoutes = new Hono();
 
+/**
+ * Type guard for the Remotion video composition props pulled from
+ * `assets.metadata.remotionProps`. Backed by the Zod schema in
+ * `@launchkit/video` rather than a hand-rolled `value && typeof
+ * candidate.title === 'string' && ...` chain — same name, same
+ * call sites, but now structured errors and type-safety guarantees
+ * come from the schema.
+ */
 function isLaunchKitVideoProps(value: unknown): value is LaunchKitVideoProps {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.title === 'string' &&
-    typeof candidate.subtitle === 'string' &&
-    typeof candidate.badge === 'string' &&
-    typeof candidate.accentColor === 'string' &&
-    typeof candidate.backgroundColor === 'string' &&
-    typeof candidate.outroCta === 'string' &&
-    Array.isArray(candidate.shots)
-  );
+  return LaunchKitVideoPropsSchema.safeParse(value).success;
 }
 
 function getRequestedVariant(value: string | undefined): 'visual' | 'narrated' {
