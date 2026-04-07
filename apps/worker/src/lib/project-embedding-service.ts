@@ -1,0 +1,53 @@
+import { EMBEDDING_DIMENSIONS } from '@launchkit/shared';
+
+/**
+ * Generate a deterministic lexical feature vector for pgvector similarity search.
+ * This keeps the demo self-contained without introducing another external service.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  // Create a deterministic pseudo-embedding from text content
+  // This gives us consistent vectors for similarity search
+  const vector: number[] = new Array(EMBEDDING_DIMENSIONS).fill(0);
+
+  // Use a combination of character codes and position to create a spread vector
+  const normalizedText = text.toLowerCase().trim();
+
+  for (let i = 0; i < normalizedText.length; i++) {
+    const charCode = normalizedText.charCodeAt(i);
+    const idx = (charCode * (i + 1) * 31) % EMBEDDING_DIMENSIONS;
+    vector[idx] += 1.0 / Math.sqrt(normalizedText.length);
+  }
+
+  // Normalize to unit length
+  const magnitude = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0));
+  if (magnitude > 0) {
+    for (let i = 0; i < vector.length; i++) {
+      vector[i] /= magnitude;
+    }
+  }
+
+  return vector;
+}
+
+/**
+ * Create a text summary suitable for embedding from project data.
+ */
+export function createProjectEmbeddingText(data: {
+  repoName: string;
+  description: string;
+  language: string;
+  techStack: string[];
+  category: string;
+  topics: string[];
+}): string {
+  return [
+    data.repoName,
+    data.description,
+    `Language: ${data.language}`,
+    `Tech: ${data.techStack.join(', ')}`,
+    `Category: ${data.category}`,
+    `Topics: ${data.topics.join(', ')}`,
+  ]
+    .filter(Boolean)
+    .join('. ');
+}

@@ -1,6 +1,6 @@
-import { checkRepos } from './check-repos.js';
-import { aggregateLearnings } from './learn.js';
-import { cleanup } from './cleanup.js';
+import { syncGitHubProjectActivity } from './sync-github-project-activity.js';
+import { aggregateFeedbackInsights } from './aggregate-feedback-insights.js';
+import { cleanupStaleLaunchData } from './cleanup-stale-launch-data.js';
 
 async function main() {
   console.log(`
@@ -18,13 +18,13 @@ async function main() {
     console.log('[Cron] Starting scheduled tasks...');
 
     // 1. Check repos for new activity
-    await checkRepos();
+    await syncGitHubProjectActivity();
 
     // 2. Aggregate learning insights
-    await aggregateLearnings();
+    await aggregateFeedbackInsights();
 
     // 3. Clean up stale data
-    await cleanup();
+    await cleanupStaleLaunchData();
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[Cron] All tasks complete in ${duration}s`);
