@@ -10,3 +10,6 @@ coverage/
 .drizzle/
 .cache/
 *.tsbuildinfo
+
+# Local editor / agent tooling — not tracked across the team.
+.claude/
