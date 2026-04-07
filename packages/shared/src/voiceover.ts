@@ -1,18 +1,39 @@
-export type VoiceoverSegment = {
-  screenCue: string;
-  text: string;
-  charStart: number;
-  charEnd: number;
-};
+import {
+  ParsedVoiceoverScriptSchema,
+  type ParsedVoiceoverScript,
+  type VoiceoverSegment,
+} from './schemas/voiceover.js';
 
-export type ParsedVoiceoverScript = {
-  segments: VoiceoverSegment[];
-  plainText: string;
-  segmentCount: number;
-};
+/**
+ * Voiceover script parser.
+ *
+ * The type definitions live in `./schemas/voiceover.ts` (Zod schemas
+ * with inferred types) so consumers can validate runtime input via
+ * `ParsedVoiceoverScriptSchema.safeParse(value)`. This file exposes
+ * the parser itself plus a thin re-export of the types so existing
+ * import sites do not break.
+ *
+ * Format
+ * ------
+ *
+ * The voiceover script the writer agent emits is a sequence of blocks
+ * separated by blank lines. Each block looks like:
+ *
+ *     [SCREEN: cue text]
+ *     "spoken line"
+ *
+ * The parser walks every block, extracts the screen cue and the
+ * spoken text, computes the cumulative character offsets so the
+ * narration helper can map ElevenLabs alignment timestamps back to
+ * segments, and rejects any block that does not match the strict
+ * shape. Strictness here is intentional — a partially-parsed script
+ * would silently produce captions that do not align with the audio.
+ */
 
-const VOICEOVER_BLOCK =
-  /^\[SCREEN:\s*([^\]]+?)\s*\]\s*\n"([^"\n]+)"\s*$/;
+const VOICEOVER_BLOCK = /^\[SCREEN:\s*([^\]]+?)\s*\]\s*\n"([^"\n]+)"\s*$/;
+
+export { ParsedVoiceoverScriptSchema };
+export type { ParsedVoiceoverScript, VoiceoverSegment };
 
 export function parseVoiceoverScript(content: string): ParsedVoiceoverScript {
   const normalized = content.replace(/\r\n/g, '\n').trim();
@@ -63,17 +84,17 @@ export function parseVoiceoverScript(content: string): ParsedVoiceoverScript {
   };
 }
 
+/**
+ * Type guard for `ParsedVoiceoverScript`.
+ *
+ * Backed by the Zod schema rather than a hand-rolled `value && typeof
+ * candidate.x === 'string'` check. Returns `true` if the value parses
+ * as a valid `ParsedVoiceoverScript`, `false` otherwise. Used by
+ * `apps/web/src/routes/asset-api-routes.ts` to validate the cached
+ * parser output stored in `assets.metadata.parsedVoiceover`.
+ */
 export function isParsedVoiceoverScript(
   value: unknown
 ): value is ParsedVoiceoverScript {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.plainText === 'string' &&
-    typeof candidate.segmentCount === 'number' &&
-    Array.isArray(candidate.segments)
-  );
+  return ParsedVoiceoverScriptSchema.safeParse(value).success;
 }
