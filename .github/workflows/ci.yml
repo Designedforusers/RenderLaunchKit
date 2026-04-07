@@ -37,6 +37,15 @@ jobs:
     name: typecheck · lint · build · test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Opt the JavaScript-based actions in this job (`actions/checkout`,
+    # `actions/setup-node`) into the Node.js 24 runtime ahead of the
+    # September 2026 deprecation of Node.js 20 on GitHub-hosted runners.
+    # Without this env var, every CI run shows a yellow deprecation
+    # annotation on the job summary, which is exactly the wrong signal
+    # for a public showcase repo. The env var is honored by the GitHub
+    # Actions runner, not by our application code.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout
