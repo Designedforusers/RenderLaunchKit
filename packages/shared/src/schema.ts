@@ -24,7 +24,11 @@ const vector = customType<{ data: number[]; driverParam: string }>({
   toDriver(value: number[]): string {
     return `[${value.join(',')}]`;
   },
-  fromDriver(value: string): number[] {
+  fromDriver(value: unknown): number[] {
+    if (typeof value !== 'string') {
+      return [];
+    }
+
     return value
       .replace(/[\[\]]/g, '')
       .split(',')
@@ -89,7 +93,7 @@ export const projects = pgTable(
     // Research results (from agentic research loop)
     research: jsonb('research'),
 
-    // Strategic brief (from strategist agent)
+    // Launch strategy (from the strategist agent)
     strategy: jsonb('strategy'),
 
     // Creative director review
@@ -97,7 +101,7 @@ export const projects = pgTable(
     reviewFeedback: jsonb('review_feedback'),
     revisionCount: integer('revision_count').default(0).notNull(),
 
-    // pgvector embedding of the project brief for similarity search
+    // pgvector embedding of the project summary for similarity search
     embedding: vector('embedding'),
 
     // Webhook tracking

@@ -15,9 +15,9 @@ LaunchKit is an AI-powered go-to-market teammate. You give it a GitHub repo URL.
 3. **Strategizes** an opinionated launch plan — picks the right channels, tone, and asset types for *this specific* product
 4. **Generates** the full kit in parallel — blog post, social threads, OG images, FAQ, product video
 5. **Reviews** everything as a creative director — scores assets, requests revisions, ensures coherence
-6. **Learns** from your feedback — every approval/rejection feeds the strategy engine for future projects
+6. **Adapts** from your feedback — approvals, rejections, and edits feed future recommendations
 
-It's not a prompt template. It's a multi-agent system with a real pipeline, real persistence, and real self-improvement.
+It's not a prompt template. It's a multi-agent system with a real pipeline, real persistence, and a feedback-informed strategy loop.
 
 ---
 
@@ -78,7 +78,7 @@ BullMQ handles all of this — priorities, retries, timeouts, fan-out, completio
 
 ### Why Claude tool use instead of an agent framework?
 
-The research agent is the only truly agentic component. It uses Claude's native tool use to autonomously decide what to search and when to stop. Total implementation: ~50 lines (`apps/worker/src/agents/researcher.ts`).
+The research agent is the only truly agentic component. It uses Claude's native tool use to autonomously decide what to search and when to stop. Total implementation: ~50 lines (`apps/worker/src/agents/launch-research-agent.ts`).
 
 Frameworks like LangChain would add 100MB of dependencies and hide the loop behind abstractions. Claude's SDK gives us the loop directly.
 
@@ -96,7 +96,7 @@ Strategy and content agents are *prompted* (single Claude call with rich context
 
 ## The Self-Learning System
 
-This is the part that makes LaunchKit get smarter over time.
+This is the part that helps LaunchKit adapt recommendations over time.
 
 ```
 User feedback (approve/reject/edit) → stored on assets table
@@ -115,7 +115,7 @@ User feedback (approve/reject/edit) → stored on assets table
                 similar past projects → makes better decisions
 ```
 
-The strategist agent receives these insights as part of its prompt context. Over time, the system literally learns which content types fit which categories.
+The strategist agent receives these insights as part of its prompt context. Over time, the system adapts which content types and tones it favors for different categories.
 
 The seeded database includes example insights so you can see the system in action immediately.
 
@@ -139,14 +139,19 @@ The seeded database includes example insights so you can see the system in actio
 
 That's it. Your LaunchKit is live.
 
+The Blueprint also runs database migrations before each web deploy, so a fresh Render setup comes up with the schema in place.
+
 ### Environment Variables
 
 | Variable | Required | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Claude API access for all agents |
+| `ANTHROPIC_MODEL` | No | Override the Claude model used by the worker |
 | `FAL_API_KEY` | No* | fal.ai for image and video generation |
 | `GITHUB_WEBHOOK_SECRET` | No | Required only for webhook integration |
-| `GITHUB_TOKEN` | No | Increases GitHub API rate limits |
+| `GITHUB_TOKEN` | Recommended | Raises GitHub API limits for analysis, research, and cron polling |
+| `WEB_SEARCH_PROVIDER` | No | Research search backend. Defaults to `duckduckgo` |
+| `API_KEY` | No | Optional bearer token required by the API when set |
 | `DATABASE_URL` | Auto | Provided by Render Postgres |
 | `REDIS_URL` | Auto | Provided by Render Key-Value |
 
@@ -215,24 +220,31 @@ launchkit/
 │
 └── apps/
     ├── web/                 # Hono API + SSE + webhook receiver
-    │   ├── routes/          #   projects, assets, events, webhooks
+    │   ├── routes/          #   project-api, asset-api, event-stream, github-webhooks
     │   ├── middleware/      #   auth, errors
-    │   └── lib/             #   db, redis, queue
+    │   └── lib/             #   database, redis-client, job-queue-clients
     │
     ├── worker/              # BullMQ processor
-    │   ├── processors/      #   analyze, research, strategize, generate, review
-    │   ├── agents/          #   researcher, strategist, writer, art-director, ...
-    │   ├── tools/           #   github, web-search, memory (pgvector lookup)
-    │   └── lib/             #   claude, fal, embeddings, publisher
+    │   ├── processors/      #   analyze-project-repository, build-launch-strategy, generate-project-assets, ...
+    │   ├── agents/          #   launch-research-agent, launch-strategy-agent, written-asset-agent, ...
+    │   ├── tools/           #   github-repository-tools, web-research-tools, project-insight-memory
+    │   └── lib/             #   anthropic-claude-client, fal-media-client, project-embedding-service, ...
     │
     ├── cron/                # Periodic tasks
-    │   ├── check-repos.ts   #   webhook fallback poller
-    │   ├── learn.ts         #   strategy insight aggregation
-    │   └── cleanup.ts       #   stale data cleanup
+    │   ├── sync-github-project-activity.ts   #   webhook fallback poller
+    │   ├── aggregate-feedback-insights.ts    #   strategy insight aggregation
+    │   └── cleanup-stale-launch-data.ts      #   stale data cleanup
     │
     └── dashboard/           # React SPA
-        ├── components/      #   ProjectList, ProjectView, AssetCard, ...
-        ├── hooks/           #   useSSE, useProject
+        ├── components/      #   ProjectSummaryList, ProjectDetailView, GeneratedAssetCard, ...
+        ├── hooks/           #   useProjectData, useProjectEventStream
+
+### Naming Conventions
+
+- `ProjectProgressPublisher` means internal Redis/SSE progress events.
+- `SocialPublisher` means external posting to a platform such as X or LinkedIn.
+- `generationInstructions` means the exact instructions used to create or regenerate an asset.
+- Role-based agent names describe the AI persona; processor names describe the concrete system action they perform.
         └── lib/             #   API client
 ```
 

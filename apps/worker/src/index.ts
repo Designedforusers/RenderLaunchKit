@@ -7,10 +7,10 @@ import {
   QUEUE_NAMES,
   QUEUE_CONFIG,
   JOB_NAMES,
-  JOB_TIMEOUTS,
 } from '@launchkit/shared';
 import type {
   AnalyzeRepoJobData,
+  FilterWebhookJobData,
   GenerateAssetJobData,
   ReviewJobData,
   RepoAnalysis,
@@ -18,13 +18,14 @@ import type {
   StrategyBrief,
   JobData,
 } from '@launchkit/shared';
-import { processAnalyzeRepo } from './processors/analyze-repo.js';
-import { processResearch } from './processors/research.js';
-import { processStrategize } from './processors/strategize.js';
-import { processGenerateContent } from './processors/generate-content.js';
-import { processReview } from './processors/review.js';
-import { events } from './lib/publisher.js';
-import { getInsightsForCategory } from './tools/memory.js';
+import { analyzeProjectRepository } from './processors/analyze-project-repository.js';
+import { researchProjectLaunchContext } from './processors/research-project-launch-context.js';
+import { buildProjectLaunchStrategy } from './processors/build-project-launch-strategy.js';
+import { generateProjectAsset } from './processors/generate-project-assets.js';
+import { reviewGeneratedProjectAssets } from './processors/review-generated-assets.js';
+import { filterWebhookEventForRegeneration } from './processors/process-webhook-regeneration.js';
+import { projectProgressPublisher } from './lib/project-progress-publisher.js';
+import { getInsightsForCategory } from './tools/project-insight-memory.js';
 
 // ── Database Connection ──
 
@@ -42,6 +43,7 @@ const connection = {
 
 // ── Generation Queue (for enqueueing from within the worker) ──
 
+const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, { connection });
 const generationQueue = new Queue(QUEUE_NAMES.GENERATION, { connection });
 const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection });
 
@@ -68,23 +70,34 @@ const analysisWorker = new Worker(
 
     try {
       if (job.name === JOB_NAMES.ANALYZE_REPO) {
-        await processAnalyzeRepo(data as AnalyzeRepoJobData);
+        await analyzeProjectRepository(data as AnalyzeRepoJobData);
 
         // Chain: enqueue research
-        await job.queue.add(JOB_NAMES.RESEARCH, { projectId: data.projectId });
+        await analysisQueue.add(
+          JOB_NAMES.RESEARCH,
+          { projectId: data.projectId },
+          {
+            jobId: `${JOB_NAMES.RESEARCH}__${data.projectId}`,
+          }
+        );
       } else if (job.name === JOB_NAMES.RESEARCH) {
-        await processResearch(data);
+        await researchProjectLaunchContext(data);
 
         // Chain: enqueue strategize
-        await job.queue.add(JOB_NAMES.STRATEGIZE, { projectId: data.projectId });
+        await analysisQueue.add(
+          JOB_NAMES.STRATEGIZE,
+          { projectId: data.projectId },
+          {
+            jobId: `${JOB_NAMES.STRATEGIZE}__${data.projectId}`,
+          }
+        );
       } else if (job.name === JOB_NAMES.STRATEGIZE) {
-        await processStrategize(data);
+        await buildProjectLaunchStrategy(data);
 
         // Fan-out: enqueue all generation jobs
         await fanOutGeneration(data.projectId);
       } else if (job.name === JOB_NAMES.FILTER_WEBHOOK) {
-        // Webhook filtering — simplified for now
-        console.log(`[Worker:Analysis] Webhook filter for project ${data.projectId}`);
+        await filterWebhookEventForRegeneration(data as FilterWebhookJobData);
       }
 
       // Record job completion
@@ -115,7 +128,7 @@ const analysisWorker = new Worker(
         .set({ status: 'failed', updatedAt: new Date() })
         .where(eq(schema.projects.id, data.projectId));
 
-      await events.error(data.projectId, job.name, error.message);
+      await projectProgressPublisher.error(data.projectId, job.name, error.message);
 
       throw err;
     }
@@ -147,7 +160,7 @@ const generationWorker = new Worker(
     });
 
     try {
-      await processGenerateContent(data);
+      await generateProjectAsset(data);
 
       await db
         .update(schema.jobs)
@@ -173,7 +186,11 @@ const generationWorker = new Worker(
         })
         .where(eq(schema.jobs.bullmqJobId, job.id || ''));
 
-      await events.error(data.projectId, 'generation', `${data.assetType}: ${error.message}`);
+      await projectProgressPublisher.error(
+        data.projectId,
+        'generation',
+        `${data.assetType}: ${error.message}`
+      );
 
       throw err;
     }
@@ -203,7 +220,7 @@ const reviewWorker = new Worker(
     });
 
     try {
-      await processReview(data);
+      await reviewGeneratedProjectAssets(data);
 
       await db
         .update(schema.jobs)
@@ -256,25 +273,35 @@ async function fanOutGeneration(projectId: string): Promise<void> {
   // Enqueue a generation job for each queued asset
   const queuedAssets = project.assets.filter((a) => a.status === 'queued');
 
-  await events.phaseStart(
+  await projectProgressPublisher.phaseStart(
     projectId,
     'generating',
     `Generating ${queuedAssets.length} assets in parallel`
   );
 
   for (const asset of queuedAssets) {
-    const assetMeta = asset.metadata as Record<string, unknown> | null;
+    const assetMetadata = asset.metadata as Record<string, unknown> | null;
 
-    await generationQueue.add(`generate-${asset.type}`, {
-      projectId,
-      assetId: asset.id,
-      assetType: asset.type,
-      brief: (assetMeta?.brief as string) || `Generate a ${asset.type} for this product`,
-      repoAnalysis,
-      research,
-      strategy,
-      pastInsights,
-    } satisfies GenerateAssetJobData);
+    await generationQueue.add(
+      `generate-${asset.type}`,
+      {
+        projectId,
+        assetId: asset.id,
+        assetType: asset.type,
+        generationInstructions:
+          (assetMetadata?.generationInstructions as string) ||
+          (assetMetadata?.brief as string) ||
+          `Generate a ${asset.type} for this product`,
+        repoName: project.repoName,
+        repoAnalysis,
+        research,
+        strategy,
+        pastInsights,
+      } satisfies GenerateAssetJobData,
+      {
+        jobId: `generate__${projectId}__${asset.id}__${asset.version}`,
+      }
+    );
   }
 
   console.log(`[FanOut] Enqueued ${queuedAssets.length} generation jobs for project ${projectId}`);
@@ -283,21 +310,38 @@ async function fanOutGeneration(projectId: string): Promise<void> {
 // ── Helper: Check if all assets are done and trigger review ──
 
 async function checkAndTriggerReview(projectId: string): Promise<void> {
+  const project = await db.query.projects.findFirst({
+    where: eq(schema.projects.id, projectId),
+  });
+
+  if (!project) {
+    return;
+  }
+
   const projectAssets = await db.query.assets.findMany({
     where: eq(schema.assets.projectId, projectId),
   });
 
   const pending = projectAssets.filter(
-    (a) => a.status === 'queued' || a.status === 'generating'
+    (a) =>
+      a.status === 'queued' ||
+      a.status === 'generating' ||
+      a.status === 'regenerating'
   );
 
-  if (pending.length === 0) {
+  if (pending.length === 0 && !['reviewing', 'complete', 'failed'].includes(project.status)) {
     // All assets done — trigger creative review
     const assetIds = projectAssets.map((a) => a.id);
-    await reviewQueue.add('creative-review', {
-      projectId,
-      assetIds,
-    } satisfies ReviewJobData);
+    await reviewQueue.add(
+      'creative-review',
+      {
+        projectId,
+        assetIds,
+      } satisfies ReviewJobData,
+      {
+        jobId: `review__${projectId}__${project.revisionCount}`,
+      }
+    );
 
     await db
       .update(schema.projects)

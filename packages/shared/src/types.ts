@@ -70,7 +70,7 @@ export interface StrategyBrief {
   tone: 'technical' | 'casual' | 'enthusiastic' | 'authoritative';
   keyMessages: string[];
   selectedChannels: ChannelStrategy[];
-  assetsToGenerate: AssetBrief[];
+  assetsToGenerate: AssetGenerationPlan[];
   skipAssets: SkippedAsset[];
 }
 
@@ -80,9 +80,9 @@ export interface ChannelStrategy {
   reasoning: string;
 }
 
-export interface AssetBrief {
+export interface AssetGenerationPlan {
   type: AssetType;
-  brief: string;
+  generationInstructions: string;
   priority: number;
 }
 
@@ -190,7 +190,8 @@ export interface StrategizeJobData extends JobData {
 export interface GenerateAssetJobData extends JobData {
   assetId: string;
   assetType: AssetType;
-  brief: string;
+  generationInstructions: string;
+  repoName: string;
   repoAnalysis: RepoAnalysis;
   research: ResearchResult;
   strategy: StrategyBrief;
@@ -200,6 +201,10 @@ export interface GenerateAssetJobData extends JobData {
 
 export interface ReviewJobData extends JobData {
   assetIds: string[];
+}
+
+export interface FilterWebhookJobData extends JobData {
+  webhookEventId: string;
 }
 
 // ── API Types ──

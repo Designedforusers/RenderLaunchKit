@@ -1,12 +1,12 @@
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { RepoInput } from './components/RepoInput.js';
-import { ProjectList } from './components/ProjectList.js';
-import { ProjectView } from './components/ProjectView.js';
-import { useProjects } from './hooks/useProject.js';
+import { RepositoryUrlForm } from './components/RepositoryUrlForm.js';
+import { ProjectSummaryList } from './components/ProjectSummaryList.js';
+import { ProjectDetailView } from './components/ProjectDetailView.js';
+import { useProjectListData } from './hooks/useProjectData.js';
 
 function HomePage() {
   const navigate = useNavigate();
-  const { projects, loading, refresh } = useProjects();
+  const { projects, loading, refresh } = useProjectListData();
 
   const handleProjectCreated = (id: string) => {
     navigate(`/projects/${id}`);
@@ -35,7 +35,7 @@ function HomePage() {
       {/* Input Section */}
       <section className="border-b border-surface-800">
         <div className="max-w-6xl mx-auto px-6 py-12">
-          <RepoInput onProjectCreated={handleProjectCreated} />
+          <RepositoryUrlForm onProjectCreated={handleProjectCreated} />
         </div>
       </section>
 
@@ -49,7 +49,7 @@ function HomePage() {
             Refresh
           </button>
         </div>
-        <ProjectList projects={projects} loading={loading} />
+        <ProjectSummaryList projects={projects} loading={loading} />
       </section>
     </div>
   );
@@ -73,7 +73,7 @@ function ProjectPage() {
         </div>
       </header>
 
-      <ProjectView projectId={id} />
+      <ProjectDetailView projectId={id} />
     </div>
   );
 }
