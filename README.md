@@ -76,21 +76,26 @@ The pipeline isn't linear. After strategizing, the worker fans out 5-8 generatio
 
 BullMQ handles all of this — priorities, retries, timeouts, fan-out, completion detection — with a few lines of config.
 
-### Why Claude tool use instead of an agent framework?
+### Why the Claude Agent SDK?
 
-The research agent is the only truly agentic component. It uses Claude's native tool use to autonomously decide what to search and when to stop. Total implementation: ~50 lines (`apps/worker/src/agents/launch-research-agent.ts`).
+The research agent is the only truly agentic component in the pipeline. It runs through `@anthropic-ai/claude-agent-sdk` — Anthropic's official agent runtime, the same engine that powers Claude Code itself. Total implementation: ~130 lines (`apps/worker/src/agents/launch-research-agent.ts`) plus a thin ~150-line runner (`apps/worker/src/lib/agent-sdk-runner.ts`) that wraps `query()` and translates the SDK's event stream into the existing project progress publisher.
 
-Frameworks like LangChain would add 100MB of dependencies and hide the loop behind abstractions. Claude's SDK gives us the loop directly.
+The Agent SDK gives us a few things that would otherwise be hundreds of lines of bespoke infrastructure:
 
-```typescript
-for (let step = 0; step < maxSteps; step++) {
-  const response = await anthropic.messages.create({ ... tools, messages });
-  if (response.stop_reason === 'end_turn') return finalResult();
-  // execute tool, append result, continue
-}
-```
+- **Server-side `WebSearch` and `WebFetch`** — Anthropic-hosted web tools (`web_search_20260209` / `web_fetch_20260209` under the hood). No SSRF risk, no DuckDuckGo HTML scraping, no prompt-injection sanitization burden on us. With Opus 4.6 the search tool also performs dynamic filtering — the model writes code to filter results before they reach the context window.
+- **In-process MCP tool definitions** — `search_github` and `lookup_similar_projects` are still our code, but they're exposed to the agent as a `createSdkMcpServer({ name: 'launchkit', tools: [...] })`. The agent calls them with type-safe Zod-validated inputs.
+- **Multi-turn session continuity** — `resume: sessionId` lets the same agent run pick up across days. The chat-based content studio entry point depends on this.
+- **Streaming events** — `task_started`, `task_progress`, `tool_use_summary`, `result` events are published by the SDK as the agent works; the runner forwards them to the dashboard via Redis pub/sub.
+- **Approval gates and hooks** (used by future deploy/notify features) — `canUseTool`, `PreToolUse`, `PostToolUse`, `Stop`, `TaskCompleted` hooks are first-class.
+- **Subagent fan-out** — `agents:` config and the built-in `Agent` tool let a parent agent spawn parallel children for things like "research these 5 competitors at once."
 
-Strategy and content agents are *prompted* (single Claude call with rich context) — they don't need a loop, just good prompts. Mixing agentic and prompted patterns where each fits is the right call.
+Strategy and content agents (writer, strategist, art-director, video-director, creative-director, webhook-relevance-agent) are *prompted* — single Claude call with rich context, no loop needed. They use `@anthropic-ai/sdk` directly via the helpers in `apps/worker/src/lib/anthropic-claude-client.ts`. Mixing agentic and prompted patterns where each fits is the right call.
+
+#### Deployment shape for the Agent SDK
+
+The Agent SDK is a wrapper around the Claude Code CLI subprocess, but the binary ships **inside** the npm package — `node_modules/@anthropic-ai/claude-agent-sdk/manifest.json` lists per-platform builds for darwin-arm64, darwin-x64, linux-x64, linux-arm64, and Alpine variants. `npm ci` is enough to land it on the worker. No global install or extra build step at deploy time.
+
+Each `query()` call forks the bundled binary for the duration of the run. For our workload (10–60 second research runs) the ~200 ms subprocess startup is invisible against the LLM latency.
 
 ---
 
@@ -145,12 +150,11 @@ The Blueprint also runs database migrations before each web deploy, so a fresh R
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes | Claude API access for all agents |
-| `ANTHROPIC_MODEL` | No | Override the Claude model used by the worker |
+| `ANTHROPIC_API_KEY` | Yes | Claude API access for all agents (including the Agent SDK CLI subprocess) |
+| `ANTHROPIC_MODEL` | No | Override the Claude model used by single-shot agents. Defaults to `claude-opus-4-6` |
 | `FAL_API_KEY` | No* | fal.ai for image and video generation |
 | `GITHUB_WEBHOOK_SECRET` | No | Required only for webhook integration |
 | `GITHUB_TOKEN` | Recommended | Raises GitHub API limits for analysis, research, and cron polling |
-| `WEB_SEARCH_PROVIDER` | No | Research search backend. Defaults to `duckduckgo` |
 | `API_KEY` | No | Optional bearer token required by the API when set |
 | `DATABASE_URL` | Auto | Provided by Render Postgres |
 | `REDIS_URL` | Auto | Provided by Render Key-Value |
@@ -227,7 +231,7 @@ launchkit/
     ├── worker/              # BullMQ processor
     │   ├── processors/      #   analyze-project-repository, build-launch-strategy, generate-project-assets, ...
     │   ├── agents/          #   launch-research-agent, launch-strategy-agent, written-asset-agent, ...
-    │   ├── tools/           #   github-repository-tools, web-research-tools, project-insight-memory
+    │   ├── tools/           #   github-repository-tools, project-insight-memory
     │   └── lib/             #   anthropic-claude-client, fal-media-client, project-embedding-service, ...
     │
     ├── cron/                # Periodic tasks
