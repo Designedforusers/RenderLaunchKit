@@ -11,7 +11,8 @@
   "dependencies": {
     "@launchkit/shared": "*",
     "@launchkit/video": "*",
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
+    "@anthropic-ai/sdk": "^0.85.0",
     "@fal-ai/client": "^1.2.0",
     "bullmq": "^5.25.0",
     "drizzle-orm": "^0.38.0",
@@ -19,8 +20,7 @@
     "pg": "^8.13.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "undici": "^7.0.0",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

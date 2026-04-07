@@ -46,6 +46,11 @@ services:
     runtime: node
     plan: starter
     rootDir: .
+    # The worker uses the Claude Agent SDK for the research agent. The
+    # SDK ships a self-contained `claude` binary inside its npm package
+    # (see node_modules/@anthropic-ai/claude-agent-sdk/manifest.json for
+    # the per-platform checksums) — `npm ci` is enough to land it. No
+    # global install or extra build step required at deploy time.
     buildCommand: npm ci && npm run build
     startCommand: npm run start:worker
     buildFilter:
@@ -72,14 +77,17 @@ services:
         value: production
       - key: ANTHROPIC_API_KEY
         sync: false
+      # NOTE: this only affects the single-shot agents (writer,
+      # strategist, art-director, etc.). The research agent runs
+      # through the Claude Agent SDK which manages its own model
+      # selection (currently hardcoded to claude-opus-4-6 in
+      # apps/worker/src/lib/agent-sdk-runner.ts).
       - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-20250514
+        value: claude-opus-4-6
       - key: FAL_API_KEY
         sync: false
       - key: GITHUB_TOKEN
         sync: false
-      - key: WEB_SEARCH_PROVIDER
-        value: duckduckgo
 
   - type: cron
     name: launchkit-cron

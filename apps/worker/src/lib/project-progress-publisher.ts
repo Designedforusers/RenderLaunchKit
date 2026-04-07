@@ -2,10 +2,30 @@ import Redis from 'ioredis';
 import { REDIS_CHANNELS } from '@launchkit/shared';
 import type { ProgressEvent } from '@launchkit/shared';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-});
+/**
+ * Lazy Redis client. Held in a module-level slot but only constructed
+ * the first time `publishProjectProgressEvent` is called. The lazy
+ * pattern matters for two reasons:
+ *
+ *   1. Importing this module in a test runner that does not have Redis
+ *      available no longer hangs the process on a reconnect loop.
+ *
+ *   2. The worker can import its agent and processor modules at startup
+ *      before Redis is reachable (Render brings services up in
+ *      parallel) without hitting noisy `ECONNREFUSED` errors. The first
+ *      `publish` call is what wires the connection.
+ */
+let redisClient: Redis | null = null;
+
+function getRedisClient(): Redis {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
+  }
+  return redisClient;
+}
 
 /**
  * Publish a progress event for a project via Redis pub/sub.
@@ -23,7 +43,7 @@ export async function publishProjectProgressEvent(
     timestamp: Date.now(),
   };
 
-  await redis.publish(channel, JSON.stringify(payload));
+  await getRedisClient().publish(channel, JSON.stringify(payload));
 }
 
 /**

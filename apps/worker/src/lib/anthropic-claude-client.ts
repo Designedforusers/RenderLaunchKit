@@ -1,7 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam, ContentBlock, Tool, ToolUseBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages';
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+/**
+ * Default model used for non-agentic Claude calls (single-shot
+ * `generateContent` and `generateJSON`). Agentic loops go through the
+ * Claude Agent SDK in `agent-sdk-runner.ts`, which has its own model
+ * selection.
+ *
+ * Default is `claude-opus-4-6` — Anthropic's most capable model. Can be
+ * overridden via the `ANTHROPIC_MODEL` env var if a deployment wants to
+ * use Sonnet for cost reasons.
+ */
+const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -10,8 +19,13 @@ const anthropic = new Anthropic({
 export { anthropic };
 
 /**
- * Simple prompted call — single request/response.
- * Used by content generation agents (writer, strategist, etc.)
+ * Single-shot prompted call. Used by the content generation agents
+ * (writer, strategist, art-director, video-director, creative-director,
+ * webhook-relevance-agent, product-video-agent) that do not need an
+ * agentic loop — they take rich context, produce one response, done.
+ *
+ * Adaptive thinking is enabled by default so the model picks its own
+ * reasoning depth per request. Effort defaults to `'high'`.
  */
 export async function generateContent(
   systemPrompt: string,
@@ -20,7 +34,7 @@ export async function generateContent(
 ): Promise<string> {
   const response = await anthropic.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: options?.maxTokens ?? 4096,
+    max_tokens: options?.maxTokens ?? 16000,
     temperature: options?.temperature,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
@@ -34,7 +48,15 @@ export async function generateContent(
 }
 
 /**
- * JSON generation — prompted call that expects a JSON response.
+ * JSON-mode call. Same as `generateContent` but the model is instructed
+ * to return valid JSON, the response is stripped of markdown fences,
+ * and the result is `JSON.parse`d into the caller-supplied generic.
+ *
+ * Note: this still uses prompt-and-parse rather than the Claude API's
+ * native structured outputs (`output_config.format`). Migrating these
+ * call sites to structured outputs is tracked as part of the upcoming
+ * "validate every runtime boundary" PR — that PR introduces shared Zod
+ * schemas which are the natural input to `messages.parse()`.
  */
 export async function generateJSON<T>(
   systemPrompt: string,
@@ -47,102 +69,11 @@ export async function generateJSON<T>(
     options
   );
 
-  // Strip markdown code fences if present
+  // Strip markdown code fences if present.
   const cleaned = response
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '')
     .trim();
 
   return JSON.parse(cleaned) as T;
-}
-
-/**
- * Agentic tool-use loop — the core of the research agent.
- * Claude decides which tools to call and when to stop.
- */
-export async function runAgentLoop(config: {
-  systemPrompt: string;
-  initialMessage: string;
-  tools: Tool[];
-  toolExecutor: (name: string, input: Record<string, unknown>) => Promise<unknown>;
-  onToolCall?: (name: string, input: Record<string, unknown>) => void;
-  terminalTool?: string;
-  maxSteps?: number;
-  maxTokens?: number;
-}): Promise<unknown> {
-  const {
-    systemPrompt,
-    initialMessage,
-    tools,
-    toolExecutor,
-    onToolCall,
-    terminalTool = 'research_complete',
-    maxSteps = 15,
-    maxTokens = 4096,
-  } = config;
-
-  const messages: MessageParam[] = [
-    { role: 'user', content: initialMessage },
-  ];
-
-  for (let step = 0; step < maxSteps; step++) {
-    const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      tools,
-      messages,
-    });
-
-    // If Claude stopped without calling a tool, return the final text
-    if (response.stop_reason === 'end_turn') {
-      const textBlock = response.content.find((c) => c.type === 'text');
-      return textBlock && textBlock.type === 'text' ? textBlock.text : null;
-    }
-
-    // Process tool calls
-    const toolUses = response.content.filter(
-      (c): c is ToolUseBlock => c.type === 'tool_use'
-    );
-
-    if (toolUses.length === 0) {
-      const textBlock = response.content.find((c) => c.type === 'text');
-      return textBlock && textBlock.type === 'text' ? textBlock.text : null;
-    }
-
-    // Add assistant message with all content blocks
-    messages.push({ role: 'assistant', content: response.content });
-
-    // Execute each tool and collect results
-    const toolResults: ToolResultBlockParam[] = [];
-
-    for (const toolUse of toolUses) {
-      onToolCall?.(toolUse.name, toolUse.input as Record<string, unknown>);
-
-      // Check for terminal tool — return its input as the result
-      if (toolUse.name === terminalTool) {
-        return toolUse.input;
-      }
-
-      try {
-        const result = await toolExecutor(toolUse.name, toolUse.input as Record<string, unknown>);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: typeof result === 'string' ? result : JSON.stringify(result),
-        });
-      } catch (err) {
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
-          is_error: true,
-        });
-      }
-    }
-
-    messages.push({ role: 'user', content: toolResults });
-  }
-
-  throw new Error(`Agent exceeded maximum steps (${maxSteps})`);
 }
