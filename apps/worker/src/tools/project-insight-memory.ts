@@ -1,5 +1,3 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import { eq, sql, desc } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import {
@@ -7,13 +5,7 @@ import {
   createProjectEmbeddingText,
 } from '../lib/project-embedding-service.js';
 import type { StrategyInsight } from '@launchkit/shared';
-
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 5,
-});
-
-const db = drizzle(pool, { schema });
+import { database as db } from '../lib/database.js';
 
 /**
  * Find similar past projects using pgvector cosine similarity.

@@ -1,12 +1,24 @@
+import { createHash } from 'node:crypto';
 import Redis from 'ioredis';
 import {
   GITHUB_API_BASE,
   GITHUB_RAW_BASE,
   REDIS_CHANNELS,
   retry,
-  simpleHash,
   truncate,
 } from '@launchkit/shared';
+
+/**
+ * SHA-256 hash truncated to 16 hex chars for Redis cache keys.
+ *
+ * The previous implementation used a 32-bit djb2 variant that produced
+ * collisions across cached GitHub API responses. With ~10^4 collision
+ * resistance per 16 hex chars (64 bits) we have a vanishingly small chance
+ * of two different repo URLs colliding to the same cache key.
+ */
+function hashCacheKey(input: string): string {
+  return createHash('sha256').update(input).digest('hex').slice(0, 16);
+}
 
 const headers: Record<string, string> = {
   Accept: 'application/vnd.github.v3+json',
@@ -31,7 +43,7 @@ if (process.env.GITHUB_TOKEN) {
 }
 
 function cacheKey(kind: string, input: string): string {
-  return REDIS_CHANNELS.GITHUB_CACHE(`${kind}:${simpleHash(input)}`);
+  return REDIS_CHANNELS.GITHUB_CACHE(`${kind}:${hashCacheKey(input)}`);
 }
 
 async function readCache<T>(key: string): Promise<T | null> {

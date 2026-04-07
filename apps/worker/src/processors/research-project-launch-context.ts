@@ -1,13 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import type { JobData, RepoAnalysis } from '@launchkit/shared';
 import { runResearchAgent } from '../agents/launch-research-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
+import { database as db } from '../lib/database.js';
 
 export async function researchProjectLaunchContext(data: JobData): Promise<void> {
   const { projectId } = data;

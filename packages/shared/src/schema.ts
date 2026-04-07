@@ -7,6 +7,7 @@ import {
   real,
   integer,
   uuid,
+  uniqueIndex,
   varchar,
   pgEnum,
   index,
@@ -188,6 +189,9 @@ export const webhookEvents = pgTable(
     projectId: uuid('project_id').references(() => projects.id, {
       onDelete: 'cascade',
     }),
+    // GitHub's `x-github-delivery` header. Unique per delivery (including
+    // redeliveries from the GitHub UI), used to dedupe replays.
+    deliveryId: varchar('delivery_id', { length: 64 }),
     eventType: varchar('event_type', { length: 50 }).notNull(),
     payload: jsonb('payload').notNull(),
     commitSha: varchar('commit_sha', { length: 40 }),
@@ -204,7 +208,10 @@ export const webhookEvents = pgTable(
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => [index('webhook_events_project_id_idx').on(table.projectId)]
+  (table) => [
+    index('webhook_events_project_id_idx').on(table.projectId),
+    uniqueIndex('webhook_events_delivery_id_idx').on(table.deliveryId),
+  ]
 );
 
 export const strategyInsights = pgTable(

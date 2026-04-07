@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq, desc } from 'drizzle-orm';
 import { database } from '../lib/database.js';
 import { enqueueRepositoryAnalysis } from '../lib/job-queue-clients.js';
+import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
 import {
   projects,
   assets,
@@ -19,7 +20,11 @@ const createProjectSchema = z.object({
   repoUrl: z.string().min(1, 'Repo URL is required'),
 });
 
-projectApiRoutes.post('/', async (c) => {
+// Project creation triggers an Anthropic agentic research loop, fal.ai
+// image/video generation, and uses the GitHub API budget. Apply the
+// stricter expensive-route limit (10 req/min/IP) on top of the global
+// /api/* limit (100 req/min/IP).
+projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
   const body = await c.req.json();
   const parsed = createProjectSchema.safeParse(body);
 

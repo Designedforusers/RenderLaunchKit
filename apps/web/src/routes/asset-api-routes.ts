@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { eq } from 'drizzle-orm';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
@@ -206,14 +209,23 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     });
   }
 
-  const file = await readFile(rendered.outputPath);
+  // Stream the file from disk rather than buffering it in memory.
+  //
+  // A 30-second 1080p Remotion render can easily exceed 100 MB. On Render's
+  // starter plan (512 MB RAM) two concurrent downloads of `readFile`-buffered
+  // responses would OOM the web process. `createReadStream` + `Readable.toWeb`
+  // hands the bytes to the platform fetch implementation as a chunked stream
+  // so memory stays bounded regardless of file size.
+  const fileStat = await stat(rendered.outputPath);
+  const nodeStream = createReadStream(rendered.outputPath);
+  const webStream = Readable.toWeb(nodeStream) as NodeReadableStream<Uint8Array>;
   const shouldDownload = c.req.query('download') === '1';
   const filename = getRenderedVideoFilename(asset.id, asset.version, variant);
 
-  return new Response(file, {
+  return new Response(webStream as unknown as ReadableStream<Uint8Array>, {
     headers: {
       'Content-Type': 'video/mp4',
-      'Content-Length': String(file.byteLength),
+      'Content-Length': String(fileStat.size),
       'Content-Disposition': `${shouldDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
       'Cache-Control': 'private, max-age=3600',
       'X-Remotion-Cache': rendered.cached ? 'hit' : 'miss',
