@@ -20,7 +20,10 @@ interface WriterInput {
   revisionInstructions?: string;
 }
 
-const ASSET_PROMPTS: Record<string, string> = {
+// `as const` plus an `AssetType` index lets us hand each lookup back
+// as a definitely-defined string under `noUncheckedIndexedAccess` —
+// see `systemPrompt` below.
+const ASSET_PROMPTS = {
   blog_post: `You are an expert developer content writer. Write a compelling blog post that:
 - Opens with a hook that identifies a pain point the reader knows well
 - Explains the product clearly with technical depth (not marketing fluff)
@@ -125,12 +128,24 @@ Output in markdown format.`,
 Output format:
 [SCREEN: description]
 "Voiceover text"`,
-};
+} as const satisfies Record<string, string>;
+
+type WriterAssetType = keyof typeof ASSET_PROMPTS;
+
+function isWriterAssetType(value: string): value is WriterAssetType {
+  return value in ASSET_PROMPTS;
+}
 
 export async function generateWrittenAsset(
   input: WriterInput
 ): Promise<{ content: string; metadata: Record<string, unknown> }> {
-  const systemPrompt = ASSET_PROMPTS[input.assetType] || ASSET_PROMPTS.blog_post;
+  // `ASSET_PROMPTS` is `as const`, so the keys are a literal union
+  // and every lookup is a definitely-defined string under
+  // `noUncheckedIndexedAccess`. Unknown asset types fall back to the
+  // blog-post prompt.
+  const systemPrompt = isWriterAssetType(input.assetType)
+    ? ASSET_PROMPTS[input.assetType]
+    : ASSET_PROMPTS.blog_post;
 
   const context = `## Product Context
 
@@ -163,30 +178,38 @@ ${input.pastInsights.length > 0 ? `## Insights from Similar Projects\n${input.pa
     temperature: 0.7,
   });
 
-  // Extract metadata based on asset type
-  const metadata: Record<string, unknown> = {
+  // Extract metadata based on asset type. We assemble per-type
+  // metadata first, then merge it into the common envelope so the
+  // result keeps a single named shape.
+  const baseMetadata = {
     assetType: input.assetType,
     tone: input.strategy.tone,
   };
 
+  let extraMetadata: Record<string, unknown> = {};
+
   if (input.assetType === 'blog_post') {
-    const titleMatch = content.match(/^#\s+(.+)/m);
-    const subtitleMatch = content.match(/^##\s+(.+)/m);
-    metadata.title = titleMatch?.[1] || 'Untitled';
-    metadata.subtitle = subtitleMatch?.[1] || '';
-    metadata.wordCount = content.split(/\s+/).length;
+    const titleMatch = /^#\s+(.+)/m.exec(content);
+    const subtitleMatch = /^##\s+(.+)/m.exec(content);
+    extraMetadata = {
+      title: titleMatch?.[1] ?? 'Untitled',
+      subtitle: subtitleMatch?.[1] ?? '',
+      wordCount: content.split(/\s+/).length,
+    };
   } else if (input.assetType === 'twitter_thread') {
     const tweets = content.split(/\n\n+/).filter((t) => t.trim().length > 0);
-    metadata.tweetCount = tweets.length;
+    extraMetadata = { tweetCount: tweets.length };
   } else if (input.assetType === 'product_hunt_description') {
-    const taglineMatch = content.match(/\*\*Tagline:\*\*\s*(.+)/);
-    metadata.tagline = taglineMatch?.[1]?.trim() || '';
+    const taglineMatch = /\*\*Tagline:\*\*\s*(.+)/.exec(content);
+    extraMetadata = { tagline: taglineMatch?.[1]?.trim() ?? '' };
   } else if (input.assetType === 'voiceover_script') {
     const parsed = parseVoiceoverScript(content);
-    metadata.segments = parsed.segments;
-    metadata.plainText = parsed.plainText;
-    metadata.segmentCount = parsed.segmentCount;
+    extraMetadata = {
+      segments: parsed.segments,
+      plainText: parsed.plainText,
+      segmentCount: parsed.segmentCount,
+    };
   }
 
-  return { content, metadata };
+  return { content, metadata: { ...baseMetadata, ...extraMetadata } };
 }

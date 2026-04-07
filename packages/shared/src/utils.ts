@@ -7,16 +7,14 @@ export function parseRepoUrl(url: string): { owner: string; name: string } | nul
   const cleaned = url.trim().replace(/\/+$/, '').replace(/\.git$/, '');
 
   // Try full URL pattern
-  const urlMatch = cleaned.match(
-    /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)/
-  );
-  if (urlMatch) {
+  const urlMatch = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)/.exec(cleaned);
+  if (urlMatch?.[1] && urlMatch[2]) {
     return { owner: urlMatch[1], name: urlMatch[2] };
   }
 
   // Try owner/repo pattern
-  const shortMatch = cleaned.match(/^([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)$/);
-  if (shortMatch) {
+  const shortMatch = /^([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)$/.exec(cleaned);
+  if (shortMatch?.[1] && shortMatch[2]) {
     return { owner: shortMatch[1], name: shortMatch[2] };
   }
 
@@ -34,15 +32,12 @@ export function buildRepoUrl(owner: string, name: string): string {
  * Group an array by a key function.
  */
 export function groupBy<T>(arr: T[], fn: (item: T) => string): Record<string, T[]> {
-  return arr.reduce(
-    (acc, item) => {
-      const key = fn(item);
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(item);
-      return acc;
-    },
-    {} as Record<string, T[]>
-  );
+  return arr.reduce<Record<string, T[]>>((acc, item) => {
+    const key = fn(item);
+    acc[key] ??= [];
+    acc[key].push(item);
+    return acc;
+  }, {});
 }
 
 /**
@@ -76,7 +71,7 @@ export async function retry<T>(
   maxAttempts: number = 3,
   baseDelay: number = 1000
 ): Promise<T> {
-  let lastError: Error | undefined;
+  let lastError = new Error('retry: no attempts made');
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       return await fn();

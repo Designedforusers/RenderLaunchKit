@@ -29,7 +29,7 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
         <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider">
           Launch Strategy
         </h3>
-        <span className={`badge ${TONE_COLORS[strategy.tone] || 'text-surface-400 bg-surface-400/10'}`}>
+        <span className={`badge ${TONE_COLORS[strategy.tone] ?? 'text-surface-400 bg-surface-400/10'}`}>
           {strategy.tone}
         </span>
       </div>
@@ -37,7 +37,7 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
       {/* Positioning */}
       <div className="mb-6">
         <p className="text-lg text-surface-100 font-medium leading-relaxed">
-          "{strategy.positioning}"
+          &ldquo;{strategy.positioning}&rdquo;
         </p>
       </div>
 

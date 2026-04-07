@@ -9,6 +9,7 @@ import {
   projects,
   webhookEvents,
 } from '@launchkit/shared';
+import { env } from '../env.js';
 
 const githubWebhookRoutes = new Hono();
 
@@ -21,7 +22,7 @@ const WEBHOOK_BODY_LIMIT_BYTES = 1024 * 1024;
 // ── Signature Verification ──
 
 function verifyGitHubSignature(body: string, signature: string | undefined): boolean {
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const secret = env.GITHUB_WEBHOOK_SECRET;
   if (!secret) return false;
   if (!signature) return false;
 
@@ -102,7 +103,7 @@ githubWebhookRoutes.post(
       );
     }
     const event = parsed.data;
-    const eventType = c.req.header('x-github-event') || 'unknown';
+    const eventType = c.req.header('x-github-event') ?? 'unknown';
 
     // Only process push and release events.
     if (!['push', 'release'].includes(eventType)) {
@@ -131,10 +132,23 @@ githubWebhookRoutes.post(
         deliveryId,
         eventType,
         payload: event,
-        commitSha: event.after || event.release?.tag_name,
-        commitMessage: event.head_commit?.message || event.release?.name,
+        commitSha: event.after ?? event.release?.tag_name,
+        commitMessage: event.head_commit?.message ?? event.release?.name,
       })
       .returning();
+
+    if (!webhookEvent) {
+      // Drizzle's `.returning()` is typed as `T[]`, so the strict
+      // flags require this guard. Reaching it means the insert was
+      // accepted but no row came back — a server-side invariant
+      // violation, not a request validation problem. The 500 carries
+      // a precise message so the response body is not mistaken for a
+      // 4xx-style validation failure.
+      return c.json(
+        { error: 'Internal error: webhook insert returned no row' },
+        500
+      );
+    }
 
     // Queue the filtering decision.
     await analysisJobQueue.add(

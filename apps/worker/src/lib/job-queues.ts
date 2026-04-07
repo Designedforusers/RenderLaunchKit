@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from '@launchkit/shared';
+import { env } from '../env.js';
 
 /**
  * Shared BullMQ queue clients for the worker process.
@@ -11,7 +12,7 @@ import { QUEUE_NAMES } from '@launchkit/shared';
  * are separate processes that connect to the same Redis from different
  * Render services.
  */
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+const redisUrl = new URL(env.REDIS_URL);
 
 export const redisConnection = {
   host: redisUrl.hostname,

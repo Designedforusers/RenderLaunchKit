@@ -27,8 +27,8 @@ export async function generateProjectAsset(data: GenerateAssetJobData): Promise<
     revisionInstructions,
   } = data;
   const generationInstructions =
-    data.generationInstructions ||
-    ((data as GenerateAssetJobData & { brief?: string }).brief) ||
+    data.generationInstructions ??
+    (data as GenerateAssetJobData & { brief?: string }).brief ??
     `Generate a ${assetType} for this product.`;
 
   // Mark asset as generating
@@ -99,7 +99,7 @@ export async function generateProjectAsset(data: GenerateAssetJobData): Promise<
         pastInsights,
         assetType,
         generationInstructions,
-        revisionInstructions,
+        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
       });
       content = result.content;
       metadata = result.metadata;

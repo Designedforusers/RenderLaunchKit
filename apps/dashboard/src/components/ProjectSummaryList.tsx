@@ -121,5 +121,5 @@ function getProgressPercent(status: string): number {
     complete: 100,
     failed: 100,
   };
-  return map[status] || 0;
+  return map[status] ?? 0;
 }

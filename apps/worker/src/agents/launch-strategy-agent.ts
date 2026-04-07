@@ -52,7 +52,7 @@ export async function createLaunchStrategy(
   pastInsights?: StrategyInsight[]
 ): Promise<StrategyBrief> {
   // Fetch insights if not provided
-  const insights = pastInsights || await getInsightsForCategory(repoAnalysis.category);
+  const insights = pastInsights ?? await getInsightsForCategory(repoAnalysis.category);
 
   const userPrompt = `Create a go-to-market strategy for this product:
 

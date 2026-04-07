@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
@@ -116,8 +117,8 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     return c.json({ error: 'Only product video assets can be rendered as MP4' }, 400);
   }
 
-  const metadata = (asset.metadata as Record<string, unknown> | null) || null;
-  const remotionProps = metadata?.remotionProps;
+  const metadata = (asset.metadata as Record<string, unknown> | null) ?? null;
+  const remotionProps = metadata?.['remotionProps'];
 
   if (!isLaunchKitVideoProps(remotionProps)) {
     return c.json({ error: 'This asset does not have Remotion render data yet' }, 409);
@@ -156,7 +157,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     }
 
     const parsedVoiceover = getParsedVoiceoverScriptFromAsset(
-      (voiceoverAsset.metadata as Record<string, unknown> | null) || null,
+      (voiceoverAsset.metadata as Record<string, unknown> | null) ?? null,
       voiceoverAsset.content
     );
 
@@ -268,19 +269,27 @@ assetApiRoutes.post('/:id/reject', async (c) => {
 
 // ── PUT /api/assets/:id/content — Edit asset content ──
 
+const editAssetContentSchema = z.object({
+  content: z.string().min(1, 'Content is required'),
+});
+
 assetApiRoutes.put('/:id/content', async (c) => {
   const id = c.req.param('id');
-  const body = await c.req.json();
+  const rawBody: unknown = await c.req.json();
+  const parsed = editAssetContentSchema.safeParse(rawBody);
 
-  if (!body.content || typeof body.content !== 'string') {
-    return c.json({ error: 'Content is required and must be a string' }, 400);
+  if (!parsed.success) {
+    return c.json(
+      { error: parsed.error.issues[0]?.message ?? 'Invalid request body' },
+      400
+    );
   }
 
   const [updated] = await database
     .update(assets)
     .set({
       userEdited: true,
-      userEditedContent: body.content,
+      userEditedContent: parsed.data.content,
       updatedAt: new Date(),
     })
     .where(eq(assets.id, id))
@@ -295,9 +304,15 @@ assetApiRoutes.put('/:id/content', async (c) => {
 
 // ── POST /api/assets/:id/regenerate — Regenerate an asset ──
 
+const regenerateAssetSchema = z.object({
+  instructions: z.string().optional(),
+});
+
 assetApiRoutes.post('/:id/regenerate', async (c) => {
   const id = c.req.param('id');
-  const body = await c.req.json().catch(() => ({}));
+  const rawBody: unknown = await c.req.json().catch(() => ({}));
+  const bodyParse = regenerateAssetSchema.safeParse(rawBody);
+  const body = bodyParse.success ? bodyParse.data : { instructions: undefined };
 
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
@@ -337,7 +352,7 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
     assetId: asset.id,
     assetType: asset.type,
     generationInstructions:
-      body.instructions || 'Regenerate with improvements based on previous feedback',
+      body.instructions ?? 'Regenerate with improvements based on previous feedback',
     repoName: project.repoName,
     repoAnalysis: project.repoAnalysis,
     research: project.research,

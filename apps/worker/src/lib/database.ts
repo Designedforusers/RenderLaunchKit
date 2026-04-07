@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from '@launchkit/shared';
+import { env } from '../env.js';
 
 /**
  * Shared Postgres pool and drizzle instance for the worker process.
@@ -14,7 +15,7 @@ import * as schema from '@launchkit/shared';
  * already capped per queue in `QUEUE_CONFIG`.
  */
 export const databasePool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,

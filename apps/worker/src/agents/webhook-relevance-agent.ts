@@ -6,6 +6,7 @@ import type {
   StrategyBrief,
   WebhookFilterDecision,
 } from '@launchkit/shared';
+import { env } from '../env.js';
 
 interface WebhookFilterInput {
   eventType: string;
@@ -125,7 +126,7 @@ function fallbackDecision(input: WebhookFilterInput): WebhookFilterDecision {
 export async function evaluateWebhookEvent(
   input: WebhookFilterInput
 ): Promise<WebhookFilterDecision> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!env.ANTHROPIC_API_KEY) {
     return fallbackDecision(input);
   }
 
@@ -137,7 +138,7 @@ export async function evaluateWebhookEvent(
 
 ## Event
 - Type: ${input.eventType}
-- Commit SHA: ${input.commitSha || 'unknown'}
+- Commit SHA: ${input.commitSha ?? 'unknown'}
 - Commit message: ${input.commitMessage}
 
 ## Product

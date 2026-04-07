@@ -35,7 +35,7 @@ function getClientKey(c: Context): string {
     const first = forwarded.split(',')[0];
     if (first) return first.trim();
   }
-  return c.req.header('cf-connecting-ip') || 'unknown';
+  return c.req.header('cf-connecting-ip') ?? 'unknown';
 }
 
 /**

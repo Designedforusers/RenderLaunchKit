@@ -27,7 +27,7 @@ function buildWebhookGenerationInstructions(
 
   return [
     prefix,
-    existingGenerationInstructions || `Generate a ${assetType} for this product.`,
+    existingGenerationInstructions ?? `Generate a ${assetType} for this product.`,
     `GitHub event: ${eventType}.`,
     `Commit summary: ${commitMessage}.`,
     `Why it matters: ${reasoning}.`,
@@ -91,7 +91,7 @@ export async function filterWebhookEventForRegeneration(
 
   const decision = await evaluateWebhookEvent({
     eventType: webhookEvent.eventType,
-    commitMessage: webhookEvent.commitMessage || 'No commit message provided',
+    commitMessage: webhookEvent.commitMessage ?? 'No commit message provided',
     commitSha: webhookEvent.commitSha,
     repoAnalysis,
     strategy,
@@ -133,12 +133,12 @@ export async function filterWebhookEventForRegeneration(
   }
 
   for (const asset of assetsToRegenerate) {
-    const assetMetadata = (asset.metadata as Record<string, unknown> | null) || {};
+    const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
     const existingGenerationInstructions =
-      typeof assetMetadata.generationInstructions === 'string'
-        ? assetMetadata.generationInstructions
-        : typeof assetMetadata.brief === 'string'
-          ? assetMetadata.brief
+      typeof assetMetadata['generationInstructions'] === 'string'
+        ? assetMetadata['generationInstructions']
+        : typeof assetMetadata['brief'] === 'string'
+          ? assetMetadata['brief']
           : undefined;
 
     await db
@@ -163,7 +163,7 @@ export async function filterWebhookEventForRegeneration(
           asset.type,
           existingGenerationInstructions,
           webhookEvent.eventType,
-          webhookEvent.commitMessage || 'No commit message provided',
+          webhookEvent.commitMessage ?? 'No commit message provided',
           decision.reasoning
         ),
         repoName: project.repoName,
@@ -171,7 +171,7 @@ export async function filterWebhookEventForRegeneration(
         research,
         strategy,
         pastInsights,
-        revisionInstructions: `Refresh this asset for commit ${webhookEvent.commitSha || 'unknown'}: ${webhookEvent.commitMessage || 'No commit message provided'}`,
+        revisionInstructions: `Refresh this asset for commit ${webhookEvent.commitSha ?? 'unknown'}: ${webhookEvent.commitMessage ?? 'No commit message provided'}`,
       },
       {
         jobId: `webhook__${webhookEvent.id}__${asset.id}__${asset.version + 1}`,
@@ -183,7 +183,7 @@ export async function filterWebhookEventForRegeneration(
     .update(schema.projects)
     .set({
       status: 'generating',
-      lastCommitSha: webhookEvent.commitSha || project.lastCommitSha,
+      lastCommitSha: webhookEvent.commitSha ?? project.lastCommitSha,
       updatedAt: new Date(),
     })
     .where(eq(schema.projects.id, projectId));

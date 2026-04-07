@@ -82,7 +82,7 @@ export function alignmentToCaptions(
         Math.max(segment.charStart, segment.charEnd - 1)
       ) ?? startSeconds;
 
-    const previousEnd = index > 0 ? segments[index - 1].charEnd : 0;
+    const previousEnd = index > 0 ? (segments[index - 1]?.charEnd ?? 0) : 0;
     const minStart = index > 0
       ? Math.ceil(
           (findPreviousDefined(
@@ -134,11 +134,12 @@ function scaleShotsToDuration(
   );
   const diff = targetFrames - totalScaledFrames;
 
-  if (diff !== 0 && scaledShots.length > 0) {
-    scaledShots[scaledShots.length - 1] = {
-      ...scaledShots[scaledShots.length - 1],
-      durationInFrames:
-        scaledShots[scaledShots.length - 1].durationInFrames + diff,
+  const lastIndex = scaledShots.length - 1;
+  const lastShot = scaledShots[lastIndex];
+  if (diff !== 0 && lastShot) {
+    scaledShots[lastIndex] = {
+      ...lastShot,
+      durationInFrames: lastShot.durationInFrames + diff,
     };
   }
 

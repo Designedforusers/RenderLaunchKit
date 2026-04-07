@@ -91,8 +91,8 @@ export async function analyzeProjectRepository(data: AnalyzeRepoJobData): Promis
   }
 
   // Detect framework
-  const deps = packageJson?.dependencies || {};
-  const devDeps = packageJson?.devDependencies || {};
+  const deps = packageJson?.dependencies ?? {};
+  const devDeps = packageJson?.devDependencies ?? {};
   const allDeps = { ...deps, ...devDeps };
   let framework: string | null = null;
   const frameworkMap: Record<string, string> = {
@@ -119,19 +119,19 @@ export async function analyzeProjectRepository(data: AnalyzeRepoJobData): Promis
     fileTree,
     packageDeps,
     topics,
-    description: repoMeta.description || '',
+    description: repoMeta.description ?? '',
   });
 
   const repoAnalysis: RepoAnalysis = {
     readme,
-    description: repoMeta.description || '',
-    language: repoMeta.language || Object.keys(languages)[0] || 'Unknown',
+    description: repoMeta.description ?? '',
+    language: repoMeta.language ?? Object.keys(languages)[0] ?? 'Unknown',
     techStack: Array.from(techStack).slice(0, 20),
     framework,
-    stars: repoMeta.stargazers_count || 0,
-    forks: repoMeta.forks_count || 0,
+    stars: repoMeta.stargazers_count ?? 0,
+    forks: repoMeta.forks_count ?? 0,
     topics,
-    license: repoMeta.license?.spdx_id || null,
+    license: repoMeta.license?.spdx_id ?? null,
     hasTests: fileTree.some((f) =>
       f.includes('test') || f.includes('spec') || f.includes('__tests__')
     ),
@@ -149,7 +149,7 @@ export async function analyzeProjectRepository(data: AnalyzeRepoJobData): Promis
     .update(schema.projects)
     .set({
       repoAnalysis,
-      lastCommitSha: commits[0]?.sha || null,
+      lastCommitSha: commits[0]?.sha ?? null,
       status: 'researching',
       updatedAt: new Date(),
     })

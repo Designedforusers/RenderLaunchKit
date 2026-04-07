@@ -6,6 +6,7 @@ import { bundle } from '@remotion/bundler';
 import type { WebpackOverrideFn } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import type { LaunchKitVideoProps } from '@launchkit/video';
+import { env } from '../env.js';
 
 const REMOTION_ENTRY = path.resolve(
   process.cwd(),
@@ -46,17 +47,15 @@ const webpackOverride: WebpackOverrideFn = (config) => {
  * because the rejected promise just keeps rethrowing the original error.
  */
 async function getBundle(): Promise<string> {
-  if (!bundlePromise) {
-    bundlePromise = bundle({
-      entryPoint: REMOTION_ENTRY,
-      rootDir: REMOTION_ROOT_DIR,
-      enableCaching: true,
-      webpackOverride,
-    }).catch((err) => {
-      bundlePromise = null;
-      throw err;
-    });
-  }
+  bundlePromise ??= bundle({
+    entryPoint: REMOTION_ENTRY,
+    rootDir: REMOTION_ROOT_DIR,
+    enableCaching: true,
+    webpackOverride,
+  }).catch((err: unknown) => {
+    bundlePromise = null;
+    throw err instanceof Error ? err : new Error(String(err));
+  });
 
   return bundlePromise;
 }
@@ -96,8 +95,8 @@ export async function renderLaunchVideoAsset(input: {
   const basename = buildRenderBasename({
     assetId: input.assetId,
     version: input.version,
-    variant: input.variant || 'visual',
-    cacheSeed: input.cacheSeed,
+    variant: input.variant ?? 'visual',
+    ...(input.cacheSeed !== undefined ? { cacheSeed: input.cacheSeed } : {}),
   });
   const outputPath = buildOutputLocation(basename);
 
@@ -134,7 +133,7 @@ export async function renderLaunchVideoAsset(input: {
         codec: 'h264',
         outputLocation: tempPath,
         inputProps: input.inputProps,
-        concurrency: process.env.REMOTION_CONCURRENCY || '50%',
+        concurrency: env.REMOTION_CONCURRENCY,
         timeoutInMilliseconds: 120000,
         overwrite: true,
         logLevel: 'error',

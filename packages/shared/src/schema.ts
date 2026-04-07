@@ -31,7 +31,7 @@ const vector = customType<{ data: number[]; driverParam: string }>({
     }
 
     return value
-      .replace(/[\[\]]/g, '')
+      .replace(/[[\]]/g, '')
       .split(',')
       .map(Number);
   },

@@ -1,4 +1,5 @@
 import { eq, sql, desc } from 'drizzle-orm';
+import { z } from 'zod';
 import * as schema from '@launchkit/shared';
 import {
   generateEmbedding,
@@ -7,19 +8,33 @@ import {
 import type { StrategyInsight } from '@launchkit/shared';
 import { database as db } from '../lib/database.js';
 
+// Result row schema for the raw `db.execute(sql...)` similarity query.
+// `db.execute` returns `unknown[]` rows because the SQL is hand-written
+// rather than going through Drizzle's typed query builder, so we
+// validate at the boundary instead of casting to `any`.
+const SimilarProjectRowSchema = z.object({
+  id: z.string(),
+  repo_name: z.string(),
+  strategy: z.unknown(),
+  review_score: z.number().nullable(),
+  similarity: z.coerce.number(),
+});
+
+export interface SimilarProject {
+  id: string;
+  repoName: string;
+  strategy: unknown;
+  reviewScore: number | null;
+  similarity: number;
+}
+
 /**
  * Find similar past projects using pgvector cosine similarity.
  */
 export async function findSimilarProjects(
   description: string,
   limit: number = 3
-): Promise<Array<{
-  id: string;
-  repoName: string;
-  strategy: any;
-  reviewScore: number | null;
-  similarity: number;
-}>> {
+): Promise<SimilarProject[]> {
   try {
     const embedding = await generateEmbedding(description);
     const vectorStr = `[${embedding.join(',')}]`;
@@ -38,13 +53,16 @@ export async function findSimilarProjects(
       LIMIT ${limit}
     `);
 
-    return (results.rows as any[]).map((row) => ({
-      id: row.id,
-      repoName: row.repo_name,
-      strategy: row.strategy,
-      reviewScore: row.review_score,
-      similarity: row.similarity,
-    }));
+    return results.rows.map((row): SimilarProject => {
+      const parsed = SimilarProjectRowSchema.parse(row);
+      return {
+        id: parsed.id,
+        repoName: parsed.repo_name,
+        strategy: parsed.strategy,
+        reviewScore: parsed.review_score,
+        similarity: parsed.similarity,
+      };
+    });
   } catch (err) {
     console.error('[Memory] Error finding similar projects:', err);
     return [];

@@ -8,16 +8,21 @@ import globals from 'globals';
 /**
  * Workspace ESLint config (flat).
  *
- * Severity is intentionally `warn` in this commit so the tooling
- * foundation can land green without forcing application code changes.
- * Rules are flipped to `error` in the upcoming "enable strict flags"
- * PR, after the shared Zod schemas land and the boundary-validation
- * pass deletes every `any` and `as unknown as X` cast in the repo.
+ * Every rule below is at `error` severity. The lint script also runs
+ * with `--max-warnings=0`, so any future warning surfaces as a hard
+ * failure in CI and the prepush hook. The progression was:
  *
- * The point of shipping the config now (even at warn) is to make every
- * subsequent PR diff visible: a reviewer can run `npm run lint` and
- * see exactly which boundaries still need validation, because each one
- * shows up as an ESLint warning.
+ *   PR #3 — config introduced at `warn` so the tooling could land
+ *           without forcing application code changes.
+ *   PR #5 — schema-validate every runtime boundary; deleted every
+ *           `any` and `as unknown as X` cast in the repo.
+ *   PR #6 — turn on the four strict TypeScript flags and flip every
+ *           rule below from `warn` to `error`.
+ *
+ * The intent is that any new `any`, unsafe member access, floating
+ * Promise, non-null assertion, or empty-string-vs-nullish bug fails
+ * the build at the earliest possible point — local typecheck, then
+ * lefthook, then CI.
  */
 export default tseslint.config(
   {
@@ -60,48 +65,47 @@ export default tseslint.config(
       globals: globals.node,
     },
     rules: {
-      // ── Anti-`any` rules — the whole point of the upcoming
-      //    boundary-validation PR. All at warn for now; flipped to
-      //    error in the strict-mode PR.
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
+      // ── Anti-`any` rules ──
+      //
+      // The boundary-validation pass in PR #5 deleted every `any` and
+      // `as unknown as X` cast. These rules guard the regression: a
+      // new `any` anywhere in the worker / web / cron / shared / video
+      // surface is a hard build failure, not a warning.
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
 
       // ── Style and correctness ──
       '@typescript-eslint/consistent-type-imports': [
-        'warn',
+        'error',
         { prefer: 'type-imports', fixStyle: 'separate-type-imports' },
       ],
-      '@typescript-eslint/no-non-null-assertion': 'warn',
-      '@typescript-eslint/prefer-nullish-coalescing': 'warn',
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-misused-promises': 'warn',
-      '@typescript-eslint/await-thenable': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/prefer-nullish-coalescing': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
 
-      // ── Demoted recommended-preset rules ──
-      // These default to `error` from `recommendedTypeChecked` but
-      // would block this PR's "no app code changes" rule. They flip
-      // back to `error` in the strict-mode PR.
-      '@typescript-eslint/prefer-regexp-exec': 'warn',
-      '@typescript-eslint/only-throw-error': 'warn',
-      '@typescript-eslint/require-await': 'warn',
-      '@typescript-eslint/no-base-to-string': 'warn',
-      '@typescript-eslint/no-redundant-type-constituents': 'warn',
+      // ── Recommended-typed preset rules ──
+      '@typescript-eslint/prefer-regexp-exec': 'error',
+      '@typescript-eslint/only-throw-error': 'error',
+      '@typescript-eslint/require-await': 'error',
+      '@typescript-eslint/no-base-to-string': 'error',
+      '@typescript-eslint/no-redundant-type-constituents': 'error',
       '@typescript-eslint/restrict-template-expressions': [
-        'warn',
+        'error',
         { allowNumber: true, allowBoolean: true, allowNullish: false },
       ],
-      '@typescript-eslint/restrict-plus-operands': 'warn',
-      '@typescript-eslint/unbound-method': 'warn',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
-      'no-useless-escape': 'warn',
+      '@typescript-eslint/restrict-plus-operands': 'error',
+      '@typescript-eslint/unbound-method': 'error',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      'no-useless-escape': 'error',
 
-      // ── Loosen rules that conflict with the existing codebase shape. ──
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
 
@@ -140,9 +144,20 @@ export default tseslint.config(
       // The new JSX transform doesn't need React in scope.
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
-      'react/no-unescaped-entities': 'warn',
-      'react/display-name': 'warn',
-      'react/jsx-key': 'warn',
+      'react/display-name': 'error',
+      'react/jsx-key': 'error',
+      'react/no-unescaped-entities': 'error',
+
+      // React event handlers commonly accept async functions whose
+      // return value is intentionally discarded. The default
+      // `no-misused-promises` errors on every `onClick={async () =>
+      // ...}` and forces a `void` wrapper that adds noise without
+      // catching real bugs. We disable the attribute check for React
+      // files only — server-side files keep the strict default.
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
+      ],
     },
   },
 
@@ -168,7 +183,12 @@ export default tseslint.config(
       globals: globals.node,
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // The seed and config scripts intentionally feed local literal
+      // data into the API at the type-erased boundary; the schemas
+      // catch shape mistakes at runtime, so the `any` constraint
+      // here is more noise than safety.
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
 );

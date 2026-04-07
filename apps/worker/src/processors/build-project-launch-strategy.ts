@@ -58,10 +58,10 @@ export async function buildProjectLaunchStrategy(data: JobData): Promise<void> {
     },
   }));
 
-  const insertedAssets = await db
-    .insert(schema.assets)
-    .values(assetRecords)
-    .returning();
+  // Insert the queued asset records. We don't read the returned
+  // rows here — the worker fan-out re-queries by `projectId` —
+  // so the result is intentionally discarded.
+  await db.insert(schema.assets).values(assetRecords);
 
   // Update project with strategy
   await db

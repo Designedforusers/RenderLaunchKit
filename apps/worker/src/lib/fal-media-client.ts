@@ -3,10 +3,11 @@ import {
   FluxImageResponseSchema,
   KlingVideoResponseSchema,
 } from './schemas/fal.js';
+import { env } from '../env.js';
 
 // Configure fal.ai client
-if (process.env.FAL_API_KEY) {
-  fal.config({ credentials: process.env.FAL_API_KEY });
+if (env.FAL_API_KEY) {
+  fal.config({ credentials: env.FAL_API_KEY });
 }
 
 /**
@@ -19,7 +20,7 @@ export async function generateImage(
     style?: string;
   }
 ): Promise<{ url: string; prompt: string }> {
-  if (!process.env.FAL_API_KEY) {
+  if (!env.FAL_API_KEY) {
     console.warn('[fal.ai] No API key configured, returning placeholder');
     return {
       url: `https://placehold.co/1200x630/1e293b/10b981?text=${encodeURIComponent('LaunchKit')}`,
@@ -32,7 +33,7 @@ export async function generateImage(
       prompt: options?.style
         ? `${prompt}. Style: ${options.style}`
         : prompt,
-      aspect_ratio: options?.aspectRatio || '16:9',
+      aspect_ratio: options?.aspectRatio ?? '16:9',
       output_format: 'png',
       safety_tolerance: '5',
     },
@@ -57,7 +58,11 @@ export async function generateImage(
         .join('; ')}`
     );
   }
-  const imageUrl = parsed.data.images[0].url;
+  const firstImage = parsed.data.images[0];
+  if (!firstImage) {
+    throw new Error('fal.ai FLUX response contained no images');
+  }
+  const imageUrl = firstImage.url;
 
   return { url: imageUrl, prompt };
 }
@@ -73,12 +78,12 @@ export async function generateVideo(
     generateAudio?: boolean;
   }
 ): Promise<{ url: string; prompt: string; duration: number }> {
-  if (!process.env.FAL_API_KEY) {
+  if (!env.FAL_API_KEY) {
     console.warn('[fal.ai] No API key configured, returning placeholder');
     return {
       url: '',
       prompt,
-      duration: options?.duration || 5,
+      duration: options?.duration ?? 5,
     };
   }
 
@@ -90,7 +95,7 @@ export async function generateVideo(
     input: {
       prompt,
       ...(options?.imageUrl ? { image_url: options.imageUrl } : {}),
-      duration: String(options?.duration || 5),
+      duration: String(options?.duration ?? 5),
     },
     logs: true,
     onQueueUpdate: (update) => {
@@ -111,5 +116,5 @@ export async function generateVideo(
   }
   const videoUrl = parsed.data.video.url;
 
-  return { url: videoUrl, prompt, duration: options?.duration || 5 };
+  return { url: videoUrl, prompt, duration: options?.duration ?? 5 };
 }

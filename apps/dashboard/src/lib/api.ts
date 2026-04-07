@@ -4,10 +4,7 @@ import {
   CreateProjectResponseSchema,
   ProjectResponseSchema,
 } from '@launchkit/shared';
-import type {
-  AssetResponse,
-  ProjectResponse,
-} from '@launchkit/shared';
+import type { AssetResponse } from '@launchkit/shared';
 
 const API_BASE = '/api';
 
@@ -38,7 +35,7 @@ async function request<S extends z.ZodType>(
     const error = (await response
       .json()
       .catch(() => ({ error: 'Request failed' }))) as { error?: string };
-    throw new Error(error.error || `HTTP ${response.status}`);
+    throw new Error(error.error ?? `HTTP ${response.status}`);
   }
 
   const json: unknown = await response.json();

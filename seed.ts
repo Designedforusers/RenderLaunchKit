@@ -373,8 +373,6 @@ async function seed() {
 
     // Create assets for each strategy item
     for (const assetSpec of seedProject.strategy.assetsToGenerate) {
-      const isMedia = ['og_image', 'social_card', 'product_video'].includes(assetSpec.type);
-
       let content: string | null = null;
       let mediaUrl: string | null = null;
       let metadata: any = { brief: assetSpec.brief, priority: assetSpec.priority };

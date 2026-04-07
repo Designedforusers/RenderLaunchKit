@@ -32,6 +32,7 @@ import {
   generationQueue,
   reviewQueue,
 } from './lib/job-queues.js';
+import { env } from './env.js';
 
 // ── Analysis Worker ──
 // Handles: analyze-repo → research → strategize → fan-out generation
@@ -94,7 +95,7 @@ const analysisWorker = new Worker(
           duration: Date.now() - startTime,
           completedAt: new Date(),
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
 
@@ -106,7 +107,7 @@ const analysisWorker = new Worker(
           duration: Date.now() - startTime,
           attempts: job.attemptsMade + 1,
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
 
       // Update project status to failed
       await db
@@ -155,7 +156,7 @@ const generationWorker = new Worker(
           duration: Date.now() - startTime,
           completedAt: new Date(),
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
 
       // Check if all generation jobs are done → trigger review
       await checkAndTriggerReview(data.projectId);
@@ -170,7 +171,7 @@ const generationWorker = new Worker(
           duration: Date.now() - startTime,
           attempts: job.attemptsMade + 1,
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
 
       await projectProgressPublisher.error(
         data.projectId,
@@ -215,7 +216,7 @@ const reviewWorker = new Worker(
           duration: Date.now() - startTime,
           completedAt: new Date(),
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
 
@@ -226,7 +227,7 @@ const reviewWorker = new Worker(
           error: error.message,
           duration: Date.now() - startTime,
         })
-        .where(eq(schema.jobs.bullmqJobId, job.id || ''));
+        .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
 
       throw err;
     }
@@ -292,8 +293,12 @@ async function fanOutGeneration(projectId: string): Promise<void> {
         assetId: asset.id,
         assetType: asset.type,
         generationInstructions:
-          (assetMetadata?.generationInstructions as string) ||
-          (assetMetadata?.brief as string) ||
+          (typeof assetMetadata?.['generationInstructions'] === 'string'
+            ? assetMetadata['generationInstructions']
+            : null) ??
+          (typeof assetMetadata?.['brief'] === 'string'
+            ? assetMetadata['brief']
+            : null) ??
           `Generate a ${asset.type} for this product`,
         repoName: project.repoName,
         repoAnalysis,
@@ -363,11 +368,13 @@ for (const [name, worker] of Object.entries({
   review: reviewWorker,
 })) {
   worker.on('completed', (job) => {
-    console.log(`[${name}] Job ${job.name}:${job.id} completed`);
+    console.log(`[${name}] Job ${job.name}:${job.id ?? '<unknown>'} completed`);
   });
 
   worker.on('failed', (job, err) => {
-    console.error(`[${name}] Job ${job?.name}:${job?.id} failed:`, err.message);
+    const jobName = job?.name ?? '<unknown>';
+    const jobId = job?.id ?? '<unknown>';
+    console.error(`[${name}] Job ${jobName}:${jobId} failed:`, err.message);
   });
 
   worker.on('error', (err) => {
@@ -381,7 +388,7 @@ console.log(`
 ╔══════════════════════════════════════════╗
 ║  LaunchKit Worker Service                ║
 ║  Queues: analysis, generation, review    ║
-║  Env: ${(process.env.NODE_ENV || 'development').padEnd(34)}║
+║  Env: ${env.NODE_ENV.padEnd(34)}║
 ╚══════════════════════════════════════════╝
 `);
 
@@ -398,5 +405,9 @@ async function shutdown() {
   process.exit(0);
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => {
+  void shutdown();
+});
+process.on('SIGINT', () => {
+  void shutdown();
+});

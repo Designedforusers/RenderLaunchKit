@@ -11,6 +11,15 @@
 // `ANTHROPIC_API_KEY` — that's the responsibility of a deploy-time
 // integration check, not this test file.
 
+// The worker now validates `process.env` through a Zod schema in
+// `apps/worker/src/env.ts`. The schema is intentionally strict in
+// production — `DATABASE_URL` is required — so the smoke test, which
+// only imports modules and never opens a database connection, has to
+// provide a placeholder before the imports trigger the lazy parser.
+// `??=` keeps any real value the developer set in their shell.
+process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/launchkit_test';
+process.env.REDIS_URL ??= 'redis://localhost:6379';
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

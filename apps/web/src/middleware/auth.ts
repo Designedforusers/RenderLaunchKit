@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { env } from '../env.js';
 
 /**
  * Optional API key auth middleware.
@@ -14,7 +15,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  * lets us use `timingSafeEqual` without a length-mismatch branch.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  const apiKey = process.env.API_KEY;
+  const apiKey = env.API_KEY;
 
   // No API key configured — open access (demo default).
   if (!apiKey) {

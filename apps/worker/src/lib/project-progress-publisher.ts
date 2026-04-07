@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { REDIS_CHANNELS } from '@launchkit/shared';
 import type { ProgressEvent } from '@launchkit/shared';
+import { env } from '../env.js';
 
 /**
  * Lazy Redis client. Held in a module-level slot but only constructed
@@ -18,12 +19,10 @@ import type { ProgressEvent } from '@launchkit/shared';
 let redisClient: Redis | null = null;
 
 function getRedisClient(): Redis {
-  if (!redisClient) {
-    redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
-  }
+  redisClient ??= new Redis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
   return redisClient;
 }
 
@@ -39,7 +38,7 @@ export async function publishProjectProgressEvent(
   const payload: ProgressEvent = {
     type: event.type,
     phase: event.phase,
-    data: event.data || {},
+    data: event.data ?? {},
     timestamp: Date.now(),
   };
 
@@ -54,7 +53,7 @@ export const projectProgressPublisher = {
     return publishProjectProgressEvent(projectId, {
       type: 'phase_start',
       phase,
-      data: { detail: detail || `Starting ${phase}` },
+      data: { detail: detail ?? `Starting ${phase}` },
     });
   },
 
@@ -62,7 +61,7 @@ export const projectProgressPublisher = {
     return publishProjectProgressEvent(projectId, {
       type: 'phase_complete',
       phase,
-      data: { detail: detail || `Completed ${phase}` },
+      data: { detail: detail ?? `Completed ${phase}` },
     });
   },
 
