@@ -222,9 +222,9 @@ export async function runResearchAgent(
     },
   });
 
-  if (!captured) {
-    throw new Error('Research agent did not produce a structured result');
-  }
-
-  return captured;
+  // `runAgent` already throws via `parseResult` if `captured` is null,
+  // so reaching this point means it is non-null. The non-null assertion
+  // is load-bearing only for TypeScript's narrowing — the runtime
+  // contract is enforced inside the parser callback above.
+  return captured!;
 }
