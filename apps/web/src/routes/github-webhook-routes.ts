@@ -4,7 +4,11 @@ import crypto from 'node:crypto';
 import { eq, and } from 'drizzle-orm';
 import { database } from '../lib/database.js';
 import { analysisJobQueue } from '../lib/job-queue-clients.js';
-import { projects, webhookEvents } from '@launchkit/shared';
+import {
+  GitHubWebhookPayloadSchema,
+  projects,
+  webhookEvents,
+} from '@launchkit/shared';
 
 const githubWebhookRoutes = new Hono();
 
@@ -70,12 +74,34 @@ githubWebhookRoutes.post(
       return c.json({ ok: true, deduped: true, deliveryId });
     }
 
-    let event: Record<string, any>;
+    // Parse the JSON envelope first, then validate it against the
+    // GitHub webhook schema. The schema covers only the fields the
+    // receiver actually reads (`repository.html_url`, `after`,
+    // `head_commit.message`, `release.tag_name`, `release.name`) and
+    // passes everything else through, so a payload format change
+    // upstream cannot break this route unless one of those specific
+    // fields disappears.
+    let rawJson: unknown;
     try {
-      event = JSON.parse(body) as Record<string, any>;
+      rawJson = JSON.parse(body);
     } catch {
       return c.json({ error: 'Invalid JSON payload' }, 400);
     }
+
+    const parsed = GitHubWebhookPayloadSchema.safeParse(rawJson);
+    if (!parsed.success) {
+      const formatted = parsed.error.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? issue.path.join('.') : '<root>';
+          return `${path}: ${issue.message}`;
+        })
+        .join('; ');
+      return c.json(
+        { error: `Webhook payload did not match the expected shape: ${formatted}` },
+        400
+      );
+    }
+    const event = parsed.data;
     const eventType = c.req.header('x-github-event') || 'unknown';
 
     // Only process push and release events.
@@ -83,11 +109,11 @@ githubWebhookRoutes.post(
       return c.json({ ok: true, skipped: true, reason: 'Unhandled event type' });
     }
 
-    // Find matching project.
-    const repoUrl = event.repository?.html_url;
-    if (!repoUrl) {
-      return c.json({ ok: true, skipped: true, reason: 'No repository URL' });
-    }
+    // Find matching project. `repository.html_url` is a required
+    // field on `GitHubWebhookPayloadSchema`, so the safeParse above
+    // already rejected any payload without it — no fallback guard
+    // needed here.
+    const repoUrl = event.repository.html_url;
 
     const project = await database.query.projects.findFirst({
       where: and(eq(projects.repoUrl, repoUrl), eq(projects.webhookEnabled, true)),

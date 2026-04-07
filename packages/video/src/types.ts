@@ -1,29 +1,51 @@
-export type LaunchKitVideoShot = {
-  id: string;
-  headline: string;
-  caption: string;
-  imageUrl: string;
-  durationInFrames: number;
-  accent?: string;
-};
+import { z } from 'zod';
 
-export type LaunchKitCaption = {
-  startInFrames: number;
-  endInFrames: number;
-  text: string;
-};
+/**
+ * Type definitions and Zod schemas for the LaunchKit Remotion video
+ * composition.
+ *
+ * The schemas exist alongside the inferred types so callers that
+ * receive these props from an untrusted source (e.g. the Remotion
+ * render route in `apps/web/src/routes/asset-api-routes.ts`, which
+ * pulls the props from `assets.metadata.remotionProps`) can validate
+ * the shape with `LaunchKitVideoPropsSchema.safeParse(value)` instead
+ * of a hand-rolled type guard.
+ *
+ * `z.infer` produces TypeScript types that are structurally
+ * identical to the previous hand-written `LaunchKitVideoProps` /
+ * `LaunchKitVideoShot` / `LaunchKitCaption` interfaces, so every
+ * existing import keeps working unchanged.
+ */
 
-export type LaunchKitVideoProps = {
-  title: string;
-  subtitle: string;
-  badge: string;
-  accentColor: string;
-  backgroundColor: string;
-  shots: LaunchKitVideoShot[];
-  outroCta: string;
-  audioSrc?: string;
-  captions?: LaunchKitCaption[];
-};
+export const LaunchKitVideoShotSchema = z.object({
+  id: z.string(),
+  headline: z.string(),
+  caption: z.string(),
+  imageUrl: z.string(),
+  durationInFrames: z.number().positive(),
+  accent: z.string().optional(),
+});
+export type LaunchKitVideoShot = z.infer<typeof LaunchKitVideoShotSchema>;
+
+export const LaunchKitCaptionSchema = z.object({
+  startInFrames: z.number().nonnegative(),
+  endInFrames: z.number().positive(),
+  text: z.string(),
+});
+export type LaunchKitCaption = z.infer<typeof LaunchKitCaptionSchema>;
+
+export const LaunchKitVideoPropsSchema = z.object({
+  title: z.string(),
+  subtitle: z.string(),
+  badge: z.string(),
+  accentColor: z.string(),
+  backgroundColor: z.string(),
+  shots: z.array(LaunchKitVideoShotSchema),
+  outroCta: z.string(),
+  audioSrc: z.string().optional(),
+  captions: z.array(LaunchKitCaptionSchema).optional(),
+});
+export type LaunchKitVideoProps = z.infer<typeof LaunchKitVideoPropsSchema>;
 
 export const VIDEO_FPS = 24;
 export const VIDEO_WIDTH = 960;
@@ -37,7 +59,7 @@ export function getLaunchKitVideoDurationInFrames(
     props.captions?.reduce(
       (max, caption) => Math.max(max, caption.endInFrames),
       0
-    ) || 0;
+    ) ?? 0;
 
   return (
     Math.max(

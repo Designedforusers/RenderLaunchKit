@@ -1,6 +1,11 @@
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import type { JobData, RepoAnalysis, ResearchResult } from '@launchkit/shared';
+import {
+  parseJsonbColumn,
+  RepoAnalysisSchema,
+  ResearchResultSchema,
+} from '@launchkit/shared';
+import type { JobData } from '@launchkit/shared';
 import { createLaunchStrategy } from '../agents/launch-strategy-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
@@ -22,14 +27,30 @@ export async function buildProjectLaunchStrategy(data: JobData): Promise<void> {
     'Crafting go-to-market strategy'
   );
 
-  const repoAnalysis = project.repoAnalysis as unknown as RepoAnalysis;
-  const research = project.research as unknown as ResearchResult;
+  // Parse the jsonb columns through their schemas. If a previous
+  // worker run wrote a row that does not match the current schema,
+  // this throws a structured error naming the failing field — that
+  // is the right behaviour for a stale row, not a silent crash later.
+  const repoAnalysis = parseJsonbColumn(
+    RepoAnalysisSchema,
+    project.repoAnalysis,
+    'project.repo_analysis'
+  );
+  const research = parseJsonbColumn(
+    ResearchResultSchema,
+    project.research,
+    'project.research'
+  );
   const strategy = await createLaunchStrategy(repoAnalysis, research);
 
-  // Create asset records for everything the strategist wants to generate
+  // Create asset records for everything the strategist wants to
+  // generate. `asset.type` no longer needs an `as any` cast because
+  // `AssetType` is now derived from the drizzle pgEnum directly
+  // (see `packages/shared/src/enums.ts`) — drizzle's column type and
+  // the schema-derived type are the same identity.
   const assetRecords = strategy.assetsToGenerate.map((asset) => ({
     projectId,
-    type: asset.type as any,
+    type: asset.type,
     status: 'queued' as const,
     metadata: {
       generationInstructions: asset.generationInstructions,

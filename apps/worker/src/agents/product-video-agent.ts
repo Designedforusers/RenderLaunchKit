@@ -6,7 +6,13 @@ import {
   getLaunchKitVideoDurationInFrames,
   VIDEO_FPS,
 } from '@launchkit/video';
-import type { RepoAnalysis, ResearchResult, StrategyBrief } from '@launchkit/shared';
+import { StoryboardResultSchema } from '@launchkit/shared';
+import type {
+  RepoAnalysis,
+  ResearchResult,
+  StoryboardResult,
+  StrategyBrief,
+} from '@launchkit/shared';
 
 interface VideoDirectorInput {
   repoName: string;
@@ -14,18 +20,6 @@ interface VideoDirectorInput {
   research: ResearchResult;
   strategy: StrategyBrief;
   generationInstructions: string;
-}
-
-interface StoryboardResult {
-  concept: string;
-  shots: Array<{
-    headline: string;
-    caption: string;
-    visualPrompt: string;
-    duration: number;
-    accent?: string;
-  }>;
-  voiceoverNotes: string;
 }
 
 const SYSTEM_PROMPT = `You are a video director specializing in developer product demo videos. Your job is to create a storyboard and generation prompts for Kling 3.0 video generation.
@@ -118,7 +112,7 @@ async function planVideoPackage(input: VideoDirectorInput): Promise<{
 
 Return a concise storyboard for a polished launch video and write prompts for strong still visuals that can anchor each shot.`;
 
-  const storyboard = await generateJSON<StoryboardResult>(SYSTEM_PROMPT, userPrompt);
+  const storyboard = await generateJSON(StoryboardResultSchema, SYSTEM_PROMPT, userPrompt);
   const shotImages = await Promise.all(
     storyboard.shots.map((shot) =>
       generateImage(shot.visualPrompt, {

@@ -1,4 +1,4 @@
-import type { ProjectPipelineEvent } from '../hooks/useProjectEventStream.js';
+import type { ProgressEvent } from '@launchkit/shared';
 
 const PHASES = [
   { key: 'analyzing', label: 'Analyzing Repo', icon: '01' },
@@ -10,7 +10,7 @@ const PHASES = [
 
 interface ProjectActivityTimelineProps {
   status: string;
-  events: ProjectPipelineEvent[];
+  events: ProgressEvent[];
 }
 
 export function ProjectActivityTimeline({

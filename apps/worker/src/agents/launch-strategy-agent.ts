@@ -1,5 +1,6 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
 import { getInsightsForCategory } from '../tools/project-insight-memory.js';
+import { StrategyBriefSchema } from '@launchkit/shared';
 import type { RepoAnalysis, ResearchResult, StrategyBrief, StrategyInsight } from '@launchkit/shared';
 
 const SYSTEM_PROMPT = `You are a developer marketing strategist. Given research about a product, decide the optimal go-to-market strategy.
@@ -65,29 +66,17 @@ ${insights.length > 0 ? `## Past Insights from Similar Projects\n${insights.map(
 
 Based on this information, create a focused, opinionated strategy. Don't try to be everywhere — pick the channels and assets that will have the highest impact for this specific product.`;
 
-  const strategy = await generateJSON<StrategyBrief>(SYSTEM_PROMPT, userPrompt, {
-    maxTokens: 4096,
-  });
-
-  strategy.assetsToGenerate = (strategy.assetsToGenerate || []).map((asset) => {
-    const assetWithLegacyFields = asset as typeof asset & { brief?: string };
-
-    return {
-      ...asset,
-      generationInstructions:
-        asset.generationInstructions || assetWithLegacyFields.brief || '',
-    };
-  });
-
-  // Validate required fields
-  if (
-    !strategy.positioning ||
-    !strategy.tone ||
-    !strategy.assetsToGenerate ||
-    strategy.assetsToGenerate.some((asset) => !asset.generationInstructions)
-  ) {
-    throw new Error('Strategist did not produce valid strategy');
-  }
+  // Schema validation replaces the previous hand-rolled
+  // `if (!strategy.positioning || ...)` check. Any missing or
+  // wrongly-typed field on the model output now throws a structured
+  // Zod error from `generateJSON` itself, with the failing field
+  // path in the message.
+  const strategy: StrategyBrief = await generateJSON(
+    StrategyBriefSchema,
+    SYSTEM_PROMPT,
+    userPrompt,
+    { maxTokens: 4096 }
+  );
 
   // Ensure at minimum we have blog + og_image
   const assetTypes = strategy.assetsToGenerate.map((a) => a.type);

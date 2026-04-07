@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import type { JobData, RepoAnalysis } from '@launchkit/shared';
+import { parseJsonbColumn, RepoAnalysisSchema } from '@launchkit/shared';
+import type { JobData } from '@launchkit/shared';
 import { runResearchAgent } from '../agents/launch-research-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
@@ -23,7 +24,11 @@ export async function researchProjectLaunchContext(data: JobData): Promise<void>
     'Starting agentic research loop'
   );
 
-  const repoAnalysis = project.repoAnalysis as unknown as RepoAnalysis;
+  const repoAnalysis = parseJsonbColumn(
+    RepoAnalysisSchema,
+    project.repoAnalysis,
+    'project.repo_analysis'
+  );
   const research = await runResearchAgent(projectId, repoAnalysis);
 
   // Update project with research results

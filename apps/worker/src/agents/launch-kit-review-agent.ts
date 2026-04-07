@@ -1,4 +1,5 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
+import { CreativeReviewSchema } from '@launchkit/shared';
 import type { CreativeReview, StrategyBrief } from '@launchkit/shared';
 
 interface AssetForReview {
@@ -73,14 +74,14 @@ ${asset.metadata ? `Metadata: ${JSON.stringify(asset.metadata)}` : ''}`
 
 Review the entire kit as a coherent package. Score each asset and decide whether to approve or request revisions.`;
 
-  const review = await generateJSON<CreativeReview>(SYSTEM_PROMPT, userPrompt, {
-    maxTokens: 4096,
-  });
-
-  // Validate
-  if (typeof review.overallScore !== 'number' || !review.assetReviews) {
-    throw new Error('Creative director did not produce valid review');
-  }
+  // Schema validation replaces the previous hand-rolled
+  // `if (typeof review.overallScore !== 'number' || ...)` check.
+  const review: CreativeReview = await generateJSON(
+    CreativeReviewSchema,
+    SYSTEM_PROMPT,
+    userPrompt,
+    { maxTokens: 4096 }
+  );
 
   return review;
 }

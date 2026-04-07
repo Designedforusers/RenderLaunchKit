@@ -1,15 +1,16 @@
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import type {
-  GenerateAssetJobData,
-  RepoAnalysis,
-  ResearchResult,
-  ReviewJobData,
-  StrategyBrief,
+import {
+  MAX_REVISION_ROUNDS,
+  MIN_APPROVAL_SCORE,
+  parseJsonbColumn,
+  RepoAnalysisSchema,
+  ResearchResultSchema,
+  StrategyBriefSchema,
 } from '@launchkit/shared';
+import type { GenerateAssetJobData, ReviewJobData } from '@launchkit/shared';
 import { reviewLaunchKitAssets } from '../agents/launch-kit-review-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
-import { MIN_APPROVAL_SCORE, MAX_REVISION_ROUNDS } from '@launchkit/shared';
 import { getInsightsForCategory } from '../tools/project-insight-memory.js';
 import { database as db } from '../lib/database.js';
 import { generationQueue } from '../lib/job-queues.js';
@@ -60,7 +61,11 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     return;
   }
 
-  const strategy = project.strategy as unknown as StrategyBrief;
+  const strategy = parseJsonbColumn(
+    StrategyBriefSchema,
+    project.strategy,
+    'project.strategy'
+  );
   const review = await reviewLaunchKitAssets(strategy, assetsForReview);
 
   // Update each asset with its review
@@ -82,12 +87,14 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
       .where(eq(schema.assets.id, assetReview.assetId));
   }
 
-  // Update project with review results
+  // Update project with review results. The schema-validated `review`
+  // matches the `review_feedback` jsonb column shape exactly, so the
+  // previous `review as any` cast is no longer required.
   await db
     .update(schema.projects)
     .set({
       reviewScore: review.overallScore,
-      reviewFeedback: review as any,
+      reviewFeedback: review,
       updatedAt: new Date(),
     })
     .where(eq(schema.projects.id, projectId));
@@ -113,8 +120,16 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     const rejectedReviews = review.assetReviews.filter(
       (assetReview) => assetReview.score < MIN_APPROVAL_SCORE
     );
-    const repoAnalysis = project.repoAnalysis as unknown as RepoAnalysis;
-    const research = project.research as unknown as ResearchResult;
+    const repoAnalysis = parseJsonbColumn(
+      RepoAnalysisSchema,
+      project.repoAnalysis,
+      'project.repo_analysis'
+    );
+    const research = parseJsonbColumn(
+      ResearchResultSchema,
+      project.research,
+      'project.research'
+    );
     const pastInsights = await getInsightsForCategory(repoAnalysis.category);
 
     for (const assetReview of rejectedReviews) {

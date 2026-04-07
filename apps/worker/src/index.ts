@@ -2,18 +2,19 @@ import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import {
-  QUEUE_NAMES,
-  QUEUE_CONFIG,
   JOB_NAMES,
+  parseJsonbColumn,
+  QUEUE_CONFIG,
+  QUEUE_NAMES,
+  RepoAnalysisSchema,
+  ResearchResultSchema,
+  StrategyBriefSchema,
 } from '@launchkit/shared';
 import type {
   AnalyzeRepoJobData,
   FilterWebhookJobData,
   GenerateAssetJobData,
   ReviewJobData,
-  RepoAnalysis,
-  ResearchResult,
-  StrategyBrief,
   JobData,
 } from '@launchkit/shared';
 import { analyzeProjectRepository } from './processors/analyze-project-repository.js';
@@ -248,9 +249,26 @@ async function fanOutGeneration(projectId: string): Promise<void> {
     throw new Error('Project not ready for generation fan-out');
   }
 
-  const repoAnalysis = project.repoAnalysis as unknown as RepoAnalysis;
-  const research = project.research as unknown as ResearchResult;
-  const strategy = project.strategy as unknown as StrategyBrief;
+  // Parse the jsonb columns through their schemas instead of the
+  // previous `as unknown as X` triple casts. If the database row was
+  // written by a different worker version with an incompatible
+  // shape, the parser fails fast with a structured error naming the
+  // failing field — much easier to debug than a downstream crash.
+  const repoAnalysis = parseJsonbColumn(
+    RepoAnalysisSchema,
+    project.repoAnalysis,
+    'project.repo_analysis'
+  );
+  const research = parseJsonbColumn(
+    ResearchResultSchema,
+    project.research,
+    'project.research'
+  );
+  const strategy = parseJsonbColumn(
+    StrategyBriefSchema,
+    project.strategy,
+    'project.strategy'
+  );
 
   // Get past insights for this category
   const pastInsights = await getInsightsForCategory(repoAnalysis.category);

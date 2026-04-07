@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import type {
-  AssetType,
-  FilterWebhookJobData,
-  RepoAnalysis,
-  ResearchResult,
-  StrategyBrief,
+import {
+  parseJsonbColumn,
+  RepoAnalysisSchema,
+  ResearchResultSchema,
+  StrategyBriefSchema,
 } from '@launchkit/shared';
+import type { AssetType, FilterWebhookJobData } from '@launchkit/shared';
 import { evaluateWebhookEvent } from '../agents/webhook-relevance-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { getInsightsForCategory } from '../tools/project-insight-memory.js';
@@ -58,7 +58,10 @@ export async function filterWebhookEventForRegeneration(
     throw new Error(`Webhook event ${webhookEventId} not found`);
   }
 
-  const availableAssets = project.assets.map((asset) => asset.type as AssetType);
+  // `asset.type` is already typed as `AssetType` (drizzle's pgEnum
+  // narrows the column type to the same union the schema produces),
+  // so the previous `as AssetType` cast is no longer needed.
+  const availableAssets = project.assets.map((asset) => asset.type);
   if (availableAssets.length === 0) {
     await db
       .update(schema.webhookEvents)
@@ -70,9 +73,21 @@ export async function filterWebhookEventForRegeneration(
     return;
   }
 
-  const repoAnalysis = project.repoAnalysis as unknown as RepoAnalysis;
-  const research = project.research as unknown as ResearchResult;
-  const strategy = project.strategy as unknown as StrategyBrief;
+  const repoAnalysis = parseJsonbColumn(
+    RepoAnalysisSchema,
+    project.repoAnalysis,
+    'project.repo_analysis'
+  );
+  const research = parseJsonbColumn(
+    ResearchResultSchema,
+    project.research,
+    'project.research'
+  );
+  const strategy = parseJsonbColumn(
+    StrategyBriefSchema,
+    project.strategy,
+    'project.strategy'
+  );
 
   const decision = await evaluateWebhookEvent({
     eventType: webhookEvent.eventType,
@@ -102,7 +117,7 @@ export async function filterWebhookEventForRegeneration(
 
   const pastInsights = await getInsightsForCategory(repoAnalysis.category);
   const assetsToRegenerate = project.assets.filter((asset) =>
-    decision.assetTypes.includes(asset.type as AssetType)
+    decision.assetTypes.includes(asset.type)
   );
 
   if (assetsToRegenerate.length === 0) {
@@ -145,7 +160,7 @@ export async function filterWebhookEventForRegeneration(
         assetId: asset.id,
         assetType: asset.type,
         generationInstructions: buildWebhookGenerationInstructions(
-          asset.type as AssetType,
+          asset.type,
           existingGenerationInstructions,
           webhookEvent.eventType,
           webhookEvent.commitMessage || 'No commit message provided',

@@ -1,6 +1,8 @@
 import type { z } from 'zod';
 
+export * from './agent-outputs.js';
 export * from './api.js';
+export * from './github-webhook.js';
 export * from './job-data.js';
 export * from './progress-event.js';
 export * from './repo-analysis.js';

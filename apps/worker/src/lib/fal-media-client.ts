@@ -1,4 +1,8 @@
 import { fal } from '@fal-ai/client';
+import {
+  FluxImageResponseSchema,
+  KlingVideoResponseSchema,
+} from './schemas/fal.js';
 
 // Configure fal.ai client
 if (process.env.FAL_API_KEY) {
@@ -40,10 +44,20 @@ export async function generateImage(
     },
   });
 
-  const imageUrl = (result.data as any)?.images?.[0]?.url;
-  if (!imageUrl) {
-    throw new Error('No image URL returned from fal.ai');
+  // Validate the fal.ai response shape rather than blind-asserting it
+  // with `(result.data as any)?.images?.[0]?.url`. If the upstream API
+  // shape changes, the parser fails fast with a structured error
+  // naming the missing field instead of returning a confusing
+  // `undefined` from the chained optional access.
+  const parsed = FluxImageResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    throw new Error(
+      `fal.ai FLUX response did not match expected shape: ${parsed.error.issues
+        .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+        .join('; ')}`
+    );
   }
+  const imageUrl = parsed.data.images[0].url;
 
   return { url: imageUrl, prompt };
 }
@@ -86,10 +100,16 @@ export async function generateVideo(
     },
   });
 
-  const videoUrl = (result.data as any)?.video?.url;
-  if (!videoUrl) {
-    throw new Error('No video URL returned from fal.ai');
+  // Same boundary-validation discipline as the image path above.
+  const parsed = KlingVideoResponseSchema.safeParse(result.data);
+  if (!parsed.success) {
+    throw new Error(
+      `fal.ai Kling response did not match expected shape: ${parsed.error.issues
+        .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+        .join('; ')}`
+    );
   }
+  const videoUrl = parsed.data.video.url;
 
   return { url: videoUrl, prompt, duration: options?.duration || 5 };
 }

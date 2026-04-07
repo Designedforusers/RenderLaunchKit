@@ -1,5 +1,6 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
 import { generateImage } from '../lib/fal-media-client.js';
+import { ImagePromptResultSchema } from '@launchkit/shared';
 import type { RepoAnalysis, ResearchResult, StrategyBrief } from '@launchkit/shared';
 
 interface ArtDirectorInput {
@@ -8,12 +9,6 @@ interface ArtDirectorInput {
   strategy: StrategyBrief;
   assetType: 'og_image' | 'social_card';
   generationInstructions: string;
-}
-
-interface ImagePromptResult {
-  prompt: string;
-  style: string;
-  reasoning: string;
 }
 
 const SYSTEM_PROMPT = `You are an art director specializing in developer tool marketing visuals. Your job is to create image generation prompts for FLUX.2 Pro that will produce stunning, professional images.
@@ -56,8 +51,14 @@ export async function generateMarketingImageAsset(
 
 Design an image that a developer would stop scrolling for.`;
 
-  // Get Claude to craft the optimal image prompt
-  const promptResult = await generateJSON<ImagePromptResult>(SYSTEM_PROMPT, userPrompt);
+  // Get Claude to craft the optimal image prompt — validated against
+  // ImagePromptResultSchema so a missing `prompt` or `style` field
+  // throws here instead of crashing the fal.ai client downstream.
+  const promptResult = await generateJSON(
+    ImagePromptResultSchema,
+    SYSTEM_PROMPT,
+    userPrompt
+  );
 
   // Generate the image via fal.ai
   const image = await generateImage(promptResult.prompt, {

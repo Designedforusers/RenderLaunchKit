@@ -1,5 +1,11 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
-import type { AssetType, RepoAnalysis, StrategyBrief } from '@launchkit/shared';
+import { WebhookFilterDecisionSchema } from '@launchkit/shared';
+import type {
+  AssetType,
+  RepoAnalysis,
+  StrategyBrief,
+  WebhookFilterDecision,
+} from '@launchkit/shared';
 
 interface WebhookFilterInput {
   eventType: string;
@@ -8,12 +14,6 @@ interface WebhookFilterInput {
   repoAnalysis: RepoAnalysis;
   strategy: StrategyBrief;
   availableAssets: AssetType[];
-}
-
-interface WebhookFilterDecision {
-  isMarketable: boolean;
-  reasoning: string;
-  assetTypes: AssetType[];
 }
 
 const SYSTEM_PROMPT = `You are a product marketing editor deciding whether a GitHub event is substantial enough to regenerate launch content.
@@ -130,7 +130,8 @@ export async function evaluateWebhookEvent(
   }
 
   try {
-    const decision = await generateJSON<WebhookFilterDecision>(
+    const decision = await generateJSON(
+      WebhookFilterDecisionSchema,
       SYSTEM_PROMPT,
       `Decide whether this event should trigger content regeneration.
 
@@ -150,12 +151,17 @@ ${input.availableAssets.join(', ')}`,
       { maxTokens: 1200 }
     );
 
+    // The schema guarantees `decision.isMarketable`, `reasoning`, and
+    // `assetTypes` are present and well-typed. We still filter the
+    // returned asset types against the project's `availableAssets` so
+    // a hallucinated-but-schema-valid asset type can't queue a
+    // generation job for an asset the project does not have.
     return {
-      isMarketable: Boolean(decision.isMarketable),
-      reasoning: decision.reasoning || 'No reasoning provided.',
+      isMarketable: decision.isMarketable,
+      reasoning: decision.reasoning,
       assetTypes: unique(
-        (decision.assetTypes || []).filter((type): type is AssetType =>
-          input.availableAssets.includes(type as AssetType)
+        decision.assetTypes.filter((type) =>
+          input.availableAssets.includes(type)
         )
       ),
     };

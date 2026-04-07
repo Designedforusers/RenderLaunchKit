@@ -1,8 +1,13 @@
-import { eq, isNotNull, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from '@launchkit/shared';
-import { groupBy, mean } from '@launchkit/shared';
+import {
+  groupBy,
+  mean,
+  RepoAnalysisSchema,
+  StrategyBriefSchema,
+} from '@launchkit/shared';
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool, { schema });
@@ -36,10 +41,15 @@ export async function aggregateFeedbackInsights(): Promise<void> {
     return;
   }
 
-  // Group by project category
+  // Group by project category. The cron is intentionally tolerant
+  // of malformed `repo_analysis` rows — older projects from before
+  // the schema validation pass may have shapes the current schema
+  // does not accept, and the right behaviour for an aggregation job
+  // is to skip those projects rather than fail the entire run. We
+  // use `safeParse` for the same reason in the strategy lookup below.
   const byCategory = groupBy(projectsWithFeedback, (p) => {
-    const analysis = p.repoAnalysis as any;
-    return analysis?.category || 'unknown';
+    const parsed = RepoAnalysisSchema.safeParse(p.repoAnalysis);
+    return parsed.success ? parsed.data.category : 'unknown';
   });
 
   let insightCount = 0;
@@ -85,12 +95,15 @@ export async function aggregateFeedbackInsights(): Promise<void> {
       }
     }
 
-    // Insight 2: Tone analysis
+    // Insight 2: Tone analysis. Same tolerant-parse pattern as
+    // above — skip projects whose `strategy` jsonb does not match
+    // the current schema rather than failing the whole aggregation.
     const toneScores: Record<string, number[]> = {};
     for (const project of categoryProjects) {
-      const strategy = project.strategy as any;
-      const tone = strategy?.tone;
-      if (tone && project.reviewScore) {
+      const parsed = StrategyBriefSchema.safeParse(project.strategy);
+      if (!parsed.success) continue;
+      const tone = parsed.data.tone;
+      if (project.reviewScore) {
         if (!toneScores[tone]) toneScores[tone] = [];
         toneScores[tone].push(project.reviewScore);
       }
