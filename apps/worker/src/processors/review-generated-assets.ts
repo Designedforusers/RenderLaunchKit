@@ -1,7 +1,4 @@
-import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import type {
   GenerateAssetJobData,
@@ -14,18 +11,8 @@ import { reviewLaunchKitAssets } from '../agents/launch-kit-review-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { MIN_APPROVAL_SCORE, MAX_REVISION_ROUNDS } from '@launchkit/shared';
 import { getInsightsForCategory } from '../tools/project-insight-memory.js';
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
-
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-const generationQueue = new Queue(schema.QUEUE_NAMES.GENERATION, {
-  connection: {
-    host: redisUrl.hostname,
-    port: parseInt(redisUrl.port || '6379', 10),
-    password: redisUrl.password || undefined,
-  },
-});
+import { database as db } from '../lib/database.js';
+import { generationQueue } from '../lib/job-queues.js';
 
 export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise<void> {
   const { projectId, assetIds } = data;
@@ -49,7 +36,16 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     where: eq(schema.assets.projectId, projectId),
   });
 
+  // Restrict the review to the specific asset IDs that triggered this job.
+  //
+  // The set is captured by `checkAndTriggerReview` in the worker entrypoint
+  // when a generation round completes. Without this filter, a webhook-driven
+  // partial regeneration would re-review every previously-`complete` asset on
+  // the project — burning Anthropic tokens and risking spurious re-revision
+  // requests on content that did not change.
+  const assetIdSet = new Set(assetIds);
   const assetsForReview = projectAssets
+    .filter((a) => assetIdSet.has(a.id))
     .filter((a) => a.status === 'reviewing' || a.status === 'complete')
     .map((a) => ({
       id: a.id,

@@ -1,7 +1,5 @@
-import { Worker, Queue } from 'bullmq';
-import { eq, and } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
+import { Worker } from 'bullmq';
+import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import {
   QUEUE_NAMES,
@@ -26,26 +24,13 @@ import { reviewGeneratedProjectAssets } from './processors/review-generated-asse
 import { filterWebhookEventForRegeneration } from './processors/process-webhook-regeneration.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { getInsightsForCategory } from './tools/project-insight-memory.js';
-
-// ── Database Connection ──
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
-
-// ── Redis Connection ──
-
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-const connection = {
-  host: redisUrl.hostname,
-  port: parseInt(redisUrl.port || '6379'),
-  password: redisUrl.password || undefined,
-};
-
-// ── Generation Queue (for enqueueing from within the worker) ──
-
-const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, { connection });
-const generationQueue = new Queue(QUEUE_NAMES.GENERATION, { connection });
-const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection });
+import { database as db, databasePool } from './lib/database.js';
+import {
+  redisConnection as connection,
+  analysisQueue,
+  generationQueue,
+  reviewQueue,
+} from './lib/job-queues.js';
 
 // ── Analysis Worker ──
 // Handles: analyze-repo → research → strategize → fan-out generation
@@ -214,7 +199,7 @@ const reviewWorker = new Worker(
     await db.insert(schema.jobs).values({
       projectId: data.projectId,
       bullmqJobId: job.id,
-      name: 'creative-review',
+      name: JOB_NAMES.CREATIVE_REVIEW,
       status: 'active',
       startedAt: new Date(),
     });
@@ -333,7 +318,7 @@ async function checkAndTriggerReview(projectId: string): Promise<void> {
     // All assets done — trigger creative review
     const assetIds = projectAssets.map((a) => a.id);
     await reviewQueue.add(
-      'creative-review',
+      JOB_NAMES.CREATIVE_REVIEW,
       {
         projectId,
         assetIds,
@@ -391,7 +376,7 @@ async function shutdown() {
     generationWorker.close(),
     reviewWorker.close(),
   ]);
-  await pool.end();
+  await databasePool.end();
   process.exit(0);
 }
 

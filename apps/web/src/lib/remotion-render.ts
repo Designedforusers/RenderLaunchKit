@@ -36,6 +36,15 @@ const webpackOverride: WebpackOverrideFn = (config) => {
   };
 };
 
+/**
+ * Lazily build (and memoize) the Remotion bundle on first render.
+ *
+ * If the bundle promise rejects, the cached promise is cleared so the
+ * next render attempt can retry. Without this, a single transient failure
+ * (webpack hiccup, missing dep, full disk) would brick every subsequent
+ * render until the process restarts — and the failure mode is silent
+ * because the rejected promise just keeps rethrowing the original error.
+ */
 async function getBundle(): Promise<string> {
   if (!bundlePromise) {
     bundlePromise = bundle({
@@ -43,6 +52,9 @@ async function getBundle(): Promise<string> {
       rootDir: REMOTION_ROOT_DIR,
       enableCaching: true,
       webpackOverride,
+    }).catch((err) => {
+      bundlePromise = null;
+      throw err;
     });
   }
 

@@ -1,6 +1,4 @@
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import type { GenerateAssetJobData } from '@launchkit/shared';
 import { generateWrittenAsset } from '../agents/written-asset-agent.js';
@@ -10,9 +8,7 @@ import {
   generateVideoStoryboardAsset,
 } from '../agents/product-video-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
+import { database as db } from '../lib/database.js';
 
 /**
  * Unified content generation processor.

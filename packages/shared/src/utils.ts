@@ -112,15 +112,12 @@ export function sanitizeText(text: string): string {
     .replace(/'/g, '&#x27;');
 }
 
-/**
- * Create a deterministic hash for cache keys.
- */
-export function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
+// `simpleHash` (a 32-bit djb2 variant) was previously exported here for
+// Redis cache keys. It was removed because the ~4 billion-key space allowed
+// collisions across cached GitHub API responses, which could serve the wrong
+// repo's data from cache. Server-side callers now use a SHA-256 helper that
+// lives next to the consumer (e.g. apps/worker/src/tools/github-repository-tools.ts).
+//
+// `node:crypto` is intentionally not imported in this package because the
+// dashboard bundle imports from @launchkit/shared and must remain
+// browser-buildable.

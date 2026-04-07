@@ -1,6 +1,4 @@
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import type { AnalyzeRepoJobData, RepoAnalysis, ProjectCategory } from '@launchkit/shared';
 import {
@@ -14,9 +12,7 @@ import {
 } from '../tools/github-repository-tools.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { storeProjectEmbedding } from '../tools/project-insight-memory.js';
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
+import { database as db } from '../lib/database.js';
 
 /**
  * Infer project category from file tree, dependencies, and metadata.

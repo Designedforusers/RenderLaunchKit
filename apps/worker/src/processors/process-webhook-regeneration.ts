@@ -1,7 +1,4 @@
-import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import type {
   AssetType,
@@ -13,18 +10,8 @@ import type {
 import { evaluateWebhookEvent } from '../agents/webhook-relevance-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { getInsightsForCategory } from '../tools/project-insight-memory.js';
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
-
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-const generationQueue = new Queue(schema.QUEUE_NAMES.GENERATION, {
-  connection: {
-    host: redisUrl.hostname,
-    port: parseInt(redisUrl.port || '6379', 10),
-    password: redisUrl.password || undefined,
-  },
-});
+import { database as db } from '../lib/database.js';
+import { generationQueue } from '../lib/job-queues.js';
 
 function buildWebhookGenerationInstructions(
   assetType: AssetType,

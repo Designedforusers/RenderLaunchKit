@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { errorHandler } from './middleware/errors.js';
 import { authMiddleware } from './middleware/auth.js';
+import { apiRateLimit } from './middleware/rate-limit.js';
 import projectApiRoutes from './routes/project-api-routes.js';
 import assetApiRoutes from './routes/asset-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
@@ -77,11 +78,35 @@ app.use(
 app.use('*', errorHandler);
 
 // ── API Routes ──
+//
+// Order is significant. Hono runs middleware in declaration order, so:
+//
+//   1. Webhooks mount first because they authenticate via HMAC signature
+//      and must not be subject to the API key middleware below. They have
+//      their own body-size limit defined inside the route.
+//
+//   2. The SSE event stream is intentionally public (no auth) so the
+//      dashboard can subscribe without negotiating bearer tokens. Knowing
+//      the project UUID is the implicit access control. The rate-limit
+//      middleware still applies to SSE so a single IP can't open thousands
+//      of streams.
+//
+//   3. The general /api/* rate limit is mounted next. It applies to
+//      everything underneath — including the SSE route just above (Hono
+//      will resolve the handler from the SSE route since it was declared
+//      first, but the rate limit also fires because it's a more specific
+//      `/api/*` matcher).
+//
+//   4. Finally the auth middleware and the protected routes.
 
-// Webhooks don't need auth (they use signature verification)
+app.use('/api/*', apiRateLimit);
+
+// Webhooks don't need auth (they use signature verification + replay
+// protection inside the route).
 app.route('/api/webhooks', githubWebhookRoutes);
 
-// SSE events don't need auth for demo purposes
+// SSE events don't need auth for demo purposes — the dashboard subscribes
+// directly. In production this trade-off should be re-examined.
 app.route('/api/projects', projectEventStreamRoutes);
 
 // Protected API routes
