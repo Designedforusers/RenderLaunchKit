@@ -219,6 +219,14 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   const shouldDownload = c.req.query('download') === '1';
   const filename = getRenderedVideoFilename(asset.id, asset.version, variant);
 
+  // `Readable.toWeb` returns Node's `ReadableStream<Uint8Array>` from
+  // `node:stream/web`, which is structurally identical to the WHATWG
+  // `ReadableStream<Uint8Array>` from `lib.dom.d.ts` that the web
+  // platform `Response` constructor expects. TypeScript treats them
+  // as nominally distinct under strict mode, so the double cast is
+  // the only honest way to bridge them — an `as unknown as` rather
+  // than a single `as` because their public-facing methods overlap
+  // but are not assignable through the inferred type alone.
   return new Response(webStream as unknown as ReadableStream<Uint8Array>, {
     headers: {
       'Content-Type': 'video/mp4',
