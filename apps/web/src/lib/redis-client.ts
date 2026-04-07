@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
+import { env } from '../env.js';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = env.REDIS_URL;
 
 // Main Redis client for general operations
 export const redisClient = new Redis(REDIS_URL, {

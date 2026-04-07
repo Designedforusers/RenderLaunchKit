@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { env } from '../env.js';
 
 /**
  * Narrow an unknown thrown value to a numeric HTTP status code.
@@ -29,7 +30,7 @@ export async function errorHandler(c: Context, next: Next) {
     return c.json(
       {
         error: error.message || 'Internal server error',
-        ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+        ...(env.NODE_ENV !== 'production' && { stack: error.stack }),
       },
       status as ContentfulStatusCode
     );

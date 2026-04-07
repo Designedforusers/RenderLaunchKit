@@ -11,13 +11,16 @@ import {
 } from './types.js';
 import type { LaunchKitVideoProps } from './types.js';
 
-const calculateMetadata: CalculateMetadataFunction<LaunchKitVideoProps> = async ({
+// Remotion types `CalculateMetadataFunction` as returning a Promise,
+// but our implementation is purely synchronous, so we wrap with
+// `Promise.resolve` to match the contract without an unnecessary
+// `async` keyword.
+const calculateMetadata: CalculateMetadataFunction<LaunchKitVideoProps> = ({
   props,
-}) => {
-  return {
+}) =>
+  Promise.resolve({
     durationInFrames: getLaunchKitVideoDurationInFrames(props),
-  };
-};
+  });
 
 export const RemotionRoot = () => {
   return (

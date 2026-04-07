@@ -47,30 +47,36 @@ export function GeneratedAssetCard({
 
   const isMedia = ['og_image', 'social_card', 'product_video'].includes(asset.type);
   const isInProgress = ['queued', 'generating', 'regenerating'].includes(asset.status);
-  const assetMetadata = (asset.metadata as Record<string, unknown> | null) || null;
+  const assetMetadata = (asset.metadata) ?? null;
   const remotionProps =
     asset.type === 'product_video'
-      ? ((assetMetadata?.remotionProps as LaunchKitVideoProps | undefined) ?? null)
+      ? ((assetMetadata?.['remotionProps'] as LaunchKitVideoProps | undefined) ?? null)
       : null;
+  const thumbnailUrl =
+    typeof assetMetadata?.['thumbnailUrl'] === 'string'
+      ? assetMetadata['thumbnailUrl']
+      : undefined;
   const hasPreview =
     Boolean(asset.content) ||
     Boolean(asset.mediaUrl) ||
     (asset.type === 'product_video' && Boolean(remotionProps));
-  const voiceoverAsset = projectAssets?.find(
-    (candidate) =>
-      candidate.type === 'voiceover_script' &&
-      candidate.status !== 'failed' &&
-      (Array.isArray(candidate.metadata?.segments)
-        ? candidate.metadata.segments.length > 0
-        : Boolean(candidate.content?.includes('[SCREEN:')))
-  );
+  const voiceoverAsset = projectAssets?.find((candidate) => {
+    if (candidate.type !== 'voiceover_script' || candidate.status === 'failed') {
+      return false;
+    }
+    const segments = candidate.metadata?.['segments'];
+    if (Array.isArray(segments)) {
+      return segments.length > 0;
+    }
+    return Boolean(candidate.content?.includes('[SCREEN:'));
+  });
   const hasNarratedVariant = asset.type === 'product_video' && Boolean(voiceoverAsset);
   const narratedPreviewUrl =
     asset.type === 'product_video'
       ? `/api/assets/${asset.id}/video.mp4?variant=narrated`
       : null;
-  const label = ASSET_TYPE_LABELS[asset.type] || asset.type;
-  const iconPath = ASSET_TYPE_ICONS[asset.type] || ASSET_TYPE_ICONS.blog_post;
+  const label = ASSET_TYPE_LABELS[asset.type] ?? asset.type;
+  const iconPath = ASSET_TYPE_ICONS[asset.type] ?? ASSET_TYPE_ICONS['blog_post'];
 
   const handleApprove = async () => {
     await api.approveAsset(asset.id);
@@ -105,10 +111,12 @@ export function GeneratedAssetCard({
     try {
       const response = await fetch(`${narratedPreviewUrl}&download=1`);
       if (!response.ok) {
-        const error = await response
+        const errorBody = (await response
           .json()
-          .catch(() => ({ error: 'Narrated export failed' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
+          .catch(() => ({ error: 'Narrated export failed' }))) as {
+          error?: string;
+        };
+        throw new Error(errorBody.error ?? `HTTP ${response.status}`);
       }
 
       const blob = await response.blob();
@@ -116,7 +124,7 @@ export function GeneratedAssetCard({
       const link = document.createElement('a');
       const disposition = response.headers.get('Content-Disposition');
       const filename =
-        disposition?.match(/filename="([^"]+)"/)?.[1] ||
+        disposition?.match(/filename="([^"]+)"/)?.[1] ??
         `launchkit-${asset.id}-narrated.mp4`;
 
       link.href = objectUrl;
@@ -179,26 +187,18 @@ export function GeneratedAssetCard({
           {asset.type === 'product_video' ? (
             <LaunchVideoPreview
               videoUrl={videoVariant === 'narrated' ? narratedPreviewUrl : asset.mediaUrl}
-              thumbnailUrl={
-                typeof assetMetadata?.thumbnailUrl === 'string'
-                  ? assetMetadata.thumbnailUrl
-                  : undefined
-              }
+              {...(thumbnailUrl !== undefined ? { thumbnailUrl } : {})}
               title={label}
               remotionProps={videoVariant === 'visual' ? remotionProps : null}
-              onError={
-                videoVariant === 'narrated'
-                  ? () =>
+              {...(videoVariant === 'narrated'
+                ? {
+                    onError: () =>
                       setVideoError(
                         'Narrated preview is unavailable. Check the voiceover asset and ElevenLabs configuration.'
-                      )
-                  : undefined
-              }
-              onLoadedData={
-                videoVariant === 'narrated'
-                  ? () => setVideoError(null)
-                  : undefined
-              }
+                      ),
+                    onLoadedData: () => setVideoError(null),
+                  }
+                : {})}
             />
           ) : (
             <img
@@ -212,27 +212,19 @@ export function GeneratedAssetCard({
       ) : asset.type === 'product_video' && remotionProps ? (
         <div className="mb-4">
           <LaunchVideoPreview
-            videoUrl={videoVariant === 'narrated' ? narratedPreviewUrl : undefined}
+            videoUrl={videoVariant === 'narrated' ? narratedPreviewUrl : null}
             title={label}
-            thumbnailUrl={
-              typeof assetMetadata?.thumbnailUrl === 'string'
-                ? assetMetadata.thumbnailUrl
-                : undefined
-            }
+            {...(thumbnailUrl !== undefined ? { thumbnailUrl } : {})}
             remotionProps={videoVariant === 'visual' ? remotionProps : null}
-            onError={
-              videoVariant === 'narrated'
-                ? () =>
+            {...(videoVariant === 'narrated'
+              ? {
+                  onError: () =>
                     setVideoError(
                       'Narrated preview is unavailable. Check the voiceover asset and ElevenLabs configuration.'
-                    )
-                : undefined
-            }
-            onLoadedData={
-              videoVariant === 'narrated'
-                ? () => setVideoError(null)
-                : undefined
-            }
+                    ),
+                  onLoadedData: () => setVideoError(null),
+                }
+              : {})}
           />
         </div>
       ) : asset.content ? (

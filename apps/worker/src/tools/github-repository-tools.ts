@@ -20,6 +20,7 @@ import {
   type GitHubRepo,
   type PackageJson,
 } from '../lib/schemas/github.js';
+import { env } from '../env.js';
 
 /**
  * SHA-256 hash truncated to 16 hex chars for Redis cache keys.
@@ -38,21 +39,18 @@ const headers: Record<string, string> = {
   'User-Agent': 'LaunchKit/1.0',
 };
 
-const redis = process.env.REDIS_URL
-  ? new Redis(process.env.REDIS_URL, {
+const redis = env.REDIS_URL
+  ? new Redis(env.REDIS_URL, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
     })
   : null;
 
-const DEFAULT_CACHE_TTL_SECONDS = parseInt(
-  process.env.GITHUB_CACHE_TTL_SECONDS || '900',
-  10
-);
+const DEFAULT_CACHE_TTL_SECONDS = env.GITHUB_CACHE_TTL_SECONDS;
 
 // Add auth token if available (increases rate limits)
-if (process.env.GITHUB_TOKEN) {
-  headers.Authorization = `token ${process.env.GITHUB_TOKEN}`;
+if (env.GITHUB_TOKEN) {
+  headers['Authorization'] = `token ${env.GITHUB_TOKEN}`;
 }
 
 function cacheKey(kind: string, input: string): string {
@@ -118,7 +116,7 @@ async function githubFetch<S extends z.ZodType>(
     if (!res.ok) {
       throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     }
-    return res.json() as Promise<unknown>;
+    return res.json();
   });
 
   const parsed = schema.parse(response);
@@ -153,8 +151,8 @@ async function githubRawJsonFetch<S extends z.ZodType>(
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'LaunchKit/1.0',
-        ...(process.env.GITHUB_TOKEN
-          ? { Authorization: `token ${process.env.GITHUB_TOKEN}` }
+        ...(env.GITHUB_TOKEN
+          ? { Authorization: `token ${env.GITHUB_TOKEN}` }
           : {}),
       },
     });

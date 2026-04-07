@@ -8,8 +8,9 @@ import {
   RepoAnalysisSchema,
   StrategyBriefSchema,
 } from '@launchkit/shared';
+import { env } from './env.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
 const db = drizzle(pool, { schema });
 
 /**
@@ -104,7 +105,7 @@ export async function aggregateFeedbackInsights(): Promise<void> {
       if (!parsed.success) continue;
       const tone = parsed.data.tone;
       if (project.reviewScore) {
-        if (!toneScores[tone]) toneScores[tone] = [];
+        toneScores[tone] ??= [];
         toneScores[tone].push(project.reviewScore);
       }
     }

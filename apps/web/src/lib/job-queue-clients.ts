@@ -6,11 +6,14 @@ import type {
   ReviewJobData,
   JobData,
 } from '@launchkit/shared';
+import { env } from '../env.js';
+
+const redisUrl = new URL(env.REDIS_URL);
 
 const connection = {
-  host: new URL(process.env.REDIS_URL || 'redis://localhost:6379').hostname,
-  port: parseInt(new URL(process.env.REDIS_URL || 'redis://localhost:6379').port || '6379'),
-  password: new URL(process.env.REDIS_URL || 'redis://localhost:6379').password || undefined,
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port || '6379'),
+  password: redisUrl.password || undefined,
 };
 
 // Create queues

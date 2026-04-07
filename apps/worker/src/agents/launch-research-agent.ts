@@ -169,7 +169,11 @@ export async function runResearchAgent(
       'research_complete',
       "Submit the final structured research result. Call this when your research is thorough enough to make confident strategic recommendations. After this call the agent ends.",
       researchCompleteSchema,
-      async (args) => {
+      // The terminal tool only mutates the closure-captured result and
+      // returns a fixed message — there's no async work to do. The
+      // SDK still expects a Promise, so we wrap with `Promise.resolve`
+      // instead of an unnecessary `async`.
+      (args) => {
         captured = {
           competitors: args.competitors,
           targetAudience: args.targetAudience,
@@ -178,14 +182,14 @@ export async function runResearchAgent(
           recommendedChannels: args.recommendedChannels,
           hnMentions: args.hnMentions ?? [],
         };
-        return {
+        return Promise.resolve({
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: 'Research recorded. End your turn now.',
             },
           ],
-        };
+        });
       }
     ),
   ];
@@ -223,8 +227,11 @@ export async function runResearchAgent(
   });
 
   // `runAgent` already throws via `parseResult` if `captured` is null,
-  // so reaching this point means it is non-null. The non-null assertion
-  // is load-bearing only for TypeScript's narrowing — the runtime
-  // contract is enforced inside the parser callback above.
-  return captured!;
+  // so reaching this point means it is non-null. The explicit guard
+  // here narrows the type for the return without a non-null assertion;
+  // the runtime contract is enforced inside the parser callback above.
+  if (!captured) {
+    throw new Error('Research agent finished without capturing a result');
+  }
+  return captured;
 }

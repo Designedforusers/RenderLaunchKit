@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { z } from 'zod';
+import { env } from '../env.js';
 
 /**
  * Default model used for non-agentic Claude calls (single-shot
@@ -11,10 +12,10 @@ import type { z } from 'zod';
  * overridden via the `ANTHROPIC_MODEL` env var if a deployment wants to
  * use Sonnet for cost reasons.
  */
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6';
+const DEFAULT_MODEL = env.ANTHROPIC_MODEL;
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 });
 
 export { anthropic };
@@ -32,7 +33,7 @@ export async function generateContent(
   const response = await anthropic.messages.create({
     model: DEFAULT_MODEL,
     max_tokens: options?.maxTokens ?? 16000,
-    temperature: options?.temperature,
+    ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
   });

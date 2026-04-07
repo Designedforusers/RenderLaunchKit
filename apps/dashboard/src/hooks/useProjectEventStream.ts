@@ -25,8 +25,16 @@ export function useProjectEventStream(projectId: string | undefined) {
     });
 
     source.addEventListener('update', (e) => {
+      // `MessageEvent.data` is typed as `any` by the DOM lib (it can
+      // be a string for SSE, or an arbitrary structured-clone payload
+      // for postMessage). We narrow before parsing.
+      const messageEvent = e as MessageEvent<unknown>;
+      const data = messageEvent.data;
+      if (typeof data !== 'string') {
+        return;
+      }
       try {
-        const raw: unknown = JSON.parse(e.data);
+        const raw: unknown = JSON.parse(data);
         const parsed = ProgressEventSchema.safeParse(raw);
         if (parsed.success) {
           setEvents((prev) => [...prev, parsed.data]);

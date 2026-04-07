@@ -13,6 +13,7 @@ import type {
   StoryboardResult,
   StrategyBrief,
 } from '@launchkit/shared';
+import { env } from '../env.js';
 
 interface VideoDirectorInput {
   repoName: string;
@@ -75,14 +76,28 @@ function buildRemotionProps(input: {
   storyboard: StoryboardResult;
   shotImages: string[];
 }): LaunchKitVideoProps {
-  const shots: LaunchKitVideoShot[] = input.storyboard.shots.map((shot, index) => ({
-    id: `shot-${index + 1}`,
-    headline: shot.headline,
-    caption: shot.caption,
-    imageUrl: input.shotImages[index],
-    durationInFrames: toFrames(shot.duration),
-    accent: shot.accent,
-  }));
+  const shots: LaunchKitVideoShot[] = input.storyboard.shots.map((shot, index) => {
+    // `shotImages` and `storyboard.shots` are produced from the same
+    // model output in `planVideoPackage`, so the lengths must match.
+    // A mismatch means the upstream pipeline broke its invariant; we
+    // fail loudly here instead of silently rendering a Remotion shot
+    // with an empty image URL (which would otherwise produce a
+    // mostly-black video the user would only catch on playback).
+    const imageUrl = input.shotImages[index];
+    if (imageUrl === undefined) {
+      throw new Error(
+        `Storyboard shot ${index + 1} has no image — got ${input.shotImages.length} images for ${input.storyboard.shots.length} shots`
+      );
+    }
+    return {
+      id: `shot-${index + 1}`,
+      headline: shot.headline,
+      caption: shot.caption,
+      imageUrl,
+      durationInFrames: toFrames(shot.duration),
+      ...(shot.accent !== undefined ? { accent: shot.accent } : {}),
+    };
+  });
 
   return {
     title: input.repoName,
@@ -124,7 +139,7 @@ Return a concise storyboard for a polished launch video and write prompts for st
 
   return {
     storyboard,
-    thumbnailUrl: shotImages[0] || '',
+    thumbnailUrl: shotImages[0] ?? '',
     remotionProps: buildRemotionProps({
       repoName: input.repoName,
       repoAnalysis: input.repoAnalysis,
@@ -170,7 +185,7 @@ export async function generateProductVideoAsset(
   let videoUrl = '';
   let renderer: 'fal' | 'remotion' = 'remotion';
 
-  if (process.env.FAL_API_KEY) {
+  if (env.FAL_API_KEY) {
     const video = await generateVideo(
       plan.storyboard.shots.map((shot) => shot.visualPrompt).join('. '),
       {

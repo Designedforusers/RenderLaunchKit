@@ -47,9 +47,9 @@ export function parseVoiceoverScript(content: string): ParsedVoiceoverScript {
   let plainText = '';
 
   for (const block of blocks) {
-    const match = block.trim().match(VOICEOVER_BLOCK);
+    const match = VOICEOVER_BLOCK.exec(block.trim());
 
-    if (!match) {
+    if (!match || !match[1] || !match[2]) {
       throw new Error(
         'Voiceover script must use repeated [SCREEN: ...] lines followed by one quoted spoken line'
       );

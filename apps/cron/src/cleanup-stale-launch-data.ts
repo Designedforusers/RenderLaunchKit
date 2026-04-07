@@ -3,8 +3,9 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import Redis from 'ioredis';
 import * as schema from '@launchkit/shared';
+import { env } from './env.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
 const db = drizzle(pool, { schema });
 
 /**
@@ -51,7 +52,7 @@ export async function cleanupStaleLaunchData(): Promise<void> {
 
   // Clean Redis cache entries
   try {
-    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    const redis = new Redis(env.REDIS_URL, {
       maxRetriesPerRequest: null,
     });
 
@@ -67,7 +68,9 @@ export async function cleanupStaleLaunchData(): Promise<void> {
       }
     }
 
-    await redis.disconnect();
+    // ioredis `disconnect()` is synchronous (returns void). The
+    // earlier `await` was a no-op the linter correctly flagged.
+    redis.disconnect();
   } catch (err) {
     console.error(
       '[Cron:CleanupStaleLaunchData] Redis cleanup error:',

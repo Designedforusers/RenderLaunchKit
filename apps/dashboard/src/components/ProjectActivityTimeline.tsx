@@ -82,7 +82,11 @@ export function ProjectActivityTimeline({
                 </p>
                 {lastEvent && (
                   <p className="text-xs text-surface-500 mt-0.5 animate-fade-in">
-                    {lastEvent.data?.detail as string || lastEvent.data?.toolName as string || ''}
+                    {(typeof lastEvent.data?.['detail'] === 'string'
+                      ? lastEvent.data['detail']
+                      : typeof lastEvent.data?.['toolName'] === 'string'
+                        ? lastEvent.data['toolName']
+                        : '') || ''}
                   </p>
                 )}
                 {isCurrent && !isFailed && (

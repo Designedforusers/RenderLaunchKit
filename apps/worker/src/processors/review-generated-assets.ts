@@ -138,12 +138,12 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
         continue;
       }
 
-      const assetMetadata = (asset.metadata as Record<string, unknown> | null) || {};
+      const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
       const generationInstructions =
-        typeof assetMetadata.generationInstructions === 'string'
-          ? assetMetadata.generationInstructions
-          : typeof assetMetadata.brief === 'string'
-            ? assetMetadata.brief
+        typeof assetMetadata['generationInstructions'] === 'string'
+          ? assetMetadata['generationInstructions']
+          : typeof assetMetadata['brief'] === 'string'
+            ? assetMetadata['brief']
           : `Regenerate the ${asset.type} asset for this project.`;
 
       await db
@@ -168,7 +168,7 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
           strategy,
           pastInsights,
           revisionInstructions:
-            assetReview.revisionInstructions ||
+            assetReview.revisionInstructions ??
             `Improve this asset based on review feedback: ${assetReview.issues.join(', ')}`,
         } satisfies GenerateAssetJobData,
         {

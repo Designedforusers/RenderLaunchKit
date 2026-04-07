@@ -4,10 +4,11 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import { GITHUB_API_BASE, JOB_NAMES, QUEUE_NAMES } from '@launchkit/shared';
+import { env } from './env.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
 const db = drizzle(pool, { schema });
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+const redisUrl = new URL(env.REDIS_URL);
 const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, {
   connection: {
     host: redisUrl.hostname,
@@ -20,8 +21,8 @@ function githubHeaders(): Record<string, string> {
   return {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'LaunchKit/1.0',
-    ...(process.env.GITHUB_TOKEN
-      ? { Authorization: `token ${process.env.GITHUB_TOKEN}` }
+    ...(env.GITHUB_TOKEN
+      ? { Authorization: `token ${env.GITHUB_TOKEN}` }
       : {}),
   };
 }
@@ -100,6 +101,22 @@ export async function syncGitHubProjectActivity(): Promise<void> {
             commitMessage: latestCommit.commit.message,
           })
           .returning();
+
+        if (!webhookEvent) {
+          // Drizzle's `.returning()` is typed as `T[]`; the strict-flag
+          // pass forces us to narrow even though the insert above always
+          // produces exactly one row in practice.
+          //
+          // Throwing here (instead of returning a 500 like the web
+          // routes) is intentional: cron jobs run under BullMQ's retry
+          // policy, so a thrown error escalates to a retry, while a
+          // silent skip would lose the event. The web request handlers
+          // do not have a retry surface, so they return 500 to the
+          // client and rely on the caller to surface the failure.
+          throw new Error(
+            `Internal error: cron-derived webhook insert returned no row for project ${project.id}`
+          );
+        }
 
         await analysisQueue.add(
           JOB_NAMES.FILTER_WEBHOOK,

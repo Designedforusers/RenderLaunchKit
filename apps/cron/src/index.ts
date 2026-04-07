@@ -1,13 +1,14 @@
 import { syncGitHubProjectActivity } from './sync-github-project-activity.js';
 import { aggregateFeedbackInsights } from './aggregate-feedback-insights.js';
 import { cleanupStaleLaunchData } from './cleanup-stale-launch-data.js';
+import { env } from './env.js';
 
 async function main() {
   console.log(`
 ╔══════════════════════════════════════════╗
 ║  LaunchKit Cron Service                  ║
 ║  Schedule: every 6 hours                 ║
-║  Env: ${(process.env.NODE_ENV || 'development').padEnd(34)}║
+║  Env: ${env.NODE_ENV.padEnd(34)}║
 ╚══════════════════════════════════════════╝
   `);
 
@@ -37,4 +38,4 @@ async function main() {
   process.exit(0);
 }
 
-main();
+void main();

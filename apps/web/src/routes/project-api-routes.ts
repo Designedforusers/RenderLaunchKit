@@ -25,11 +25,11 @@ const createProjectSchema = z.object({
 // stricter expensive-route limit (10 req/min/IP) on top of the global
 // /api/* limit (100 req/min/IP).
 projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
-  const body = await c.req.json();
+  const body: unknown = await c.req.json();
   const parsed = createProjectSchema.safeParse(body);
 
   if (!parsed.success) {
-    return c.json({ error: parsed.error.issues[0].message }, 400);
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 400);
   }
 
   const repo = parseRepoUrl(parsed.data.repoUrl);
@@ -70,6 +70,17 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       status: 'pending',
     })
     .returning();
+
+  if (!project) {
+    // Drizzle's `.returning()` is typed as `T[]`, so the strict
+    // flags require this guard. Reaching it means the insert was
+    // accepted but no row came back — a server-side invariant
+    // violation rather than a request validation problem.
+    return c.json(
+      { error: 'Internal error: project insert returned no row' },
+      500
+    );
+  }
 
   // Enqueue the analysis pipeline
   await enqueueRepositoryAnalysis({
@@ -217,10 +228,23 @@ projectApiRoutes.delete('/:id', async (c) => {
 
 // ── PATCH /api/projects/:id/webhook — Toggle webhook ──
 
+const toggleWebhookSchema = z.object({
+  enabled: z.boolean(),
+});
+
 projectApiRoutes.patch('/:id/webhook', async (c) => {
   const id = c.req.param('id');
-  const body = await c.req.json();
-  const enabled = Boolean(body.enabled);
+  const rawBody: unknown = await c.req.json();
+  const parsedBody = toggleWebhookSchema.safeParse(rawBody);
+
+  if (!parsedBody.success) {
+    return c.json(
+      { error: parsedBody.error.issues[0]?.message ?? 'Invalid request body' },
+      400
+    );
+  }
+
+  const enabled = parsedBody.data.enabled;
 
   const [updated] = await database
     .update(projects)

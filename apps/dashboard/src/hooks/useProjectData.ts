@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api.js';
 import type { ProjectDetail, ProjectSummary } from '../lib/api.js';
 
@@ -21,7 +21,7 @@ export function useProjectListData() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   return { projects, loading, error, refresh };
@@ -46,17 +46,30 @@ export function useProjectDetailData(id: string | undefined) {
     }
   }, [id]);
 
+  // Mirror the latest project into a ref so the polling interval
+  // below can read the current status without re-firing the effect
+  // on every payload change. Without this, either:
+  //   (a) we add `project` to the dep array and the interval is
+  //       torn down/recreated on every poll, racing the next tick;
+  //   (b) we omit it and the interval closes over a stale value.
+  const projectRef = useRef(project);
   useEffect(() => {
-    refresh();
-    // Auto-refresh every 5 seconds if project is in progress
+    projectRef.current = project;
+  }, [project]);
+
+  useEffect(() => {
+    void refresh();
+    // Auto-refresh every 5 seconds while the project is in progress.
+    // Status terminal states (`complete`, `failed`) stop the poll.
     const interval = setInterval(() => {
-      if (project && !['complete', 'failed'].includes(project.status)) {
-        refresh();
+      const current = projectRef.current;
+      if (current && !['complete', 'failed'].includes(current.status)) {
+        void refresh();
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [refresh, project?.status]);
+  }, [refresh]);
 
   return { project, loading, error, refresh };
 }

@@ -12,6 +12,7 @@ import projectApiRoutes from './routes/project-api-routes.js';
 import assetApiRoutes from './routes/asset-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
+import { env } from './env.js';
 
 const app = new Hono();
 const dashboardDistDir = path.resolve(process.cwd(), 'apps/dashboard/dist');
@@ -55,7 +56,7 @@ async function serveDashboardFile(filePath: string): Promise<Response | null> {
     return new Response(file, {
       headers: {
         'Content-Type':
-          contentTypes[path.extname(filePath).toLowerCase()] ||
+          contentTypes[path.extname(filePath).toLowerCase()] ??
           'application/octet-stream',
       },
     });
@@ -157,13 +158,13 @@ app.get('*', (c) => {
 
 // ── Start Server ──
 
-const port = parseInt(process.env.PORT || '3000');
+const port = env.PORT;
 
 console.log(`
 ╔══════════════════════════════════════════╗
 ║  LaunchKit Web Service                   ║
 ║  Port: ${String(port).padEnd(33)}║
-║  Env: ${(process.env.NODE_ENV || 'development').padEnd(34)}║
+║  Env: ${env.NODE_ENV.padEnd(34)}║
 ╚══════════════════════════════════════════╝
 `);
 

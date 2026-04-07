@@ -33,7 +33,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   if (error || !project) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-8 text-center">
-        <p className="text-red-400">{error || 'Project not found'}</p>
+        <p className="text-red-400">{error ?? 'Project not found'}</p>
         <Link to="/" className="btn-ghost mt-4 inline-block">Back to projects</Link>
       </div>
     );

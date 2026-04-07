@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { env } from '../env.js';
 
 export type ElevenLabsCharacterAlignment = {
   characters: string[];
@@ -23,8 +24,8 @@ export function getElevenLabsConfig(): {
   voiceId: string;
   modelId: string | null;
 } | null {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  const apiKey = env.ELEVENLABS_API_KEY;
+  const voiceId = env.ELEVENLABS_VOICE_ID;
 
   if (!apiKey || !voiceId) {
     return null;
@@ -33,7 +34,7 @@ export function getElevenLabsConfig(): {
   return {
     apiKey,
     voiceId,
-    modelId: process.env.ELEVENLABS_MODEL_ID || null,
+    modelId: env.ELEVENLABS_MODEL_ID ?? null,
   };
 }
 

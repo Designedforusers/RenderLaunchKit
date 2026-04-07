@@ -9,7 +9,7 @@ function HomePage() {
   const { projects, loading, refresh } = useProjectListData();
 
   const handleProjectCreated = (id: string) => {
-    navigate(`/projects/${id}`);
+    void navigate(`/projects/${id}`);
   };
 
   return (

@@ -1,4 +1,7 @@
-const STATUS_CONFIG: Record<string, { color: string; bg: string; label?: string; animate?: boolean }> = {
+// `as const satisfies` keeps the literal types for keys (so each lookup
+// returns a definitely-defined value under `noUncheckedIndexedAccess`)
+// while still type-checking the value shape.
+const STATUS_CONFIG = {
   pending: { color: 'text-surface-400', bg: 'bg-surface-400/10' },
   analyzing: { color: 'text-blue-400', bg: 'bg-blue-400/10', animate: true },
   researching: { color: 'text-violet-400', bg: 'bg-violet-400/10', animate: true },
@@ -12,7 +15,16 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; label?: string;
   approved: { color: 'text-accent-400', bg: 'bg-accent-400/10' },
   rejected: { color: 'text-red-400', bg: 'bg-red-400/10' },
   regenerating: { color: 'text-orange-400', bg: 'bg-orange-400/10', animate: true },
-};
+} as const satisfies Record<
+  string,
+  { color: string; bg: string; label?: string; animate?: boolean }
+>;
+
+type StatusKey = keyof typeof STATUS_CONFIG;
+
+function isStatusKey(value: string): value is StatusKey {
+  return value in STATUS_CONFIG;
+}
 
 interface LaunchStatusBadgeProps {
   status: string;
@@ -23,7 +35,8 @@ export function LaunchStatusBadge({
   status,
   className = '',
 }: LaunchStatusBadgeProps) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const config: { color: string; bg: string; label?: string; animate?: boolean } =
+    isStatusKey(status) ? STATUS_CONFIG[status] : STATUS_CONFIG.pending;
 
   return (
     <span
@@ -32,7 +45,7 @@ export function LaunchStatusBadge({
       {config.animate && (
         <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${config.color.replace('text-', 'bg-')} animate-pulse-dot`} />
       )}
-      {config.label || status}
+      {config.label ?? status}
     </span>
   );
 }
