@@ -8,13 +8,48 @@ import type {
 } from '@launchkit/shared';
 import { env } from '../env.js';
 
-interface WebhookFilterInput {
+/**
+ * Phase 6 — Commit marketability agent.
+ *
+ * Renamed from `webhook-relevance-agent.ts` and extended with
+ * trend-awareness. Decides whether a GitHub commit is substantial
+ * enough to regenerate launch content. Same single-call generateJSON
+ * shape as the original; the only behavioural change is that the
+ * agent now accepts an optional list of relevant trends (the top
+ * trending topics in the project's category, computed by the new
+ * `trend-matcher.ts` helper) and uses them to bias the decision.
+ *
+ * A commit that touches a hot trend is MORE marketable than one
+ * that does not, even if its scope is small. The system prompt
+ * tells the model this explicitly; the rules-based fallback also
+ * checks the commit message against trend topic keywords.
+ *
+ * The schema name `WebhookFilterDecisionSchema` is intentionally
+ * preserved because renaming it would cascade through too many
+ * call sites for cosmetic improvement. The `WebhookFilter*` names
+ * are read by future maintainers as "the marketability filter
+ * decision" — accurate enough.
+ */
+
+export interface CommitMarketabilityTrend {
+  topic: string;
+  headline: string;
+  velocityScore: number;
+}
+
+export interface CommitMarketabilityInput {
   eventType: string;
   commitMessage: string;
   commitSha?: string | null;
   repoAnalysis: RepoAnalysis;
   strategy: StrategyBrief;
   availableAssets: AssetType[];
+  // Top 3-5 trends from `trend_signals` for the project's category.
+  // The agent uses these to decide whether the commit aligns with what
+  // the dev community is currently talking about. Optional so the agent
+  // still works when trends are unavailable (fresh deploy with empty
+  // trend_signals table, or Voyage misconfigured).
+  relevantTrends?: CommitMarketabilityTrend[];
 }
 
 const SYSTEM_PROMPT = `You are a product marketing editor deciding whether a GitHub event is substantial enough to regenerate launch content.
@@ -31,7 +66,12 @@ Rules:
 - Tiny chores, typos, docs-only edits, refactors without user-visible changes, CI changes, and dependency bumps alone are not marketable.
 - Choose only from the provided available assets.
 - Prefer a focused subset when the change is narrow.
-- For release events, it is acceptable to regenerate the full available set.`;
+- For release events, it is acceptable to regenerate the full available set.
+
+Trend awareness:
+- Up to 5 current dev community trends are provided via the user prompt's "Relevant trends" section. A commit that touches one of these trends is MORE marketable, even if its scope is small.
+- Reference the trend by topic in your \`reasoning\` when applicable.
+- Trends are NOT required. When none are provided, fall back to the strategy + repo context only.`;
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
@@ -85,13 +125,16 @@ function selectAssetTypes(
   return unique(selected.length > 0 ? selected : availableAssets.slice(0, 3));
 }
 
-function fallbackDecision(input: WebhookFilterInput): WebhookFilterDecision {
+function fallbackDecision(
+  input: CommitMarketabilityInput
+): WebhookFilterDecision {
   const normalized = input.commitMessage.toLowerCase();
 
   if (input.eventType === 'release') {
     return {
       isMarketable: true,
-      reasoning: 'Release events are marketing-worthy by default and should refresh the launch pack.',
+      reasoning:
+        'Release events are marketing-worthy by default and should refresh the launch pack.',
       assetTypes: input.availableAssets,
     };
   }
@@ -105,16 +148,41 @@ function fallbackDecision(input: WebhookFilterInput): WebhookFilterDecision {
     );
 
   if (negativeOnly) {
+    // Trend override: a small commit that happens to touch a hot topic
+    // is still marketable. We look for any trend whose `topic` appears
+    // as a substring of the lowercased commit message.
+    if (
+      input.relevantTrends !== undefined &&
+      input.relevantTrends.length > 0
+    ) {
+      const matchingTrend = input.relevantTrends.find((trend) =>
+        normalized.includes(trend.topic.toLowerCase())
+      );
+      if (matchingTrend !== undefined) {
+        return {
+          isMarketable: true,
+          reasoning: `Commit touches trending topic "${matchingTrend.topic}" — marking marketable despite the heuristic skip.`,
+          assetTypes: selectAssetTypes(
+            input.availableAssets,
+            input.commitMessage,
+            input.eventType
+          ),
+        };
+      }
+    }
+
     return {
       isMarketable: false,
-      reasoning: 'The change appears internal or editorial rather than something users would notice.',
+      reasoning:
+        'The change appears internal or editorial rather than something users would notice.',
       assetTypes: [],
     };
   }
 
   return {
     isMarketable: true,
-    reasoning: 'The change looks user-visible enough to warrant refreshed launch assets.',
+    reasoning:
+      'The change looks user-visible enough to warrant refreshed launch assets.',
     assetTypes: selectAssetTypes(
       input.availableAssets,
       input.commitMessage,
@@ -123,8 +191,25 @@ function fallbackDecision(input: WebhookFilterInput): WebhookFilterDecision {
   };
 }
 
-export async function evaluateWebhookEvent(
-  input: WebhookFilterInput
+function renderTrendsSection(
+  trends: CommitMarketabilityTrend[] | undefined
+): string {
+  if (trends === undefined || trends.length === 0) {
+    return '';
+  }
+
+  const lines = trends
+    .map(
+      (trend) =>
+        `- ${trend.topic} (velocity ${trend.velocityScore.toFixed(2)}): ${trend.headline}`
+    )
+    .join('\n');
+
+  return `\n\n## Relevant trends in the dev community right now\n${lines}`;
+}
+
+export async function evaluateCommitMarketability(
+  input: CommitMarketabilityInput
 ): Promise<WebhookFilterDecision> {
   if (!env.ANTHROPIC_API_KEY) {
     return fallbackDecision(input);
@@ -148,7 +233,7 @@ ${JSON.stringify(input.repoAnalysis, null, 2)}
 ${JSON.stringify(input.strategy, null, 2)}
 
 ## Available assets
-${input.availableAssets.join(', ')}`,
+${input.availableAssets.join(', ')}${renderTrendsSection(input.relevantTrends)}`,
       { maxTokens: 1200 }
     );
 

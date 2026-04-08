@@ -91,12 +91,28 @@ export const JOB_TIMEOUTS = {
   [JOB_NAMES.GENERATE_IMAGES]: 300_000,
   [JOB_NAMES.GENERATE_VIDEO]: 600_000,
   [JOB_NAMES.CREATIVE_REVIEW]: 60_000,
-  [JOB_NAMES.FILTER_WEBHOOK]: 30_000,
+  // Phase 6 commit-marketing-run pipeline. The legacy webhook
+  // processor finished in 5-10s; the new processor adds: Voyage diff
+  // embed (~500ms), trend matcher pgvector query (~50ms), commit-
+  // marketability `generateJSON` call (~3-5s), influencer-discovery
+  // agent run with N enrichment tool calls (~10-20s), and parallel
+  // outreach-draft `generateJSON` calls (~3-5s each). Realistic
+  // worst case ~30-45s. Bumped from the legacy 30s to 90s to give
+  // ~2x headroom over the worst case without hiding real hangs.
+  [JOB_NAMES.FILTER_WEBHOOK]: 90_000,
   // Trending-signal ingest runs the agentic fan-out (Grok + Exa +
   // 5 free APIs + clustering) for a single category. ~30s of tool
   // calls + ~15s of clustering in steady state; the 120s ceiling
   // leaves headroom for Claude retries on a transient upstream.
   [JOB_NAMES.INGEST_TRENDING_SIGNALS]: 120_000,
+  // Phase 5 dev_influencers enrichment runs N keyless API lookups
+  // (GitHub + dev.to + HN, ~200ms each) for the 50 stalest rows,
+  // plus an optional weekly X API enrichment pass for any row whose
+  // last_x_enriched_at is stale. Worst case at 50 × 4 platforms ×
+  // 200ms = ~40s, plus the Voyage embed loop (~50 × 500ms = 25s),
+  // plus per-row update round trips. The 180s ceiling covers it
+  // with headroom.
+  [JOB_NAMES.ENRICH_DEV_INFLUENCERS]: 180_000,
 } as const;
 
 // ── Asset Type Labels ──
