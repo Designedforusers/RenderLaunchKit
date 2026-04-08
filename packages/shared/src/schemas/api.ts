@@ -23,8 +23,35 @@ import { StrategyBriefSchema } from './strategy.js';
 
 // ── Requests ────────────────────────────────────────────────────────
 
+/**
+ * Max length for a GitHub personal access token submitted alongside
+ * a repo URL. GitHub's current token formats are well under 100
+ * characters (classic PATs are 40 hex chars; fine-grained tokens are
+ * ~93 chars including the `github_pat_` prefix); the 255 cap here is
+ * a generous upper bound that rejects obvious pastebin-blob abuse
+ * without rejecting any valid GitHub token shape.
+ */
+const GITHUB_TOKEN_MAX_LENGTH = 255;
+
 export const CreateProjectRequestSchema = z.object({
   repoUrl: z.string().min(1, 'Repo URL is required'),
+  /**
+   * Optional GitHub personal access token for private-repo access.
+   * When present, the web service encrypts it with AES-256-GCM and
+   * persists the blob on the project row; the analyze worker decrypts
+   * it once at job start and routes every GitHub API fetch for the
+   * project through the user-scoped token. Omitted for public repos.
+   *
+   * The `.min(1)` rejects empty strings so `{ githubToken: "" }`
+   * does not round-trip into the database as a zero-byte ciphertext
+   * — the frontend can safely send `undefined` when the input is
+   * blank and the route handler will treat it as "no token".
+   */
+  githubToken: z
+    .string()
+    .min(1)
+    .max(GITHUB_TOKEN_MAX_LENGTH)
+    .optional(),
 });
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
 

@@ -135,10 +135,19 @@ export const api = {
   getProject: (id: string) =>
     request(DashboardProjectDetailSchema, `/projects/${id}`),
 
-  createProject: (repoUrl: string) =>
+  createProject: (repoUrl: string, githubToken?: string) =>
     request(CreateProjectResponseSchema, '/projects', {
       method: 'POST',
-      body: JSON.stringify({ repoUrl }),
+      // Only include `githubToken` in the body when the user
+      // actually provided one — an empty string or `undefined` would
+      // be rejected by the server-side schema's `.min(1)`, and the
+      // default public-repo path must continue to work with a bare
+      // `{ repoUrl }` body.
+      body: JSON.stringify(
+        githubToken && githubToken.length > 0
+          ? { repoUrl, githubToken }
+          : { repoUrl }
+      ),
     }),
 
   deleteProject: (id: string) =>

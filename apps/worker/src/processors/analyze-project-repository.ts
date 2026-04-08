@@ -9,10 +9,12 @@ import {
   getRecentCommits,
   getLanguages,
   getTopics,
+  type GithubFetchOptions,
 } from '../tools/github-repository-tools.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { storeProjectEmbedding } from '../tools/project-insight-memory.js';
 import { database as db } from '../lib/database.js';
+import { decryptGithubToken } from '../lib/github-token-crypto.js';
 
 /**
  * Infer project category from file tree, dependencies, and metadata.
@@ -72,15 +74,37 @@ export async function analyzeProjectRepository(data: AnalyzeRepoJobData): Promis
     `Analyzing ${repoOwner}/${repoName}`
   );
 
+  // Look up the project row to see whether the user attached an
+  // encrypted personal access token at creation time. When present,
+  // decrypt it once and thread it through every GitHub fetch below
+  // so private-repo analyses are routed through the user's own scope
+  // instead of the shared public token. When absent (or when the
+  // decrypt fails — see `decryptGithubToken` for the degrade-to-null
+  // contract), the fetch tools fall back to the global `GITHUB_TOKEN`
+  // env var or run unauthenticated.
+  const projectRow = await db.query.projects.findFirst({
+    where: eq(schema.projects.id, projectId),
+    columns: { githubTokenEncrypted: true },
+  });
+
+  const authToken =
+    projectRow?.githubTokenEncrypted != null
+      ? (decryptGithubToken(projectRow.githubTokenEncrypted) ?? undefined)
+      : undefined;
+
+  const githubOptions: GithubFetchOptions = authToken !== undefined
+    ? { authToken }
+    : {};
+
   // Fetch all repo data in parallel
   const [repoMeta, readme, fileTree, packageJson, commits, languages, topics] = await Promise.all([
-    getRepo(repoOwner, repoName),
-    getReadme(repoOwner, repoName),
-    getFileTree(repoOwner, repoName),
-    getPackageJson(repoOwner, repoName),
-    getRecentCommits(repoOwner, repoName),
-    getLanguages(repoOwner, repoName),
-    getTopics(repoOwner, repoName),
+    getRepo(repoOwner, repoName, githubOptions),
+    getReadme(repoOwner, repoName, githubOptions),
+    getFileTree(repoOwner, repoName, githubOptions),
+    getPackageJson(repoOwner, repoName, githubOptions),
+    getRecentCommits(repoOwner, repoName, 10, githubOptions),
+    getLanguages(repoOwner, repoName, githubOptions),
+    getTopics(repoOwner, repoName, githubOptions),
   ]);
 
   // Build tech stack from languages and dependencies

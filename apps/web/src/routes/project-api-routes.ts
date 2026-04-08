@@ -10,15 +10,18 @@ import {
   jobs,
   parseRepoUrl,
   buildRepoUrl,
+  CreateProjectRequestSchema,
 } from '@launchkit/shared';
+import {
+  encryptGithubToken,
+  GithubTokenEncryptionDisabledError,
+} from '../lib/github-token-crypto.js';
 
 const projectApiRoutes = new Hono();
 
 // ── POST /api/projects — Create a new project from a repo URL ──
 
-const createProjectSchema = z.object({
-  repoUrl: z.string().min(1, 'Repo URL is required'),
-});
+const createProjectSchema = CreateProjectRequestSchema;
 
 // Project creation triggers an Anthropic agentic research loop, fal.ai
 // image/video generation, and uses the GitHub API budget. Apply the
@@ -38,6 +41,22 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       { error: 'Invalid GitHub repo URL. Expected format: https://github.com/owner/repo' },
       400
     );
+  }
+
+  // Encrypt a user-supplied GitHub personal access token before we
+  // touch the database. Doing this up-front keeps the "private-repo
+  // support is not configured" error out of the partially-written
+  // state where a row exists without a usable token.
+  let githubTokenEncrypted: string | null = null;
+  if (parsed.data.githubToken !== undefined) {
+    try {
+      githubTokenEncrypted = encryptGithubToken(parsed.data.githubToken);
+    } catch (err) {
+      if (err instanceof GithubTokenEncryptionDisabledError) {
+        return c.json({ error: err.message }, 503);
+      }
+      throw err;
+    }
   }
 
   // Check if project already exists
@@ -68,6 +87,11 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       repoOwner: repo.owner,
       repoName: repo.name,
       status: 'pending',
+      // `exactOptionalPropertyTypes` forbids an explicit `undefined`
+      // on an optional column, so only spread the field when we have
+      // a ciphertext to store. Null-valued public-repo projects get
+      // the column default (NULL) from the migration.
+      ...(githubTokenEncrypted !== null ? { githubTokenEncrypted } : {}),
     })
     .returning();
 

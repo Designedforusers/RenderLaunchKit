@@ -73,6 +73,18 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CACHE_TTL_SECONDS: z.coerce.number().int().nonnegative().default(900),
 
+  // ── Private-repo token decryption ──────────────────────────────
+  // Base64-encoded 32-byte key that pairs with the web service's
+  // `GITHUB_TOKEN_SECRET`. Used by `lib/github-token-crypto.ts` to
+  // decrypt a per-project user-supplied GitHub token at the start
+  // of an analyze job so every fetch for that project is routed
+  // through the user's own access scope. Optional: when unset, the
+  // worker falls back to the global `GITHUB_TOKEN` and silently
+  // ignores any encrypted blob it encounters (public-repo projects
+  // keep working, private-repo projects fail cleanly at the first
+  // 404 from the GitHub API).
+  GITHUB_TOKEN_SECRET: z.string().optional(),
+
   // ── Trending signals (Phase 3) ────────────────────────────────
   // Grok is the only source with live X (Twitter) search; xAI's Live
   // Search mode restricted to `x` returns posts the other free APIs

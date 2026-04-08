@@ -25,6 +25,16 @@ const envSchema = z.object({
   API_KEY: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
 
+  // ── Private-repo token encryption ──────────────────────────────
+  // Base64-encoded 32-byte key used by `lib/github-token-crypto.ts`
+  // to encrypt a user-supplied GitHub personal access token with
+  // AES-256-GCM before persisting it on the `projects` row. When
+  // unset, the API rejects project-creation requests that include a
+  // `githubToken` field with 503 — the public-repo path keeps
+  // working unchanged. Generate a key with
+  // `node -e "console.log(crypto.randomBytes(32).toString('base64'))"`.
+  GITHUB_TOKEN_SECRET: z.string().optional(),
+
   // ── Voiceover (ElevenLabs) ─────────────────────────────────────
   // Required only when the narrated video variant is requested. The
   // route checks all three at request time and returns 409 if any is
