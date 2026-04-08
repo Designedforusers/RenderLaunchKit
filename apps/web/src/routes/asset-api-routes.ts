@@ -338,14 +338,31 @@ async function writeFeedbackEvent(input: {
   action: 'approved' | 'rejected' | 'edited' | 'regenerated';
   editText: string | null;
 }): Promise<FeedbackEventResult | null> {
-  const [event] = await database
-    .insert(assetFeedbackEvents)
-    .values({
-      assetId: input.assetId,
-      action: input.action,
-      editText: input.editText,
-    })
-    .returning({ id: assetFeedbackEvents.id });
+  // The insert is a side effect for the four legacy routes
+  // (approve / reject / content / regenerate) — a Postgres hiccup on
+  // the feedback row must NOT 500 an otherwise-successful user action.
+  // We swallow the error, log it, and return null. The new
+  // POST /:id/feedback route still correctly surfaces a 500 via its
+  // existing `result === null` check because the row was never
+  // persisted, so callers of the canonical endpoint still know the
+  // event did not land.
+  let event: { id: string } | undefined;
+  try {
+    [event] = await database
+      .insert(assetFeedbackEvents)
+      .values({
+        assetId: input.assetId,
+        action: input.action,
+        editText: input.editText,
+      })
+      .returning({ id: assetFeedbackEvents.id });
+  } catch (err) {
+    console.warn(
+      `[asset-api] writeFeedbackEvent insert failed for asset ${input.assetId} —`,
+      err instanceof Error ? err.message : String(err)
+    );
+    return null;
+  }
 
   if (!event) return null;
 
