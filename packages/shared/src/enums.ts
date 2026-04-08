@@ -2,7 +2,12 @@ import { z } from 'zod';
 import {
   assetStatusEnum,
   assetTypeEnum,
+  commitRunStatusEnum,
+  feedbackActionEnum,
+  outreachChannelEnum,
+  outreachStatusEnum,
   projectStatusEnum,
+  trendSourceEnum,
 } from './schema.js';
 
 /**
@@ -35,3 +40,25 @@ export type AssetStatus = z.infer<typeof AssetStatusSchema>;
 
 export const ProjectStatusSchema = z.enum(projectStatusEnum.enumValues);
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
+
+// ── Phase 2: enums for the new tables in the agentic GTM build ──
+//
+// Same derivation pattern as the three above. Hand-written object
+// schemas in `./schemas/` import these for their `source`,
+// `channel`, `status`, and `action` fields so the database column
+// type and the application validator can never silently disagree.
+
+export const TrendSourceSchema = z.enum(trendSourceEnum.enumValues);
+export type TrendSource = z.infer<typeof TrendSourceSchema>;
+
+export const OutreachChannelSchema = z.enum(outreachChannelEnum.enumValues);
+export type OutreachChannel = z.infer<typeof OutreachChannelSchema>;
+
+export const OutreachStatusSchema = z.enum(outreachStatusEnum.enumValues);
+export type OutreachStatus = z.infer<typeof OutreachStatusSchema>;
+
+export const CommitRunStatusSchema = z.enum(commitRunStatusEnum.enumValues);
+export type CommitRunStatus = z.infer<typeof CommitRunStatusSchema>;
+
+export const FeedbackActionSchema = z.enum(feedbackActionEnum.enumValues);
+export type FeedbackAction = z.infer<typeof FeedbackActionSchema>;

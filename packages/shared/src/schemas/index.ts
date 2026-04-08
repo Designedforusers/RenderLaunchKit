@@ -2,14 +2,19 @@ import type { z } from 'zod';
 
 export * from './agent-outputs.js';
 export * from './api.js';
+export * from './asset-feedback-event.js';
+export * from './commit-marketing-run.js';
+export * from './dev-influencer.js';
 export * from './github-webhook.js';
 export * from './job-data.js';
+export * from './outreach-draft.js';
 export * from './progress-event.js';
 export * from './repo-analysis.js';
 export * from './research.js';
 export * from './review.js';
 export * from './strategy-insight.js';
 export * from './strategy.js';
+export * from './trend-signal.js';
 export * from './voiceover.js';
 
 /**
