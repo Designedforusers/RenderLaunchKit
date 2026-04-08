@@ -1,7 +1,7 @@
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { RepoAnalysis, ResearchResult } from '@launchkit/shared';
-import { runAgent } from '../lib/agent-sdk-runner.js';
+import { asAgentSdkTools, runAgent } from '../lib/agent-sdk-runner.js';
 import { searchRepos } from '../tools/github-repository-tools.js';
 import { findSimilarProjects } from '../tools/project-insight-memory.js';
 
@@ -197,11 +197,10 @@ export async function runResearchAgent(
   await runAgent({
     systemPrompt: SYSTEM_PROMPT,
     prompt: `Research this product for go-to-market planning. Use your tools, then call research_complete with the structured findings.\n\n${JSON.stringify(repoAnalysis, null, 2)}`,
-    // Cast through `unknown` to widen the heterogeneous tool union to
-    // the SDK's `Array<SdkMcpToolDefinition<any>>` shape — see the
-    // comment above the `tools` declaration for the contravariance
-    // explanation.
-    tools: tools as unknown as Parameters<typeof runAgent>[0]['tools'],
+    // SDK contravariance bridge — `asAgentSdkTools` centralises the
+    // single `as unknown as` cast that handles the heterogeneous Zod
+    // tool union. See the helper's docstring in `agent-sdk-runner.ts`.
+    tools: asAgentSdkTools(tools),
     builtInTools: ['WebSearch', 'WebFetch'],
     // 15 was the old `runAgentLoop` ceiling and was sufficient for the
     // existing research workload. Going higher invites the model to
