@@ -35,19 +35,34 @@ export const GitHubWebhookRepositorySchema = z
 // commit, on a delete event, or on the initial commit of a new
 // branch. The schema models that explicitly so the webhook receiver
 // can fall back to the release fields without throwing.
+//
+// `added`, `modified`, and `removed` are the file-path arrays GitHub
+// ships with every push head_commit. Phase 6's commit-marketing-run
+// processor reads them to compose the context text the agent sees,
+// so they are typed here (not left to `.passthrough()`) to keep the
+// consumer code free of `unknown` narrowing at the call site.
 
 export const GitHubWebhookHeadCommitSchema = z
   .object({
     message: z.string(),
+    added: z.array(z.string()).optional(),
+    modified: z.array(z.string()).optional(),
+    removed: z.array(z.string()).optional(),
   })
   .passthrough();
 
 // ── release fields (optional, present on release events) ────────────
+//
+// `body` is the release-notes markdown the author wrote. Phase 6's
+// processor reads it alongside `name`/`tag_name` to compose the
+// release-marketing-run context, so it is typed here for the same
+// reason as the push-commit file arrays above.
 
 export const GitHubWebhookReleaseSchema = z
   .object({
     tag_name: z.string().optional(),
     name: z.string().nullable().optional(),
+    body: z.string().nullable().optional(),
   })
   .passthrough();
 

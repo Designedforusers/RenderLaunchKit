@@ -89,7 +89,7 @@ The Agent SDK gives us a few things that would otherwise be hundreds of lines of
 - **Approval gates and hooks** (used by future deploy/notify features) — `canUseTool`, `PreToolUse`, `PostToolUse`, `Stop`, `TaskCompleted` hooks are first-class.
 - **Subagent fan-out** — `agents:` config and the built-in `Agent` tool let a parent agent spawn parallel children for things like "research these 5 competitors at once."
 
-Strategy and content agents (writer, strategist, art-director, video-director, creative-director, webhook-relevance-agent) are *prompted* — single Claude call with rich context, no loop needed. They use `@anthropic-ai/sdk` directly via the helpers in `apps/worker/src/lib/anthropic-claude-client.ts`. Mixing agentic and prompted patterns where each fits is the right call.
+Strategy and content agents (writer, strategist, art-director, video-director, creative-director, commit-marketability-agent, outreach-draft-agent) are *prompted* — single Claude call with rich context, no loop needed. They use `@anthropic-ai/sdk` directly via the helpers in `apps/worker/src/lib/anthropic-claude-client.ts`. Mixing agentic and prompted patterns where each fits is the right call.
 
 #### Deployment shape for the Agent SDK
 

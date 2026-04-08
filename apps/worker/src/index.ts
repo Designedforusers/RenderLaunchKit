@@ -22,7 +22,7 @@ import { researchProjectLaunchContext } from './processors/research-project-laun
 import { buildProjectLaunchStrategy } from './processors/build-project-launch-strategy.js';
 import { generateProjectAsset } from './processors/generate-project-assets.js';
 import { reviewGeneratedProjectAssets } from './processors/review-generated-assets.js';
-import { filterWebhookEventForRegeneration } from './processors/process-webhook-regeneration.js';
+import { processCommitMarketingRun } from './processors/process-commit-marketing-run.js';
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
 import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
@@ -86,7 +86,7 @@ const analysisWorker = new Worker(
         // Fan-out: enqueue all generation jobs
         await fanOutGeneration(data.projectId);
       } else if (job.name === JOB_NAMES.FILTER_WEBHOOK) {
-        await filterWebhookEventForRegeneration(data as FilterWebhookJobData);
+        await processCommitMarketingRun(data as FilterWebhookJobData);
       }
 
       // Record job completion
