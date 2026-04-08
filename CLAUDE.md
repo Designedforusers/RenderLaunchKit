@@ -53,13 +53,14 @@ Every external input parses through a Zod schema:
 - GitHub webhook payloads
 - pgvector raw-SQL row results
 
-There are exactly three live `as unknown as` casts in source code, all under `apps/`, all with an explanatory comment at the call site:
+There are exactly two live `as unknown as` casts in source code, both under `apps/`, both centralised in helpers and both with an explanatory docstring at the cast itself:
 
-- `apps/worker/src/agents/launch-research-agent.ts` — SDK contravariance bridging the heterogeneous Zod tool union to the SDK's `SdkMcpToolDefinition<any>` array.
-- `apps/worker/src/agents/trending-signals-agent.ts` — same SDK contravariance bridge as `launch-research-agent.ts`. The trending signals agent assembles its own heterogeneous Zod tool array (Grok + Exa + the five free-API search tools) and feeds it to the same `runAgent` wrapper, so it hits the same nominal mismatch and resolves it with the same cast.
-- `apps/web/src/lib/stream-utils.ts` — Node `Readable.toWeb()` returns `ReadableStream<Uint8Array>` from `node:stream/web`, which TypeScript treats as nominally distinct from the WHATWG `ReadableStream<Uint8Array>` the platform `Response` constructor expects. The bridge is centralised in the `fileToWebStream(filePath)` helper so the file-streaming routes (`/api/assets/:id/video.mp4`, `/api/assets/:id/audio.mp3`, and any future static-file endpoint) share one cast instead of repeating it.
+- `apps/worker/src/lib/agent-sdk-runner.ts` (the `asAgentSdkTools()` helper) — SDK contravariance bridging the heterogeneous Zod tool union returned by `tool('name', 'desc', ZodInputShape, handler)` calls to the `Parameters<typeof runAgent>[0]['tools']` shape the Agent SDK accepts. Every agent in the worker (`launch-research-agent.ts`, `trending-signals-agent.ts`, `influencer-discovery-agent.ts`, and any future agent) calls `asAgentSdkTools(tools)` instead of inlining the cast — one cast in one place, used by N agents.
+- `apps/web/src/lib/stream-utils.ts` (the `fileToWebStream()` helper) — Node `Readable.toWeb()` returns `ReadableStream<Uint8Array>` from `node:stream/web`, which TypeScript treats as nominally distinct from the WHATWG `ReadableStream<Uint8Array>` the platform `Response` constructor expects. The bridge is centralised in the helper so the file-streaming routes (`/api/assets/:id/video.mp4`, `/api/assets/:id/audio.mp3`, and any future static-file endpoint) share one cast instead of repeating it.
 
-The phrase `as unknown as` also appears inside two doc comments (`apps/worker/src/index.ts`, `packages/shared/src/schemas/index.ts`) — both narrate prior history, neither is a live cast. A grep for the phrase returns five hits; only the three listed above are real casts. If you're tempted to add a fourth, talk yourself out of it first — and if it really is necessary, document the *why* at the call site and update this list in the same PR.
+The phrase `as unknown as` also appears inside two narrative doc comments (`apps/worker/src/index.ts`, `packages/shared/src/schemas/index.ts`) plus three "see the helper" pointers in agent call-site comments (`influencer-discovery-agent.ts`, `launch-research-agent.ts`, `trending-signals-agent.ts`) and the helper docstrings themselves — none of those are live casts. A grep for the phrase returns ten hits; only the two listed above are real casts.
+
+If you're tempted to add a third live cast, the answer is almost always "extend one of the two helpers to cover your case." The two existing helpers already absorb every cast pattern that has come up in the codebase: SDK contravariance for agent tool unions, and Node-vs-WHATWG nominal-distinct types for file streaming. A genuinely new third pattern would justify a third helper plus a CLAUDE.md update; an inlined cast at a single call site would not.
 
 ### Typed env modules, lazy parsed
 

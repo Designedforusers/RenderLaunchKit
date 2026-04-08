@@ -2,6 +2,7 @@ import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { TrendSourceSchema, type TrendSource } from '@launchkit/shared';
 import {
+  asAgentSdkTools,
   createExaMcpServerConfig,
   EXA_MCP_TOOL_NAMES,
   runAgent,
@@ -406,7 +407,7 @@ export async function runTrendingSignalsAgent(
   await runAgent({
     systemPrompt: SYSTEM_PROMPT,
     prompt: userPrompt,
-    tools: tools as unknown as Parameters<typeof runAgent>[0]['tools'],
+    tools: asAgentSdkTools(tools),
     ...(externalMcpServers ? { externalMcpServers } : {}),
     allowedExternalMcpTools,
     // Keep WebSearch available as a fallback when Exa is unavailable

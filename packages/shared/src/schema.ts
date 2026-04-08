@@ -369,8 +369,18 @@ export const devInfluencers = pgTable(
     // Recent post topics, refreshed by the enrichment cron.
     recentTopics: jsonb('recent_topics'),
     audienceSize: integer('audience_size').default(0).notNull(),
+    // Per-platform audience data (Twitter followers, GitHub repos,
+    // dev.to post count, HN karma). Separate from `audienceSize`,
+    // which is the scalar max-across-platforms used by the matcher's
+    // ORDER BY. Typed at the Zod layer as `AudienceBreakdownSchema`.
+    audienceBreakdown: jsonb('audience_breakdown'),
     topicEmbedding: vector('topic_embedding'),
     lastEnrichedAt: timestamp('last_enriched_at'),
+    // Timestamp of the last paid X-enrichment run for this influencer.
+    // Separate from `lastEnrichedAt` (which covers the free-API
+    // refresh) because the paid X tool is rate- and cost-limited and
+    // runs on its own cadence.
+    lastXEnrichedAt: timestamp('last_x_enriched_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

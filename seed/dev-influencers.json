@@ -1,0 +1,1421 @@
+{
+  "_comment": "Hand-curated dev influencer seed for Phase 5. ~150 entries across 10 ProjectCategorySchema categories. The enrichment cron (apps/cron/src/enrich-dev-influencers.ts) refreshes bio, audienceSize, recentTopics, and topicEmbedding on its weekly cadence; the seed only needs handle, platforms, categories, and an audience-size hint. Entries are alphabetized within each category for easier review.",
+  "influencers": [
+    {
+      "handle": "adamwathan",
+      "platforms": {
+        "github": "adamwathan",
+        "twitter": "adamwathan",
+        "website": "https://adamwathan.me"
+      },
+      "categories": ["cli_tool", "framework", "devtool"],
+      "bio": "Creator of Tailwind CSS. Built the Tailwind CLI and ecosystem tooling.",
+      "audienceSize": 200000
+    },
+    {
+      "handle": "antfu",
+      "platforms": {
+        "github": "antfu",
+        "twitter": "antfu7",
+        "website": "https://antfu.me"
+      },
+      "categories": ["cli_tool", "devtool", "library"],
+      "bio": "Vue/Vite/Nuxt core team. Creator of UnoCSS, Slidev, and countless OSS CLI tools.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "gaearon",
+      "platforms": {
+        "github": "gaearon",
+        "twitter": "dan_abramov2",
+        "website": "https://overreacted.io"
+      },
+      "categories": ["cli_tool", "library", "framework"],
+      "bio": "Co-author of Redux and Create React App. Former React core team.",
+      "audienceSize": 90000
+    },
+    {
+      "handle": "holman",
+      "platforms": {
+        "github": "holman",
+        "twitter": "holman",
+        "website": "https://zachholman.com"
+      },
+      "categories": ["cli_tool", "devtool", "other"],
+      "bio": "Created Spark, Boxen, Dotfiles. Early GitHub employee and developer culture writer.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "jordaneldredge",
+      "platforms": {
+        "github": "captbaritone",
+        "twitter": "captbaritone",
+        "website": "https://jordaneldredge.com"
+      },
+      "categories": ["cli_tool", "web_app", "devtool"],
+      "bio": "Creator of Webamp. Relay/React engineer at Meta building developer tools.",
+      "audienceSize": 8000
+    },
+    {
+      "handle": "mitchellh",
+      "platforms": {
+        "github": "mitchellh",
+        "twitter": "mitchellh",
+        "website": "https://mitchellh.com"
+      },
+      "categories": ["cli_tool", "infrastructure", "devtool"],
+      "bio": "Founder of HashiCorp. Creator of Vagrant, Packer, Terraform, and Ghostty terminal.",
+      "audienceSize": 80000
+    },
+    {
+      "handle": "rauchg",
+      "platforms": {
+        "github": "rauchg",
+        "twitter": "rauchg",
+        "website": "https://rauchg.com"
+      },
+      "categories": ["cli_tool", "web_app", "devtool"],
+      "bio": "CEO of Vercel. Creator of Socket.io and Next.js pioneer. Built the Vercel CLI.",
+      "audienceSize": 280000
+    },
+    {
+      "handle": "rothgar",
+      "platforms": {
+        "github": "rothgar",
+        "twitter": "rothgar",
+        "website": "https://rothgar.com"
+      },
+      "categories": ["cli_tool", "infrastructure", "devtool"],
+      "bio": "Kubernetes and CLI tooling advocate. Maintains awesome-kubernetes.",
+      "audienceSize": 15000
+    },
+    {
+      "handle": "sindresorhus",
+      "platforms": {
+        "github": "sindresorhus",
+        "twitter": "sindresorhus",
+        "website": "https://sindresorhus.com"
+      },
+      "categories": ["cli_tool", "library", "devtool"],
+      "bio": "The most prolific open-source maintainer in Node.js. 1000+ packages including Ora, Chalk, Execa.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "tj",
+      "platforms": {
+        "github": "tj",
+        "twitter": "tjholowaychuk",
+        "website": "https://tjholowaychuk.com"
+      },
+      "categories": ["cli_tool", "library", "framework"],
+      "bio": "Built Express, Koa, Mocha, Stylus, Commander. Prolific Node.js library maintainer.",
+      "audienceSize": 55000
+    },
+    {
+      "handle": "tom-james-watson",
+      "platforms": {
+        "github": "tom-james-watson",
+        "twitter": "tomjwatson",
+        "website": "https://tomjwatson.com"
+      },
+      "categories": ["cli_tool", "devtool", "other"],
+      "bio": "Creator of Elon Musk's Block Chrome extension and OSS CLI utilities.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "wesbos",
+      "platforms": {
+        "github": "wesbos",
+        "twitter": "wesbos",
+        "website": "https://wesbos.com"
+      },
+      "categories": ["cli_tool", "web_app", "devtool"],
+      "bio": "Full-stack JS educator. Maintains popular ESLint config and Syntax.fm podcast.",
+      "audienceSize": 260000
+    },
+    {
+      "handle": "yyx990803",
+      "platforms": {
+        "github": "yyx990803",
+        "twitter": "youyuxi",
+        "website": "https://evanyou.me"
+      },
+      "categories": ["cli_tool", "framework", "devtool"],
+      "bio": "Creator of Vue.js and Vite. Author of vue-cli and create-vue.",
+      "audienceSize": 240000
+    },
+
+    {
+      "handle": "cassidoo",
+      "platforms": {
+        "github": "cassidoo",
+        "twitter": "cassidoo",
+        "website": "https://cassidoo.co"
+      },
+      "categories": ["web_app", "devtool", "framework"],
+      "bio": "Developer advocate and full-stack engineer. Writes the ReactJS and frontend newsletters.",
+      "audienceSize": 90000
+    },
+    {
+      "handle": "drewdevault",
+      "platforms": {
+        "github": "ddevault",
+        "website": "https://drewdevault.com"
+      },
+      "categories": ["web_app", "infrastructure", "other"],
+      "bio": "Founder of SourceHut. Sway window manager maintainer and OSS ideologue.",
+      "audienceSize": 12000
+    },
+    {
+      "handle": "kentcdodds",
+      "platforms": {
+        "github": "kentcdodds",
+        "twitter": "kentcdodds",
+        "website": "https://kentcdodds.com"
+      },
+      "categories": ["web_app", "library", "framework"],
+      "bio": "Creator of Testing Library and Remix educator. JS testing evangelist.",
+      "audienceSize": 280000
+    },
+    {
+      "handle": "kitze",
+      "platforms": {
+        "github": "kitze",
+        "twitter": "thekitze",
+        "website": "https://kitze.io"
+      },
+      "categories": ["web_app", "devtool", "framework"],
+      "bio": "Indie hacker. Founder of Sizzy browser and React-speaker with cult following.",
+      "audienceSize": 70000
+    },
+    {
+      "handle": "kyliefan7",
+      "platforms": {
+        "github": "kyliefan7",
+        "twitter": "kylie__fan"
+      },
+      "categories": ["web_app", "library", "other"],
+      "bio": "Frontend engineer and Vue contributor. Writes about modern CSS and web platform APIs.",
+      "audienceSize": 4000
+    },
+    {
+      "handle": "leerob",
+      "platforms": {
+        "github": "leerob",
+        "twitter": "leeerob",
+        "website": "https://leerob.io"
+      },
+      "categories": ["web_app", "framework", "devtool"],
+      "bio": "VP of Product at Vercel. Next.js evangelist and educator.",
+      "audienceSize": 190000
+    },
+    {
+      "handle": "mojombo",
+      "platforms": {
+        "github": "mojombo",
+        "twitter": "mojombo",
+        "website": "https://tom.preston-werner.com"
+      },
+      "categories": ["web_app", "devtool", "other"],
+      "bio": "Co-founder of GitHub. Creator of Jekyll, TOML, and Semantic Versioning.",
+      "audienceSize": 45000
+    },
+    {
+      "handle": "shadcn",
+      "platforms": {
+        "github": "shadcn",
+        "twitter": "shadcn",
+        "website": "https://shadcn.com"
+      },
+      "categories": ["web_app", "library", "devtool"],
+      "bio": "Creator of shadcn/ui. Redefined how React component libraries are distributed.",
+      "audienceSize": 170000
+    },
+    {
+      "handle": "steveruizok",
+      "platforms": {
+        "github": "steveruizok",
+        "twitter": "steveruizok",
+        "website": "https://tldraw.com"
+      },
+      "categories": ["web_app", "library", "devtool"],
+      "bio": "Creator of tldraw. Canvas/whiteboard React expert.",
+      "audienceSize": 35000
+    },
+    {
+      "handle": "t3dotgg",
+      "platforms": {
+        "github": "t3dotgg",
+        "twitter": "t3dotgg",
+        "website": "https://t3.gg"
+      },
+      "categories": ["web_app", "framework", "devtool"],
+      "bio": "Theo Browne. Creator of the T3 Stack and Uploadthing. Prolific React/Next.js YouTuber.",
+      "audienceSize": 380000
+    },
+    {
+      "handle": "taylorbryant",
+      "platforms": {
+        "github": "taylorbryant",
+        "twitter": "taylorbryant",
+        "website": "https://taylorbryant.blog"
+      },
+      "categories": ["web_app", "framework", "devtool"],
+      "bio": "Full-stack developer writing about Next.js, Tailwind, and modern web workflows.",
+      "audienceSize": 3000
+    },
+    {
+      "handle": "theprimeagen",
+      "platforms": {
+        "github": "ThePrimeagen",
+        "twitter": "ThePrimeagen",
+        "website": "https://theprimeagen.tv"
+      },
+      "categories": ["web_app", "cli_tool", "devtool"],
+      "bio": "Ex-Netflix engineer. Neovim evangelist and Twitch streamer teaching systems/web dev.",
+      "audienceSize": 430000
+    },
+    {
+      "handle": "timneutkens",
+      "platforms": {
+        "github": "timneutkens",
+        "twitter": "timneutkens"
+      },
+      "categories": ["web_app", "framework", "devtool"],
+      "bio": "Next.js core lead at Vercel. Architect of the App Router and Turbopack integration.",
+      "audienceSize": 45000
+    },
+
+    {
+      "handle": "ahmed-ghanem",
+      "platforms": {
+        "github": "ahmedghanem00",
+        "twitter": "ahmedghanem00"
+      },
+      "categories": ["mobile_app", "library", "other"],
+      "bio": "Mobile and backend developer contributing to OSS SDKs.",
+      "audienceSize": 2000
+    },
+    {
+      "handle": "airbnb",
+      "platforms": {
+        "github": "airbnb",
+        "website": "https://airbnb.io"
+      },
+      "categories": ["mobile_app", "library", "framework"],
+      "bio": "Airbnb engineering. Releases React Native Maps, Lottie, and other mobile OSS.",
+      "audienceSize": 130000
+    },
+    {
+      "handle": "brentvatne",
+      "platforms": {
+        "github": "brentvatne",
+        "twitter": "notbrent",
+        "website": "https://brentvatne.ca"
+      },
+      "categories": ["mobile_app", "framework", "devtool"],
+      "bio": "Expo engineering lead. React Native core contributor.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "evanbacon",
+      "platforms": {
+        "github": "EvanBacon",
+        "twitter": "Baconbrix",
+        "website": "https://evanbacon.dev"
+      },
+      "categories": ["mobile_app", "framework", "web_app"],
+      "bio": "Expo Router lead. Pioneering universal React Native apps for web + native.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "florianbuerger",
+      "platforms": {
+        "github": "florianbuerger",
+        "twitter": "florianbuerger",
+        "website": "https://florianbuerger.com"
+      },
+      "categories": ["mobile_app", "library", "devtool"],
+      "bio": "iOS engineer writing about Swift, UIKit, and SwiftUI.",
+      "audienceSize": 4000
+    },
+    {
+      "handle": "kavya719",
+      "platforms": {
+        "github": "kavya719",
+        "twitter": "kavya719",
+        "website": "https://kavya719.github.io"
+      },
+      "categories": ["mobile_app", "infrastructure", "other"],
+      "bio": "Kavya Joshi. Distributed systems engineer and mobile infra speaker.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "kelset",
+      "platforms": {
+        "github": "kelset",
+        "twitter": "kelset"
+      },
+      "categories": ["mobile_app", "framework", "devtool"],
+      "bio": "React Native core contributor and release manager.",
+      "audienceSize": 8000
+    },
+    {
+      "handle": "kzzzf",
+      "platforms": {
+        "github": "kmagiera",
+        "twitter": "kzzzf"
+      },
+      "categories": ["mobile_app", "library", "framework"],
+      "bio": "Krzysztof Magiera. Founder of Software Mansion. Creator of React Native Reanimated and Gesture Handler.",
+      "audienceSize": 15000
+    },
+    {
+      "handle": "mrousavy",
+      "platforms": {
+        "github": "mrousavy",
+        "twitter": "mrousavy",
+        "website": "https://mrousavy.com"
+      },
+      "categories": ["mobile_app", "library", "framework"],
+      "bio": "Marc Rousavy. Creator of react-native-vision-camera, react-native-mmkv, and Nitro Modules.",
+      "audienceSize": 18000
+    },
+    {
+      "handle": "nathanborror",
+      "platforms": {
+        "github": "nathanborror",
+        "twitter": "nathanborror",
+        "website": "https://nathanborror.com"
+      },
+      "categories": ["mobile_app", "devtool", "other"],
+      "bio": "Indie iOS developer. Builds SwiftUI apps and shares design-minded craft.",
+      "audienceSize": 10000
+    },
+    {
+      "handle": "objcio",
+      "platforms": {
+        "github": "objcio",
+        "twitter": "objcio",
+        "website": "https://objc.io"
+      },
+      "categories": ["mobile_app", "library", "other"],
+      "bio": "Chris Eidhof and Florian Kugler. Publishers of advanced Swift and iOS architecture content.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "ra1028",
+      "platforms": {
+        "github": "ra1028",
+        "twitter": "r_razuki"
+      },
+      "categories": ["mobile_app", "library", "framework"],
+      "bio": "Ryo Aoyama. iOS/Swift OSS author of DifferenceKit, Carbon, and SwiftUI Atoms.",
+      "audienceSize": 4000
+    },
+    {
+      "handle": "robertmogos",
+      "platforms": {
+        "github": "rmogos",
+        "twitter": "robertmogos"
+      },
+      "categories": ["mobile_app", "web_app", "framework"],
+      "bio": "NativeScript core contributor. Builds cross-platform mobile frameworks.",
+      "audienceSize": 3000
+    },
+    {
+      "handle": "satya164",
+      "platforms": {
+        "github": "satya164",
+        "twitter": "satya164"
+      },
+      "categories": ["mobile_app", "library", "framework"],
+      "bio": "Satyajit Sahoo. Core maintainer of React Navigation and callstack OSS.",
+      "audienceSize": 12000
+    },
+
+    {
+      "handle": "developit",
+      "platforms": {
+        "github": "developit",
+        "twitter": "_developit",
+        "website": "https://jasonformat.com"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Jason Miller. Creator of Preact and WMR. Former Chrome web platform advocate.",
+      "audienceSize": 50000
+    },
+    {
+      "handle": "jaredpalmer",
+      "platforms": {
+        "github": "jaredpalmer",
+        "twitter": "jaredpalmer",
+        "website": "https://jaredpalmer.com"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Creator of Formik, TSDX, and Razzle. Former Vercel engineer and Turbo lead.",
+      "audienceSize": 50000
+    },
+    {
+      "handle": "jaredforsyth",
+      "platforms": {
+        "github": "jaredforsyth",
+        "twitter": "jaredforsyth",
+        "website": "https://jaredforsyth.com"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "OCaml/ReasonML core contributor. Former React at Khan Academy.",
+      "audienceSize": 8000
+    },
+    {
+      "handle": "jhchen",
+      "platforms": {
+        "github": "jhchen",
+        "twitter": "jhchen",
+        "website": "https://jhchen.me"
+      },
+      "categories": ["library", "devtool", "web_app"],
+      "bio": "Jason Chen. Creator of Quill rich text editor and Parchment document model.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "matteocrippa",
+      "platforms": {
+        "github": "matteocrippa",
+        "twitter": "ghego"
+      },
+      "categories": ["library", "mobile_app", "other"],
+      "bio": "Maintainer of awesome-swift and prolific Swift/TypeScript OSS author.",
+      "audienceSize": 6000
+    },
+    {
+      "handle": "paularmstrong",
+      "platforms": {
+        "github": "paularmstrong",
+        "twitter": "paul_armstrong"
+      },
+      "categories": ["library", "devtool", "web_app"],
+      "bio": "Creator of Normalizr. Build infra engineer with long React/JS OSS history.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "reactwg",
+      "platforms": {
+        "github": "reactwg",
+        "website": "https://react.dev"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "The React working group. Planning discussions for the React core library.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "rich-harris",
+      "platforms": {
+        "github": "Rich-Harris",
+        "twitter": "Rich_Harris",
+        "website": "https://rich-harris.dev"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Creator of Svelte and Rollup. Vercel engineer.",
+      "audienceSize": 100000
+    },
+    {
+      "handle": "ryansolid",
+      "platforms": {
+        "github": "ryansolid",
+        "twitter": "RyanCarniato"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Ryan Carniato. Creator of SolidJS. Fine-grained reactivity advocate.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "sebmarkbage",
+      "platforms": {
+        "github": "sebmarkbage",
+        "twitter": "sebmarkbage"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Sebastian Markbåge. React core architect. Principal engineer at Vercel.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "sebmck",
+      "platforms": {
+        "github": "sebmck",
+        "twitter": "sebmck",
+        "website": "https://sebmck.com"
+      },
+      "categories": ["library", "devtool", "framework"],
+      "bio": "Sebastian McKenzie. Creator of Babel, Yarn, and Rome/Biome.",
+      "audienceSize": 45000
+    },
+    {
+      "handle": "tannerlinsley",
+      "platforms": {
+        "github": "tannerlinsley",
+        "twitter": "tannerlinsley",
+        "website": "https://tanstack.com"
+      },
+      "categories": ["library", "framework", "devtool"],
+      "bio": "Creator of TanStack Query, TanStack Router, and the TanStack ecosystem.",
+      "audienceSize": 50000
+    },
+
+    {
+      "handle": "aaronpatterson",
+      "platforms": {
+        "github": "tenderlove",
+        "twitter": "tenderlove",
+        "website": "https://tenderlovemaking.com"
+      },
+      "categories": ["api", "framework", "library"],
+      "bio": "Ruby and Rails core. Maintainer of Nokogiri and psych.",
+      "audienceSize": 65000
+    },
+    {
+      "handle": "dhh",
+      "platforms": {
+        "github": "dhh",
+        "twitter": "dhh",
+        "website": "https://dhh.dk"
+      },
+      "categories": ["api", "framework", "web_app"],
+      "bio": "Creator of Ruby on Rails. Co-founder of Basecamp and 37signals.",
+      "audienceSize": 550000
+    },
+    {
+      "handle": "ericelliott",
+      "platforms": {
+        "github": "ericelliott",
+        "twitter": "_ericelliott",
+        "website": "https://ericelliottjs.com"
+      },
+      "categories": ["api", "library", "framework"],
+      "bio": "Author of Programming JavaScript Applications. API design and functional JS educator.",
+      "audienceSize": 100000
+    },
+    {
+      "handle": "honojs",
+      "platforms": {
+        "github": "honojs",
+        "website": "https://hono.dev"
+      },
+      "categories": ["api", "framework", "web_app"],
+      "bio": "Yusuke Wada and team. Hono — the ultrafast edge-first web framework.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "jarred-sumner",
+      "platforms": {
+        "github": "Jarred-Sumner",
+        "twitter": "jarredsumner",
+        "website": "https://bun.sh"
+      },
+      "categories": ["api", "infrastructure", "devtool"],
+      "bio": "Creator of Bun. JavaScript runtime and bundler in Zig.",
+      "audienceSize": 75000
+    },
+    {
+      "handle": "jlongster",
+      "platforms": {
+        "github": "jlongster",
+        "twitter": "jlongster",
+        "website": "https://jlongster.com"
+      },
+      "categories": ["api", "library", "devtool"],
+      "bio": "James Long. Creator of Prettier and Actual Budget. Local-first software evangelist.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "kamilmysliwiec",
+      "platforms": {
+        "github": "kamilmysliwiec",
+        "twitter": "kammysliwiec",
+        "website": "https://kamilmysliwiec.com"
+      },
+      "categories": ["api", "framework", "library"],
+      "bio": "Creator of NestJS. Enterprise Node.js framework architect.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "kitlangton",
+      "platforms": {
+        "github": "kitlangton",
+        "twitter": "kitlangton"
+      },
+      "categories": ["api", "library", "framework"],
+      "bio": "Kit Langton. ZIO contributor and Scala developer tools author.",
+      "audienceSize": 8000
+    },
+    {
+      "handle": "matthewmueller",
+      "platforms": {
+        "github": "matthewmueller",
+        "twitter": "mattmueller",
+        "website": "https://mat.tm"
+      },
+      "categories": ["api", "framework", "devtool"],
+      "bio": "Creator of Bud framework (Go). Previously Node.js API tooling.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "phoenixframework",
+      "platforms": {
+        "github": "phoenixframework",
+        "website": "https://phoenixframework.org"
+      },
+      "categories": ["api", "framework", "web_app"],
+      "bio": "Chris McCord and team. Phoenix — productive Elixir web framework with LiveView.",
+      "audienceSize": 22000
+    },
+    {
+      "handle": "ry",
+      "platforms": {
+        "github": "ry",
+        "twitter": "ry",
+        "website": "https://tinyclouds.org"
+      },
+      "categories": ["api", "infrastructure", "devtool"],
+      "bio": "Ryan Dahl. Creator of Node.js and Deno.",
+      "audienceSize": 120000
+    },
+    {
+      "handle": "tiangolo",
+      "platforms": {
+        "github": "tiangolo",
+        "twitter": "tiangolo",
+        "website": "https://tiangolo.com"
+      },
+      "categories": ["api", "framework", "library"],
+      "bio": "Sebastián Ramírez. Creator of FastAPI, Typer, and SQLModel.",
+      "audienceSize": 75000
+    },
+    {
+      "handle": "wycats",
+      "platforms": {
+        "github": "wycats",
+        "twitter": "wycats"
+      },
+      "categories": ["api", "framework", "library"],
+      "bio": "Yehuda Katz. Ember.js co-creator, Rust core alumnus, jQuery and Rails contributor.",
+      "audienceSize": 55000
+    },
+
+    {
+      "handle": "bluwyoo",
+      "platforms": {
+        "github": "bluwy",
+        "twitter": "bluwyoo"
+      },
+      "categories": ["framework", "devtool", "library"],
+      "bio": "Bjorn Lu. Svelte and Vite core team.",
+      "audienceSize": 6000
+    },
+    {
+      "handle": "denoland",
+      "platforms": {
+        "github": "denoland",
+        "twitter": "deno_land",
+        "website": "https://deno.com"
+      },
+      "categories": ["framework", "infrastructure", "api"],
+      "bio": "The Deno team. Secure JavaScript and TypeScript runtime.",
+      "audienceSize": 95000
+    },
+    {
+      "handle": "emberjs",
+      "platforms": {
+        "github": "emberjs",
+        "website": "https://emberjs.com"
+      },
+      "categories": ["framework", "library", "web_app"],
+      "bio": "The Ember.js organization. Battle-tested ambitious web application framework.",
+      "audienceSize": 22000
+    },
+    {
+      "handle": "flutter",
+      "platforms": {
+        "github": "flutter",
+        "website": "https://flutter.dev"
+      },
+      "categories": ["framework", "mobile_app", "web_app"],
+      "bio": "The Flutter team. Cross-platform UI toolkit.",
+      "audienceSize": 170000
+    },
+    {
+      "handle": "igorminar",
+      "platforms": {
+        "github": "IgorMinar",
+        "twitter": "IgorMinar"
+      },
+      "categories": ["framework", "library", "devtool"],
+      "bio": "Igor Minar. Founder and longtime lead of Angular.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "laravel",
+      "platforms": {
+        "github": "laravel",
+        "website": "https://laravel.com"
+      },
+      "categories": ["framework", "api", "web_app"],
+      "bio": "Taylor Otwell and the Laravel team. PHP for web artisans.",
+      "audienceSize": 80000
+    },
+    {
+      "handle": "lucasmeijer",
+      "platforms": {
+        "github": "lucasmeijer",
+        "twitter": "lucasmeijer"
+      },
+      "categories": ["framework", "devtool", "other"],
+      "bio": "Unity engineer. Long history in game engine and compiler tooling.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "mhevery",
+      "platforms": {
+        "github": "mhevery",
+        "twitter": "mhevery"
+      },
+      "categories": ["framework", "library", "devtool"],
+      "bio": "Miško Hevery. Creator of AngularJS and Qwik.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "nuxt",
+      "platforms": {
+        "github": "nuxt",
+        "twitter": "nuxt_js",
+        "website": "https://nuxt.com"
+      },
+      "categories": ["framework", "web_app", "devtool"],
+      "bio": "Nuxt team — intuitive Vue framework.",
+      "audienceSize": 55000
+    },
+    {
+      "handle": "remix-run",
+      "platforms": {
+        "github": "remix-run",
+        "website": "https://remix.run"
+      },
+      "categories": ["framework", "web_app", "library"],
+      "bio": "Ryan Florence, Michael Jackson and team. Creators of Remix and React Router.",
+      "audienceSize": 65000
+    },
+    {
+      "handle": "sveltejs",
+      "platforms": {
+        "github": "sveltejs",
+        "website": "https://svelte.dev"
+      },
+      "categories": ["framework", "library", "devtool"],
+      "bio": "Svelte core team. Cybernetically enhanced web apps.",
+      "audienceSize": 75000
+    },
+    {
+      "handle": "tomdale",
+      "platforms": {
+        "github": "tomdale",
+        "twitter": "tomdale"
+      },
+      "categories": ["framework", "library", "web_app"],
+      "bio": "Tom Dale. Ember.js co-creator. Formerly at LinkedIn and Apple.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "trpc",
+      "platforms": {
+        "github": "trpc",
+        "twitter": "trpcio",
+        "website": "https://trpc.io"
+      },
+      "categories": ["framework", "api", "library"],
+      "bio": "Alex Johansson and team. End-to-end typesafe APIs with tRPC.",
+      "audienceSize": 35000
+    },
+
+    {
+      "handle": "antoncodes",
+      "platforms": {
+        "github": "antonioru",
+        "twitter": "antoniorullo"
+      },
+      "categories": ["devtool", "library", "web_app"],
+      "bio": "Beautiful React Hooks author. Frontend architect at Hopin.",
+      "audienceSize": 6000
+    },
+    {
+      "handle": "biomejs",
+      "platforms": {
+        "github": "biomejs",
+        "twitter": "biomejs",
+        "website": "https://biomejs.dev"
+      },
+      "categories": ["devtool", "cli_tool", "library"],
+      "bio": "Biome team. Rust-based formatter and linter for the web.",
+      "audienceSize": 12000
+    },
+    {
+      "handle": "cpojer",
+      "platforms": {
+        "github": "cpojer",
+        "twitter": "cpojer",
+        "website": "https://cpojer.net"
+      },
+      "categories": ["devtool", "library", "framework"],
+      "bio": "Christoph Nakazawa. Former Jest and Metro lead at Meta. Creator of Nakazawa Tech.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "devongovett",
+      "platforms": {
+        "github": "devongovett",
+        "twitter": "devongovett"
+      },
+      "categories": ["devtool", "library", "framework"],
+      "bio": "Devon Govett. Creator of Parcel bundler and the Radix-inspired React Aria libraries at Adobe.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "dorkodu",
+      "platforms": {
+        "github": "dorkodu",
+        "website": "https://dorkodu.com"
+      },
+      "categories": ["devtool", "web_app", "api"],
+      "bio": "Dorkodu team. Indie dev tools and social platforms.",
+      "audienceSize": 1500
+    },
+    {
+      "handle": "drwpow",
+      "platforms": {
+        "github": "drwpow",
+        "twitter": "drwpow",
+        "website": "https://pow.rs"
+      },
+      "categories": ["devtool", "library", "cli_tool"],
+      "bio": "Drew Powers. Creator of openapi-typescript and design-token tooling.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "hi-ogawa",
+      "platforms": {
+        "github": "hi-ogawa",
+        "twitter": "hiroshi_ogawa"
+      },
+      "categories": ["devtool", "framework", "library"],
+      "bio": "Hiroshi Ogawa. Vite core contributor and frontend OSS author.",
+      "audienceSize": 3000
+    },
+    {
+      "handle": "karlhorky",
+      "platforms": {
+        "github": "karlhorky",
+        "twitter": "karlhorky"
+      },
+      "categories": ["devtool", "library", "framework"],
+      "bio": "Karl Horky. Curated JS/TS list maintainer and GraphQL Code Generator contributor.",
+      "audienceSize": 4000
+    },
+    {
+      "handle": "marvinhagemeister",
+      "platforms": {
+        "github": "marvinhagemeister",
+        "twitter": "marvinhagemeist",
+        "website": "https://marvinh.dev"
+      },
+      "categories": ["devtool", "library", "framework"],
+      "bio": "Marvin Hagemeister. Preact and Vite core contributor, dev tooling specialist.",
+      "audienceSize": 8000
+    },
+    {
+      "handle": "patak-dev",
+      "platforms": {
+        "github": "patak-dev",
+        "twitter": "patak_dev"
+      },
+      "categories": ["devtool", "framework", "library"],
+      "bio": "Matias Capeletto. Vite and Vitest core team.",
+      "audienceSize": 7000
+    },
+    {
+      "handle": "sanity-io",
+      "platforms": {
+        "github": "sanity-io",
+        "website": "https://sanity.io"
+      },
+      "categories": ["devtool", "api", "web_app"],
+      "bio": "Sanity team. Structured content platform for developers.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "sheerun",
+      "platforms": {
+        "github": "sheerun",
+        "twitter": "sheerun"
+      },
+      "categories": ["devtool", "cli_tool", "library"],
+      "bio": "Adam Stankiewicz. Creator of wait-for-it in JS and prolific CI/dev tooling author.",
+      "audienceSize": 6000
+    },
+    {
+      "handle": "storybookjs",
+      "platforms": {
+        "github": "storybookjs",
+        "twitter": "storybookjs",
+        "website": "https://storybook.js.org"
+      },
+      "categories": ["devtool", "library", "framework"],
+      "bio": "Storybook maintainer team. The frontend workshop for UI components.",
+      "audienceSize": 85000
+    },
+    {
+      "handle": "vitejs",
+      "platforms": {
+        "github": "vitejs",
+        "twitter": "vite_js",
+        "website": "https://vitejs.dev"
+      },
+      "categories": ["devtool", "framework", "cli_tool"],
+      "bio": "The Vite team. Next-generation frontend tooling.",
+      "audienceSize": 80000
+    },
+
+    {
+      "handle": "bcantrill",
+      "platforms": {
+        "github": "bcantrill",
+        "twitter": "bcantrill",
+        "website": "https://www.tritondatacenter.com"
+      },
+      "categories": ["infrastructure", "other", "devtool"],
+      "bio": "Bryan Cantrill. DTrace co-creator. CTO of Oxide Computer.",
+      "audienceSize": 70000
+    },
+    {
+      "handle": "bgrant0607",
+      "platforms": {
+        "github": "bgrant0607",
+        "twitter": "bgrant0607"
+      },
+      "categories": ["infrastructure", "devtool", "other"],
+      "bio": "Brian Grant. Kubernetes co-founder and API design lead.",
+      "audienceSize": 12000
+    },
+    {
+      "handle": "brendanburns",
+      "platforms": {
+        "github": "brendandburns",
+        "twitter": "brendandburns"
+      },
+      "categories": ["infrastructure", "devtool", "cli_tool"],
+      "bio": "Brendan Burns. Kubernetes co-founder. Corporate VP at Microsoft Azure.",
+      "audienceSize": 50000
+    },
+    {
+      "handle": "charity",
+      "platforms": {
+        "github": "charity",
+        "twitter": "mipsytipsy",
+        "website": "https://charity.wtf"
+      },
+      "categories": ["infrastructure", "devtool", "other"],
+      "bio": "Charity Majors. Co-founder and CTO of Honeycomb. Observability evangelist.",
+      "audienceSize": 100000
+    },
+    {
+      "handle": "cncf",
+      "platforms": {
+        "github": "cncf",
+        "website": "https://cncf.io"
+      },
+      "categories": ["infrastructure", "devtool", "other"],
+      "bio": "Cloud Native Computing Foundation. Stewards Kubernetes, Envoy, Prometheus, and more.",
+      "audienceSize": 180000
+    },
+    {
+      "handle": "davecheney",
+      "platforms": {
+        "github": "davecheney",
+        "twitter": "davecheney",
+        "website": "https://dave.cheney.net"
+      },
+      "categories": ["infrastructure", "library", "other"],
+      "bio": "Dave Cheney. Go team alumnus. Heptio and VMware cloud-native engineer.",
+      "audienceSize": 45000
+    },
+    {
+      "handle": "grafana",
+      "platforms": {
+        "github": "grafana",
+        "website": "https://grafana.com"
+      },
+      "categories": ["infrastructure", "data", "devtool"],
+      "bio": "Grafana Labs. Observability, dashboards, Loki, Tempo, Mimir.",
+      "audienceSize": 95000
+    },
+    {
+      "handle": "hashicorp",
+      "platforms": {
+        "github": "hashicorp",
+        "website": "https://hashicorp.com"
+      },
+      "categories": ["infrastructure", "devtool", "cli_tool"],
+      "bio": "HashiCorp. Creators of Terraform, Vault, Consul, Nomad, Packer, Vagrant.",
+      "audienceSize": 180000
+    },
+    {
+      "handle": "kelseyhightower",
+      "platforms": {
+        "github": "kelseyhightower",
+        "twitter": "kelseyhightower"
+      },
+      "categories": ["infrastructure", "devtool", "cli_tool"],
+      "bio": "Kelsey Hightower. Kubernetes, Google Cloud, and cloud native evangelist.",
+      "audienceSize": 200000
+    },
+    {
+      "handle": "lizthegrey",
+      "platforms": {
+        "github": "lizthegrey",
+        "twitter": "lizthegrey"
+      },
+      "categories": ["infrastructure", "devtool", "other"],
+      "bio": "Liz Fong-Jones. Field CTO at Honeycomb. Site reliability and observability leader.",
+      "audienceSize": 55000
+    },
+    {
+      "handle": "mxcl",
+      "platforms": {
+        "github": "mxcl",
+        "twitter": "mxcl",
+        "website": "https://mxcl.dev"
+      },
+      "categories": ["infrastructure", "cli_tool", "devtool"],
+      "bio": "Max Howell. Creator of Homebrew. Founder of tea.xyz.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "solomonstre",
+      "platforms": {
+        "github": "shykes",
+        "twitter": "solomonstre"
+      },
+      "categories": ["infrastructure", "devtool", "cli_tool"],
+      "bio": "Solomon Hykes. Creator of Docker. Founder of Dagger.",
+      "audienceSize": 150000
+    },
+    {
+      "handle": "thockin",
+      "platforms": {
+        "github": "thockin",
+        "twitter": "thockin"
+      },
+      "categories": ["infrastructure", "devtool", "other"],
+      "bio": "Tim Hockin. Kubernetes co-founder and network model architect at Google.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "zolrath",
+      "platforms": {
+        "github": "zolrath",
+        "twitter": "zolrath"
+      },
+      "categories": ["infrastructure", "devtool", "cli_tool"],
+      "bio": "Matt Furden. Tailscale engineer and dotfile/tooling enthusiast.",
+      "audienceSize": 8000
+    },
+
+    {
+      "handle": "chrisalbon",
+      "platforms": {
+        "github": "chrisalbon",
+        "twitter": "chrisalbon",
+        "website": "https://chrisalbon.com"
+      },
+      "categories": ["data", "other", "library"],
+      "bio": "Chris Albon. Director of ML at Wikimedia. Author of widely used ML flashcards.",
+      "audienceSize": 130000
+    },
+    {
+      "handle": "dask",
+      "platforms": {
+        "github": "dask",
+        "website": "https://dask.org"
+      },
+      "categories": ["data", "infrastructure", "library"],
+      "bio": "Dask organization. Parallel computing for Python at scale.",
+      "audienceSize": 20000
+    },
+    {
+      "handle": "fchollet",
+      "platforms": {
+        "github": "fchollet",
+        "twitter": "fchollet"
+      },
+      "categories": ["data", "library", "framework"],
+      "bio": "François Chollet. Creator of Keras. Google researcher.",
+      "audienceSize": 500000
+    },
+    {
+      "handle": "hadley",
+      "platforms": {
+        "github": "hadley",
+        "twitter": "hadleywickham",
+        "website": "https://hadley.nz"
+      },
+      "categories": ["data", "library", "framework"],
+      "bio": "Hadley Wickham. Chief Scientist at Posit. Creator of the tidyverse for R.",
+      "audienceSize": 130000
+    },
+    {
+      "handle": "huggingface",
+      "platforms": {
+        "github": "huggingface",
+        "twitter": "huggingface",
+        "website": "https://huggingface.co"
+      },
+      "categories": ["data", "library", "api"],
+      "bio": "Hugging Face. Transformers, Datasets, and the model hub.",
+      "audienceSize": 220000
+    },
+    {
+      "handle": "jakevdp",
+      "platforms": {
+        "github": "jakevdp",
+        "twitter": "jakevdp",
+        "website": "https://jakevdp.github.io"
+      },
+      "categories": ["data", "library", "other"],
+      "bio": "Jake VanderPlas. Author of the Python Data Science Handbook. JAX and Altair core.",
+      "audienceSize": 50000
+    },
+    {
+      "handle": "jeremyphoward",
+      "platforms": {
+        "github": "jph00",
+        "twitter": "jeremyphoward",
+        "website": "https://fast.ai"
+      },
+      "categories": ["data", "library", "framework"],
+      "bio": "Jeremy Howard. Co-founder of fast.ai. Creator of fastai and fastcore.",
+      "audienceSize": 230000
+    },
+    {
+      "handle": "karpathy",
+      "platforms": {
+        "github": "karpathy",
+        "twitter": "karpathy",
+        "website": "https://karpathy.ai"
+      },
+      "categories": ["data", "library", "other"],
+      "bio": "Andrej Karpathy. Former Tesla AI director. Creator of nanoGPT and llm.c.",
+      "audienceSize": 900000
+    },
+    {
+      "handle": "mattrickard",
+      "platforms": {
+        "github": "mattrickard",
+        "twitter": "mattrickard"
+      },
+      "categories": ["data", "infrastructure", "devtool"],
+      "bio": "Matt Rickard. Ex-Google Kubernetes engineer writing about ML infra.",
+      "audienceSize": 15000
+    },
+    {
+      "handle": "rasbt",
+      "platforms": {
+        "github": "rasbt",
+        "twitter": "rasbt",
+        "website": "https://sebastianraschka.com"
+      },
+      "categories": ["data", "library", "framework"],
+      "bio": "Sebastian Raschka. Author of Machine Learning with PyTorch and Scikit-Learn.",
+      "audienceSize": 270000
+    },
+    {
+      "handle": "simonw",
+      "platforms": {
+        "github": "simonw",
+        "twitter": "simonw",
+        "website": "https://simonwillison.net"
+      },
+      "categories": ["data", "cli_tool", "devtool"],
+      "bio": "Simon Willison. Co-creator of Django. Creator of Datasette and llm CLI.",
+      "audienceSize": 55000
+    },
+    {
+      "handle": "teoliphant",
+      "platforms": {
+        "github": "teoliphant",
+        "twitter": "teoliphant"
+      },
+      "categories": ["data", "library", "framework"],
+      "bio": "Travis Oliphant. Creator of NumPy and SciPy. Founder of Anaconda and Quansight.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "wesm",
+      "platforms": {
+        "github": "wesm",
+        "twitter": "wesmckinn",
+        "website": "https://wesmckinney.com"
+      },
+      "categories": ["data", "library", "infrastructure"],
+      "bio": "Wes McKinney. Creator of pandas. Co-founder of Voltron Data and Apache Arrow PMC.",
+      "audienceSize": 70000
+    },
+
+    {
+      "handle": "andrewrk",
+      "platforms": {
+        "github": "andrewrk",
+        "twitter": "andy_kelley",
+        "website": "https://andrewkelley.me"
+      },
+      "categories": ["other", "library", "infrastructure"],
+      "bio": "Andrew Kelley. Creator of the Zig programming language.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "aturon",
+      "platforms": {
+        "github": "aturon",
+        "twitter": "aaron_turon"
+      },
+      "categories": ["other", "library", "framework"],
+      "bio": "Aaron Turon. Rust language team alumnus. Long-time PL researcher.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "bagder",
+      "platforms": {
+        "github": "bagder",
+        "twitter": "bagder",
+        "website": "https://daniel.haxx.se"
+      },
+      "categories": ["other", "cli_tool", "library"],
+      "bio": "Daniel Stenberg. Creator and maintainer of curl.",
+      "audienceSize": 40000
+    },
+    {
+      "handle": "bdamos",
+      "platforms": {
+        "github": "bdamos",
+        "twitter": "bdamos"
+      },
+      "categories": ["other", "infrastructure", "data"],
+      "bio": "Systems engineer contributing to low-level OSS.",
+      "audienceSize": 1000
+    },
+    {
+      "handle": "bradfitz",
+      "platforms": {
+        "github": "bradfitz",
+        "twitter": "bradfitz",
+        "website": "https://bradfitz.com"
+      },
+      "categories": ["other", "infrastructure", "library"],
+      "bio": "Brad Fitzpatrick. Creator of LiveJournal and memcached. Co-founder of Tailscale.",
+      "audienceSize": 65000
+    },
+    {
+      "handle": "cmuratori",
+      "platforms": {
+        "github": "cmuratori",
+        "twitter": "cmuratori",
+        "website": "https://caseymuratori.com"
+      },
+      "categories": ["other", "infrastructure", "devtool"],
+      "bio": "Casey Muratori. Handmade Hero creator. Performance and systems programming educator.",
+      "audienceSize": 90000
+    },
+    {
+      "handle": "eatonphil",
+      "platforms": {
+        "github": "eatonphil",
+        "twitter": "eatonphil",
+        "website": "https://eatonphil.com"
+      },
+      "categories": ["other", "data", "infrastructure"],
+      "bio": "Phil Eaton. Database internals writer. Former EDB engineer.",
+      "audienceSize": 25000
+    },
+    {
+      "handle": "hyc_symas",
+      "platforms": {
+        "github": "hyc",
+        "twitter": "hyc_symas"
+      },
+      "categories": ["other", "infrastructure", "library"],
+      "bio": "Howard Chu. Chief architect of LMDB and OpenLDAP.",
+      "audienceSize": 5000
+    },
+    {
+      "handle": "jonblow",
+      "platforms": {
+        "github": "jblow",
+        "twitter": "jonathan_blow",
+        "website": "https://jonblow.net"
+      },
+      "categories": ["other", "devtool", "framework"],
+      "bio": "Jonathan Blow. Creator of Braid and The Witness. Designer of the Jai language.",
+      "audienceSize": 200000
+    },
+    {
+      "handle": "mjg59",
+      "platforms": {
+        "github": "mjg59",
+        "twitter": "mjg59",
+        "website": "https://mjg59.dreamwidth.org"
+      },
+      "categories": ["other", "infrastructure", "devtool"],
+      "bio": "Matthew Garrett. Linux kernel contributor and security researcher.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "nothings",
+      "platforms": {
+        "github": "nothings",
+        "twitter": "nothings"
+      },
+      "categories": ["other", "library", "infrastructure"],
+      "bio": "Sean Barrett. Creator of the stb single-file C libraries.",
+      "audienceSize": 30000
+    },
+    {
+      "handle": "patio11",
+      "platforms": {
+        "github": "patio11",
+        "twitter": "patio11",
+        "website": "https://kalzumeus.com"
+      },
+      "categories": ["other", "web_app", "api"],
+      "bio": "Patrick McKenzie. Stripe alum. Writer on software economics and microSaaS.",
+      "audienceSize": 280000
+    },
+    {
+      "handle": "steveklabnik",
+      "platforms": {
+        "github": "steveklabnik",
+        "twitter": "steveklabnik",
+        "website": "https://steveklabnik.com"
+      },
+      "categories": ["other", "library", "framework"],
+      "bio": "Steve Klabnik. Rust core alumnus. Author of The Rust Programming Language.",
+      "audienceSize": 60000
+    },
+    {
+      "handle": "withoutboats",
+      "platforms": {
+        "github": "withoutboats",
+        "website": "https://without.boats"
+      },
+      "categories": ["other", "library", "framework"],
+      "bio": "Boats. Rust language and async team alumnus. Systems-programming essayist.",
+      "audienceSize": 15000
+    }
+  ]
+}

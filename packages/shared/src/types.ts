@@ -76,6 +76,7 @@ export type {
   TrendSignal,
   TrendSignalInsert,
   // dev influencer
+  AudienceBreakdown,
   DevInfluencer,
   DevInfluencerInsert,
   InfluencerPlatforms,
@@ -91,4 +92,7 @@ export type {
   // asset feedback event
   AssetFeedbackEvent,
   AssetFeedbackEventRequest,
+  // ── Phase 5: influencer discovery pipeline ──
+  // influencer candidate (agent/matcher output, not a DB row)
+  InfluencerCandidate,
 } from './schemas/index.js';

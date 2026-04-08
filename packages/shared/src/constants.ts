@@ -25,6 +25,12 @@ export const JOB_NAMES = {
   CREATIVE_REVIEW: 'creative-review',
   FILTER_WEBHOOK: 'filter-webhook',
   INGEST_TRENDING_SIGNALS: 'ingest-trending-signals',
+  // Phase 5: background batch enrichment of dev_influencer rows.
+  // Cron enqueues one job per 6h cadence; the worker reads N stale
+  // rows, refreshes their bios + audience metrics + topic embeddings,
+  // and writes them back. Same enqueue/execute split as the trending
+  // signals ingest above.
+  ENRICH_DEV_INFLUENCERS: 'enrich-dev-influencers',
 } as const;
 
 // ── Queue Configuration ──

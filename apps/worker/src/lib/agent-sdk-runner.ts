@@ -197,6 +197,32 @@ export interface AgentRunOutput<TResult> {
 const MCP_SERVER_NAME = 'launchkit';
 
 /**
+ * Bridge a heterogeneous Zod-typed tool array to the
+ * `Parameters<typeof runAgent>[0]['tools']` shape the SDK accepts.
+ *
+ * Every agent in the worker (`launch-research-agent.ts`,
+ * `trending-signals-agent.ts`, `influencer-discovery-agent.ts`, …)
+ * declares its tool surface via `tool('name', 'desc', ZodInputShape, handler)`
+ * calls. Each call returns an `SdkMcpToolDefinition` parameterised by
+ * the specific Zod input shape, so the resulting array's element type
+ * is a union of those parameterisations. The Agent SDK accepts the
+ * array as `SdkMcpToolDefinition<any>[]` internally — TypeScript
+ * cannot narrow the heterogeneous union to that `any`-bound shape
+ * without erasing the per-tool input types we just declared.
+ *
+ * This helper centralises the `as unknown as` bridge so every agent
+ * shares one cast instead of repeating it. Counted as one of the
+ * documented `as unknown as` casts in `CLAUDE.md`. Any new agent that
+ * declares a tool surface and calls `runAgent()` MUST go through this
+ * helper rather than inlining the cast at the call site.
+ */
+export function asAgentSdkTools(
+  tools: readonly unknown[]
+): Parameters<typeof runAgent>[0]['tools'] {
+  return tools as unknown as Parameters<typeof runAgent>[0]['tools'];
+}
+
+/**
  * Run an agent through the Claude Agent SDK. Returns the parsed result
  * plus session metadata for resumption.
  */
