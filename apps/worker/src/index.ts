@@ -24,6 +24,7 @@ import { generateProjectAsset } from './processors/generate-project-assets.js';
 import { reviewGeneratedProjectAssets } from './processors/review-generated-assets.js';
 import { filterWebhookEventForRegeneration } from './processors/process-webhook-regeneration.js';
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
+import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { getInsightsForCategory } from './tools/project-insight-memory.js';
 import { database as db, databasePool } from './lib/database.js';
@@ -190,24 +191,29 @@ const generationWorker = new Worker(
 );
 
 // ── Trending Worker ──
-// Handles: ingest-trending-signals (scheduled by the cron)
+// Handles: ingest-trending-signals AND enrich-dev-influencers
+// (both scheduled by the cron service).
 //
 // Jobs on this queue are fire-and-forget from the cron's perspective.
-// Each job runs the trending-signals agent for a single project
-// category and writes clustered rows into `trend_signals`. The
-// processor validates its own job payload at the boundary and keeps
-// a single category failure from affecting the others.
+// Both job types share the queue because they're semantically the
+// same shape: scheduled background data refreshes that run independent
+// of user requests, with their own per-row error isolation. Each
+// processor validates its own job payload at the boundary.
 
 const trendingWorker = new Worker(
   QUEUE_NAMES.TRENDING,
   async (job) => {
-    if (job.name !== JOB_NAMES.INGEST_TRENDING_SIGNALS) {
-      console.warn(
-        `[Worker:Trending] unknown job name "${job.name}" — skipping`
-      );
+    if (job.name === JOB_NAMES.INGEST_TRENDING_SIGNALS) {
+      await processIngestTrendingSignals(job);
       return;
     }
-    await processIngestTrendingSignals(job);
+    if (job.name === JOB_NAMES.ENRICH_DEV_INFLUENCERS) {
+      await processEnrichDevInfluencers(job);
+      return;
+    }
+    console.warn(
+      `[Worker:Trending] unknown job name "${job.name}" — skipping`
+    );
   },
   {
     connection,

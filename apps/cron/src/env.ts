@@ -34,6 +34,24 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(7 * 24),
+  // Phase 5: dev_influencers enrichment cadence for the paid X API
+  // path. The keyless enrichment (GitHub + dev.to + HN) runs on the
+  // existing 6-hour cron cadence; the X user-read endpoint costs
+  // $0.010 per call so we space its refreshes much further apart.
+  // The cron stamps this onto the BullMQ job payload for the
+  // enrichment worker to honour — the worker treats any influencer
+  // whose `last_x_enriched_at` is older than this many hours (or
+  // NULL) as eligible for an X refresh on this run.
+  //
+  // Default 168h = 1 week. At 150 seeded influencers × $0.010 that's
+  // ~$8.50/mo (see `~/.claude/plans/async-brewing-beaver.md` cost
+  // table). Operators who want fresher numbers can lower it; the X
+  // API spend cap in the developer console is the safety net.
+  X_API_ENRICHMENT_INTERVAL_HOURS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(168),
 });
 
 export type CronEnv = z.infer<typeof envSchema>;

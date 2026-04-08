@@ -6,6 +6,7 @@ export * from './asset-feedback-event.js';
 export * from './commit-marketing-run.js';
 export * from './dev-influencer.js';
 export * from './github-webhook.js';
+export * from './influencer-candidate.js';
 export * from './job-data.js';
 export * from './outreach-draft.js';
 export * from './progress-event.js';

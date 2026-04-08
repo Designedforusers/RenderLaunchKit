@@ -114,3 +114,24 @@ export const IngestTrendingSignalsJobDataSchema = z.object({
 export type IngestTrendingSignalsJobData = z.infer<
   typeof IngestTrendingSignalsJobDataSchema
 >;
+
+/**
+ * Background dev_influencers enrichment (Phase 5). The cron enqueues
+ * one job per scheduled run; the worker reads up to `batchSize` stale
+ * rows from `dev_influencers` ordered by `last_enriched_at NULLS FIRST`
+ * and refreshes their bio, audience_breakdown, audience_size, and
+ * topic_embedding via the per-platform enrichment tools.
+ *
+ * `xEnrichmentIntervalHours` controls the secondary X API enrichment
+ * cadence: rows whose `last_x_enriched_at` is older than this many
+ * hours (or NULL) get the paid `enrich-x-user` call. The cron stamps
+ * this from its own `X_API_ENRICHMENT_INTERVAL_HOURS` env var so the
+ * worker honours whatever cadence the operator configured.
+ */
+export const EnrichDevInfluencersJobDataSchema = z.object({
+  batchSize: z.number().int().positive().max(200).default(50),
+  xEnrichmentIntervalHours: z.number().int().positive().default(168),
+});
+export type EnrichDevInfluencersJobData = z.infer<
+  typeof EnrichDevInfluencersJobDataSchema
+>;

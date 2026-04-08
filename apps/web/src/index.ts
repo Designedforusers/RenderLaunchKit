@@ -10,6 +10,7 @@ import { authMiddleware } from './middleware/auth.js';
 import { apiRateLimit } from './middleware/rate-limit.js';
 import projectApiRoutes from './routes/project-api-routes.js';
 import assetApiRoutes from './routes/asset-api-routes.js';
+import outreachApiRoutes from './routes/outreach-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
 import { env } from './env.js';
@@ -114,6 +115,7 @@ app.route('/api/projects', projectEventStreamRoutes);
 app.use('/api/*', authMiddleware);
 app.route('/api/projects', projectApiRoutes);
 app.route('/api/assets', assetApiRoutes);
+app.route('/api/outreach', outreachApiRoutes);
 
 // ── Health Check ──
 
