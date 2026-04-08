@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { createReadStream } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { Readable } from 'node:stream';
-import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
+import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
@@ -24,6 +23,7 @@ import {
   getRenderedVideoFilename,
   renderLaunchVideoAsset,
 } from '../lib/remotion-render.js';
+import { fileToWebStream } from '../lib/stream-utils.js';
 import {
   assets,
   isParsedVoiceoverScript,
@@ -210,24 +210,15 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   //
   // A 30-second 1080p Remotion render can easily exceed 100 MB. On Render's
   // starter plan (512 MB RAM) two concurrent downloads of `readFile`-buffered
-  // responses would OOM the web process. `createReadStream` + `Readable.toWeb`
-  // hands the bytes to the platform fetch implementation as a chunked stream
-  // so memory stays bounded regardless of file size.
+  // responses would OOM the web process. `fileToWebStream` hands the bytes
+  // to the platform fetch implementation as a chunked stream so memory stays
+  // bounded regardless of file size. The Node-vs-WHATWG `ReadableStream`
+  // type bridge lives in that helper so this route doesn't repeat the cast.
   const fileStat = await stat(rendered.outputPath);
-  const nodeStream = createReadStream(rendered.outputPath);
-  const webStream = Readable.toWeb(nodeStream) as NodeReadableStream<Uint8Array>;
   const shouldDownload = c.req.query('download') === '1';
   const filename = getRenderedVideoFilename(asset.id, asset.version, variant);
 
-  // `Readable.toWeb` returns Node's `ReadableStream<Uint8Array>` from
-  // `node:stream/web`, which is structurally identical to the WHATWG
-  // `ReadableStream<Uint8Array>` from `lib.dom.d.ts` that the web
-  // platform `Response` constructor expects. TypeScript treats them
-  // as nominally distinct under strict mode, so the double cast is
-  // the only honest way to bridge them — an `as unknown as` rather
-  // than a single `as` because their public-facing methods overlap
-  // but are not assignable through the inferred type alone.
-  return new Response(webStream as unknown as ReadableStream<Uint8Array>, {
+  return new Response(fileToWebStream(rendered.outputPath), {
     headers: {
       'Content-Type': 'video/mp4',
       'Content-Length': String(fileStat.size),
@@ -235,6 +226,81 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       'Cache-Control': 'private, max-age=3600',
       'X-Remotion-Cache': rendered.cached ? 'hit' : 'miss',
       'X-Narration-Cache': narrationCache,
+    },
+  });
+});
+
+// ── GET /api/assets/:id/audio.mp3 — Stream the worker-rendered audio ──
+//
+// Validation through the inline Zod schema folds two failure modes
+// into one rejection path: a missing `audioCacheKey` and a malformed
+// one (anything that isn't 16 hex chars) both fail `safeParse` with
+// the same 422. The hex regex is the path-traversal defence — combined
+// with `path.resolve` against a fixed cache directory, no value that
+// passes the schema can escape the cache root.
+
+const audioMetadataSchema = z.object({
+  audioCacheKey: z.string().regex(/^[a-f0-9]{16}$/),
+});
+
+assetApiRoutes.get('/:id/audio.mp3', async (c) => {
+  const id = c.req.param('id');
+  const asset = await database.query.assets.findFirst({
+    where: eq(assets.id, id),
+  });
+
+  if (!asset) {
+    return c.json({ error: 'Asset not found' }, 404);
+  }
+
+  if (asset.type !== 'voice_commercial' && asset.type !== 'podcast_script') {
+    return c.json(
+      { error: 'Only voice_commercial and podcast_script assets can be streamed as audio' },
+      400
+    );
+  }
+
+  const parsed = audioMetadataSchema.safeParse(asset.metadata);
+  if (!parsed.success) {
+    // Distinct status from the file-missing 404 below: a 422 says
+    // "the metadata blob does not look like a worker-rendered audio
+    // asset", which usually means the seed shipped a stub or a
+    // regeneration is in flight. Surfaces a clearer signal in the
+    // dashboard than a generic 409.
+    return c.json(
+      { error: 'Asset metadata does not contain a valid audioCacheKey' },
+      422
+    );
+  }
+
+  const audioPath = path.resolve(
+    process.cwd(),
+    '.cache/elevenlabs-rendered',
+    `${parsed.data.audioCacheKey}.mp3`
+  );
+
+  if (!existsSync(audioPath)) {
+    return c.json(
+      { error: 'Rendered audio file is not available on disk yet' },
+      404
+    );
+  }
+
+  // Stream the file from disk rather than buffering it in memory —
+  // same memory-bounded pattern (and same `fileToWebStream` helper)
+  // as the video.mp4 route above. The Node-vs-WHATWG ReadableStream
+  // type bridge lives in `stream-utils.ts` so this route doesn't
+  // need its own cast.
+  const fileStat = await stat(audioPath);
+  const shouldDownload = c.req.query('download') === '1';
+  const filename = `${asset.id}-v${asset.version}-${asset.type}.mp3`;
+
+  return new Response(fileToWebStream(audioPath), {
+    headers: {
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': String(fileStat.size),
+      'Content-Disposition': `${shouldDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
+      'Cache-Control': 'private, max-age=3600',
     },
   });
 });
