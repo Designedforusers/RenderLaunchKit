@@ -59,6 +59,15 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-opus-4-6'),
 
+  // ── Embeddings (Voyage AI) ─────────────────────────────────────
+  // Voyage is the canonical embeddings pairing for Anthropic-stack
+  // projects. `voyage-3-large` at 1024 dim. Optional at the schema
+  // level so the worker boots without it; the embedding helper at
+  // `apps/worker/src/lib/voyage-embeddings.ts` throws a structured
+  // `VoyageEmbeddingError` at call time if the key is missing.
+  VOYAGE_API_KEY: z.string().optional(),
+  VOYAGE_MODEL: z.string().default('voyage-3-large'),
+
   // ── Third-party APIs ───────────────────────────────────────────
   FAL_API_KEY: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),

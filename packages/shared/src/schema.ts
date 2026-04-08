@@ -15,12 +15,13 @@ import {
 import { relations } from 'drizzle-orm';
 // pgvector column helper — uses raw SQL for the vector type
 import { customType } from 'drizzle-orm/pg-core';
+import { EMBEDDING_DIMENSIONS } from './constants.js';
 
 // ── Custom pgvector type ──
 
 const vector = customType<{ data: number[]; driverParam: string }>({
   dataType() {
-    return 'vector(1536)';
+    return `vector(${EMBEDDING_DIMENSIONS})`;
   },
   toDriver(value: number[]): string {
     return `[${value.join(',')}]`;

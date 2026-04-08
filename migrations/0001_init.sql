@@ -61,7 +61,10 @@ CREATE TABLE projects (
   review_feedback JSONB,
   revision_count INTEGER NOT NULL DEFAULT 0,
 
-  embedding vector(1536),
+  -- Voyage `voyage-3-large` output dimension. See
+  -- migrations/0003_voyage_embeddings.sql for the rationale and the
+  -- migration that handles older installs that bootstrapped at 1536.
+  embedding vector(1024),
 
   webhook_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   last_commit_sha VARCHAR(40),
