@@ -133,6 +133,38 @@ const envSchema = z.object({
   ELEVENLABS_VOICE_ID: z.string().optional(),
   ELEVENLABS_VOICE_ID_ALT: z.string().optional(),
   ELEVENLABS_MODEL_ID: z.string().optional(),
+
+  // ── World Labs (Marble) 3D world generation ───────────────────
+  // Drives the `world_scene` asset type — the writer agent crafts a
+  // text prompt describing the product being used in a real-world
+  // setting, the World Labs API generates a 3D Gaussian-splat scene,
+  // and the dashboard links the user out to the interactive Marble
+  // viewer. Optional at the schema level so the worker boots without
+  // it; the helper in `apps/worker/src/lib/world-labs-client.ts`
+  // throws a structured error at call time if the key is missing.
+  // The model defaults to `marble-1.1`; bump to `marble-1.1-plus` via
+  // env override when an outdoor or larger indoor scene is requested.
+  WORLD_LABS_API_KEY: z.string().optional(),
+  WORLD_LABS_MODEL: z.string().default('marble-1.1'),
+  // How long the polling loop is willing to wait for a single world
+  // generation before giving up. World generations land in ~5 minutes
+  // per the docs; the default ceiling here is 15 minutes, which is
+  // long enough to ride out a slow render without the BullMQ job
+  // looking permanently stuck. Override in tests if needed.
+  WORLD_LABS_POLL_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60),
+  // Delay between successive operation polls. Five seconds is gentle
+  // on the upstream and gives a snappy enough progress signal for the
+  // dashboard SSE stream — the operation only flips `done` once, so a
+  // tighter loop would just burn quota.
+  WORLD_LABS_POLL_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;

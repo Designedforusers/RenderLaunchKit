@@ -77,3 +77,29 @@ export const StoryboardResultSchema = z.object({
   voiceoverNotes: z.string(),
 });
 export type StoryboardResult = z.infer<typeof StoryboardResultSchema>;
+
+// ── World Labs scene agent ──────────────────────────────────────────
+//
+// Plans a real-world 3D scene that showcases the product being used.
+// The `worldPrompt` is fed verbatim to the World Labs Marble API; the
+// `displayName` is the human-readable label surfaced in the dashboard
+// and on the Marble viewer page; the `reasoning` is captured on asset
+// metadata so the user understands why this particular setting was
+// chosen for their product.
+//
+// `model` is the Marble model the worker will request. `marble-1.1` is
+// the default; `marble-1.1-plus` consumes more credits but produces a
+// larger world, which the agent should pick when the scene calls for
+// an outdoor environment or a sprawling indoor space (open-plan
+// office, warehouse, conference floor, etc.).
+
+export const WorldLabsModelSchema = z.enum(['marble-1.1', 'marble-1.1-plus']);
+export type WorldLabsModel = z.infer<typeof WorldLabsModelSchema>;
+
+export const WorldScenePromptResultSchema = z.object({
+  displayName: z.string().min(1),
+  worldPrompt: z.string().min(1),
+  model: WorldLabsModelSchema,
+  reasoning: z.string(),
+});
+export type WorldScenePromptResult = z.infer<typeof WorldScenePromptResultSchema>;

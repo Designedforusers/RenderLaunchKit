@@ -1,0 +1,24 @@
+-- Migration: add the `world_scene` asset type for the World Labs
+-- (Marble) 3D world generation integration.
+--
+-- The new asset type plugs the World Labs API into the existing
+-- generation fan-out: the writer agent crafts a real-world scene
+-- prompt for the product, the worker calls
+-- `apps/worker/src/lib/world-labs-client.ts` to kick off and poll a
+-- Marble world generation, and the dashboard links the user out to
+-- the interactive viewer at https://marble.worldlabs.ai/world/<id>.
+--
+-- Why a separate migration
+-- ------------------------
+--
+-- `ALTER TYPE ... ADD VALUE` is explicitly non-transactional in
+-- Postgres (see migrations/0004 for the long-form rationale). The
+-- enum mutation has to run outside a BEGIN/COMMIT block so a later
+-- failure cannot leave the catalog in an inconsistent state. We give
+-- it its own migration file rather than appending to 0004 so the
+-- additive change is reviewable in isolation and the rollback
+-- footprint is a single statement.
+--
+-- The `IF NOT EXISTS` guard makes the statement idempotent — safe to
+-- re-run on a database that already has the value.
+ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'world_scene';
