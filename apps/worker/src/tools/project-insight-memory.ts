@@ -95,6 +95,7 @@ export async function getInsightsForCategory(
       insight: i.insight,
       confidence: i.confidence,
       sampleSize: i.sampleSize,
+      insightType: i.insightType,
     }));
   } catch (err) {
     console.error('[Memory] Error getting insights:', err);

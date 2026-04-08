@@ -24,7 +24,12 @@
 export type {
   AssetType,
   AssetStatus,
+  CommitRunStatus,
+  FeedbackAction,
+  OutreachChannel,
+  OutreachStatus,
   ProjectStatus,
+  TrendSource,
 } from './enums.js';
 
 export type {
@@ -66,4 +71,24 @@ export type {
   CreateProjectRequest,
   CreateProjectResponse,
   ProjectResponse,
+  // ── Phase 2: agentic GTM build ──
+  // trend signal
+  TrendSignal,
+  TrendSignalInsert,
+  // dev influencer
+  DevInfluencer,
+  DevInfluencerInsert,
+  InfluencerPlatforms,
+  // commit marketing run
+  CommitMarketingRun,
+  CommitMarketingRunInsert,
+  TrendUsedSnapshot,
+  InfluencerRecommendedSnapshot,
+  // outreach draft
+  OutreachDraft,
+  OutreachDraftInsert,
+  OutreachStatusUpdate,
+  // asset feedback event
+  AssetFeedbackEvent,
+  AssetFeedbackEventRequest,
 } from './schemas/index.js';
