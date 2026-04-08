@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { AssetTypeSchema } from '../enums.js';
-import { RepoAnalysisSchema } from './repo-analysis.js';
+import {
+  ProjectCategorySchema,
+  RepoAnalysisSchema,
+} from './repo-analysis.js';
 import { ResearchResultSchema } from './research.js';
 import { StrategyBriefSchema } from './strategy.js';
 import { StrategyInsightSchema } from './strategy-insight.js';
@@ -89,3 +92,25 @@ export const FilterWebhookJobDataSchema = z.object({
   webhookEventId: z.string().uuid(),
 });
 export type FilterWebhookJobData = z.infer<typeof FilterWebhookJobDataSchema>;
+
+/**
+ * Background trending-signal ingest. The cron enqueues one job per
+ * distinct project category on its 6-hour cadence; the worker runs
+ * the agentic fan-out (Grok + Exa + 5 free APIs + clustering) and
+ * writes clustered rows to the `trend_signals` table. No `projectId`
+ * because the ingest is cross-project — a trend row is looked up
+ * by category, not by project.
+ */
+export const IngestTrendingSignalsJobDataSchema = z.object({
+  category: ProjectCategorySchema,
+  seedKeywords: z.array(z.string().min(1)).optional(),
+  /**
+   * Optional override for the expires_at of rows this job inserts.
+   * Cron passes a computed timestamp so every row in a single ingest
+   * wave shares the same TTL regardless of per-cluster latency.
+   */
+  expiresAt: z.coerce.date().optional(),
+});
+export type IngestTrendingSignalsJobData = z.infer<
+  typeof IngestTrendingSignalsJobDataSchema
+>;

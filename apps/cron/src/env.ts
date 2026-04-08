@@ -16,6 +16,24 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   GITHUB_TOKEN: z.string().optional(),
+  // Trending-signal ingest TTL. The cron uses this to stamp the
+  // `expiresAt` field on the BullMQ job payload so every row from a
+  // single ingest wave shares the same TTL regardless of per-cluster
+  // latency on the worker side. The worker has its own copy of the
+  // same default in `apps/worker/src/env.ts` for the bypass path when
+  // the cron did not pass an explicit override.
+  //
+  // Every other trending-signal credential (ANTHROPIC_API_KEY,
+  // VOYAGE_API_KEY, GROK_API_KEY, EXA_API_KEY, PRODUCT_HUNT_TOKEN)
+  // lives exclusively in the worker env module — the cron only
+  // enqueues jobs, the worker executes them, so those keys are dead
+  // configuration on the cron service and would only confuse
+  // operators configuring the cron on Render.
+  TRENDING_SIGNAL_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(7 * 24),
 });
 
 export type CronEnv = z.infer<typeof envSchema>;

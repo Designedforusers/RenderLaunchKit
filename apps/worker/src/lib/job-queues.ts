@@ -23,3 +23,4 @@ export const redisConnection = {
 export const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, { connection: redisConnection });
 export const generationQueue = new Queue(QUEUE_NAMES.GENERATION, { connection: redisConnection });
 export const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection: redisConnection });
+export const trendingQueue = new Queue(QUEUE_NAMES.TRENDING, { connection: redisConnection });

@@ -4,6 +4,11 @@ export const QUEUE_NAMES = {
   ANALYSIS: 'analysis',
   GENERATION: 'generation',
   REVIEW: 'review',
+  // Background ingest of trending signals. The cron enqueues one job
+  // per distinct project category on its 6-hour cadence; the worker
+  // runs the agentic fan-out (Grok + Exa + 5 free APIs) and writes
+  // clustered rows to the `trend_signals` table.
+  TRENDING: 'trending',
 } as const;
 
 // ── Job Names ──
@@ -19,6 +24,7 @@ export const JOB_NAMES = {
   GENERATE_VIDEO: 'generate-video',
   CREATIVE_REVIEW: 'creative-review',
   FILTER_WEBHOOK: 'filter-webhook',
+  INGEST_TRENDING_SIGNALS: 'ingest-trending-signals',
 } as const;
 
 // ── Queue Configuration ──
@@ -51,6 +57,20 @@ export const QUEUE_CONFIG = {
       removeOnFail: { count: 25 },
     },
   },
+  // Trending signals run one per category per 6-hour cron tick —
+  // the concurrency cap is low because each job burns ~10s of
+  // Claude time and the worker should not saturate its API budget
+  // on background ingest. Attempts is 1 because a failed ingest is
+  // best dropped and retried on the next cron cycle rather than
+  // retrying immediately against a flaky upstream.
+  [QUEUE_NAMES.TRENDING]: {
+    concurrency: 2,
+    defaultJobOptions: {
+      attempts: 1,
+      removeOnComplete: { count: 50 },
+      removeOnFail: { count: 25 },
+    },
+  },
 } as const;
 
 // ── Job Timeouts (ms) ──
@@ -66,6 +86,11 @@ export const JOB_TIMEOUTS = {
   [JOB_NAMES.GENERATE_VIDEO]: 600_000,
   [JOB_NAMES.CREATIVE_REVIEW]: 60_000,
   [JOB_NAMES.FILTER_WEBHOOK]: 30_000,
+  // Trending-signal ingest runs the agentic fan-out (Grok + Exa +
+  // 5 free APIs + clustering) for a single category. ~30s of tool
+  // calls + ~15s of clustering in steady state; the 120s ceiling
+  // leaves headroom for Claude retries on a transient upstream.
+  [JOB_NAMES.INGEST_TRENDING_SIGNALS]: 120_000,
 } as const;
 
 // ── Asset Type Labels ──

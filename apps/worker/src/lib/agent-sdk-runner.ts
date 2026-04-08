@@ -1,8 +1,10 @@
 import {
   createSdkMcpServer,
   query,
+  type McpServerConfig,
   type SdkMcpToolDefinition,
 } from '@anthropic-ai/claude-agent-sdk';
+import { env } from '../env.js';
 import { projectProgressPublisher } from './project-progress-publisher.js';
 
 /**
@@ -94,6 +96,35 @@ export interface AgentRunInput<TResult> {
   tools: AgentToolDefinition[];
 
   /**
+   * Optional external MCP servers to federate into the agent. Each
+   * key becomes the MCP namespace and each value is an `McpServerConfig`
+   * the Agent SDK understands (stdio / http / sse / sdk). Example:
+   *
+   * ```ts
+   * externalMcpServers: {
+   *   exa: { type: 'http', url: 'https://mcp.exa.ai/mcp?exaApiKey=...' },
+   * }
+   * ```
+   *
+   * The runner merges these with the in-process `launchkit` server and
+   * the SDK routes every tool call to the right namespace. Callers
+   * that need to whitelist specific tools from an external server
+   * should add them to `allowedExternalMcpTools` — otherwise the
+   * runner rejects every external tool by default, matching the
+   * existing least-privilege posture for built-in tools.
+   */
+  externalMcpServers?: Record<string, McpServerConfig>;
+
+  /**
+   * Fully-qualified names of external MCP tools to allow. Format is
+   * `mcp__<server>__<tool>` exactly as the SDK emits them. Any tool
+   * not listed here is rejected even if the corresponding MCP server
+   * is federated — the runner stays least-privilege by default and
+   * forces the caller to opt into every external surface explicitly.
+   */
+  allowedExternalMcpTools?: string[];
+
+  /**
    * Built-in Agent SDK tools to enable. Defaults to `['WebSearch',
    * 'WebFetch']` which is the standard for research agents. Pass `[]`
    * to disable all built-in tools.
@@ -176,6 +207,8 @@ export async function runAgent<TResult>(
     systemPrompt,
     prompt,
     tools,
+    externalMcpServers,
+    allowedExternalMcpTools = [],
     builtInTools = ['WebSearch', 'WebFetch'],
     maxTurns = 25,
     effort = 'high',
@@ -195,11 +228,27 @@ export async function runAgent<TResult>(
   });
 
   // Compose the allowed tool list. Built-in tools use their bare names;
-  // MCP tools use the `mcp__<server>__<tool>` form the SDK auto-generates.
+  // in-process MCP tools use the `mcp__<server>__<tool>` form the SDK
+  // auto-generates; external MCP tools must be whitelisted by the
+  // caller in `allowedExternalMcpTools` so every external surface is
+  // opted into explicitly rather than inherited by default.
   const mcpToolNames = tools.map(
     (t) => `mcp__${MCP_SERVER_NAME}__${t.name}`
   );
-  const allowedTools = [...builtInTools, ...mcpToolNames];
+  const allowedTools = [
+    ...builtInTools,
+    ...mcpToolNames,
+    ...allowedExternalMcpTools,
+  ];
+
+  // Federate the caller-provided external MCP servers alongside the
+  // in-process `launchkit` server. An empty `externalMcpServers` leaves
+  // the map shaped exactly the way it was before this field existed,
+  // which keeps the existing research agent behavior byte-identical.
+  const mcpServers: Record<string, McpServerConfig> = {
+    [MCP_SERVER_NAME]: mcpServer,
+    ...(externalMcpServers ?? {}),
+  };
 
   let sessionId: string | undefined = resumeSessionId;
   let finalText = '';
@@ -212,7 +261,7 @@ export async function runAgent<TResult>(
     options: {
       model: 'claude-opus-4-6',
       systemPrompt,
-      mcpServers: { [MCP_SERVER_NAME]: mcpServer },
+      mcpServers,
       allowedTools,
       maxTurns,
       // Backend service: never prompt for permission, never read
@@ -315,5 +364,45 @@ export async function runAgent<TResult>(
     totalCostUsd,
     durationMs,
     turnCount,
+  };
+}
+
+// ── External MCP server factories ─────────────────────────────────
+
+/**
+ * Fully-qualified Exa MCP tool names. Exposed here so callers can
+ * whitelist exactly the tools they rely on without hard-coding the
+ * `mcp__exa__` prefix at every call site. The list mirrors the
+ * public Exa MCP server's tool surface — if Exa adds new tools we
+ * opt into them explicitly rather than picking them up by accident.
+ */
+export const EXA_MCP_TOOL_NAMES = {
+  webSearch: 'mcp__exa__web_search_exa',
+  companyResearch: 'mcp__exa__company_research_exa',
+  crawling: 'mcp__exa__crawling_exa',
+  linkedinSearch: 'mcp__exa__linkedin_search_exa',
+  deepResearcherStart: 'mcp__exa__deep_researcher_start',
+  deepResearcherCheck: 'mcp__exa__deep_researcher_check',
+} as const;
+
+/**
+ * Build the Agent SDK config entry for the hosted Exa MCP server.
+ *
+ * Returns `null` when `EXA_API_KEY` is not set so callers can
+ * conditionally spread the result into their `externalMcpServers`
+ * map — the trending-signals agent degrades gracefully to the
+ * built-in Anthropic WebSearch when Exa is unavailable.
+ *
+ * Exa's hosted MCP endpoint accepts the API key as a query
+ * parameter; passing it via the URL keeps the transport stateless
+ * and avoids shipping per-request headers through the Agent SDK's
+ * MCP bridge.
+ */
+export function createExaMcpServerConfig(): McpServerConfig | null {
+  const apiKey = env.EXA_API_KEY;
+  if (!apiKey) return null;
+  return {
+    type: 'http',
+    url: `https://mcp.exa.ai/mcp?exaApiKey=${encodeURIComponent(apiKey)}`,
   };
 }
