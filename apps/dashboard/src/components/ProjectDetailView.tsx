@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Competitor } from '@launchkit/shared';
 import { useProjectDetailData } from '../hooks/useProjectData.js';
 import { useProjectEventStream } from '../hooks/useProjectEventStream.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
-import { ProjectActivityTimeline } from './ProjectActivityTimeline.js';
 import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
+import {
+  PipelineStageStrip,
+  AgentToolCallStream,
+  AnimatedAssetGrid,
+  StageLoader,
+  toolCallsFromEvents,
+  latestDetailByPhase,
+  phaseFromStatus,
+} from './pipeline/index.js';
 
 interface ProjectDetailViewProps {
   projectId: string;
@@ -16,6 +25,14 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   const { project, loading, error, refresh } = useProjectDetailData(projectId);
   const { events } = useProjectEventStream(projectId);
   const [showResearch, setShowResearch] = useState(false);
+
+  // Hook ordering: these derived values must be computed before any
+  // early return so the hook call count stays constant across renders
+  // (react-hooks/rules-of-hooks). They operate on `events`
+  // independently of `project`, so computing them before the
+  // loading/error guards is cheap and correct.
+  const toolCalls = useMemo(() => toolCallsFromEvents(events), [events]);
+  const detailsByPhase = useMemo(() => latestDetailByPhase(events), [events]);
 
   if (loading && !project) {
     return (
@@ -46,6 +63,16 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   const mediaAssets = project.assets.filter((a) =>
     ['og_image', 'social_card', 'product_video'].includes(a.type)
   );
+
+  const currentPhase = phaseFromStatus(project.status);
+  const activeDetail = currentPhase ? detailsByPhase[currentPhase] : null;
+  const isGenerating = project.status === 'generating';
+  // The strategy is the source of truth for how many assets the
+  // worker is about to produce. Until the strategy is known we fall
+  // back to the default kit size so the skeleton grid still
+  // appears eagerly.
+  const expectedAssetCount =
+    project.strategy?.assetsToGenerate.length ?? project.assets.length + 3;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -88,6 +115,39 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           </div>
         )}
       </div>
+
+      {/* Pipeline Strip — visible at every status so reviewers can
+          see the flow even for completed projects. */}
+      <div className="mb-6">
+        <PipelineStageStrip
+          status={project.status}
+          detailsByPhase={detailsByPhase}
+        />
+      </div>
+
+      {/* Active-stage spotlight — per-phase animated loader + live
+          tool-call log. Only rendered while the pipeline is mid-run;
+          collapses cleanly to nothing on complete/failed. */}
+      <AnimatePresence>
+        {isInProgress && (
+          <motion.div
+            key="stage-spotlight"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              <StageLoader status={project.status} detail={activeDetail} />
+              <AgentToolCallStream
+                toolCalls={toolCalls}
+                isStreaming={isInProgress}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content — 2 columns */}
@@ -171,40 +231,49 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           )}
 
           {/* Media Assets */}
-          {mediaAssets.length > 0 && (
+          {(mediaAssets.length > 0 || isGenerating) && (
             <div>
               <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
                 Media
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {mediaAssets.map((asset) => (
+              <AnimatedAssetGrid
+                assets={mediaAssets}
+                expectedCount={Math.min(2, expectedAssetCount)}
+                isGenerating={isGenerating && mediaAssets.length === 0}
+                className="grid gap-4 sm:grid-cols-2"
+                renderAsset={(asset) => (
                   <GeneratedAssetCard
-                    key={asset.id}
                     asset={asset}
                     onRefresh={refresh}
                     projectAssets={project.assets}
                   />
-                ))}
-              </div>
+                )}
+              />
             </div>
           )}
 
           {/* Text Assets */}
-          {textAssets.length > 0 && (
+          {(textAssets.length > 0 || isGenerating) && (
             <div>
               <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
                 Content
               </h3>
-              <div className="grid gap-4">
-                {textAssets.map((asset) => (
+              <AnimatedAssetGrid
+                assets={textAssets}
+                expectedCount={Math.max(
+                  0,
+                  expectedAssetCount - mediaAssets.length
+                )}
+                isGenerating={isGenerating}
+                className="grid gap-4"
+                renderAsset={(asset) => (
                   <GeneratedAssetCard
-                    key={asset.id}
                     asset={asset}
                     onRefresh={refresh}
                     projectAssets={project.assets}
                   />
-                ))}
-              </div>
+                )}
+              />
             </div>
           )}
 
@@ -217,9 +286,6 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
 
         {/* Sidebar — 1 column */}
         <div className="space-y-6">
-          {/* Progress Timeline */}
-          <ProjectActivityTimeline status={project.status} events={events} />
-
           {/* Job History */}
           {project.jobs.length > 0 && (
             <div className="card">
