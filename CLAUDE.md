@@ -86,6 +86,18 @@ If you need a new domain type, write the Zod schema first.
 - `generationInstructions` always means the exact instructions used to create or regenerate an asset. It is not a synonym for `brief`, `prompt`, or `description`.
 - Role-based agent names (`launch-research-agent`, `launch-strategy-agent`, `creative-director-agent`) describe the AI persona. Processor names (`analyze-project-repository`, `build-project-launch-strategy`) describe the concrete system action.
 
+### Self-learning Layer 3: forward-compat note (Phase 7)
+
+Phase 7 ships the **data infrastructure** for the self-learning loop's third layer: every approve/reject/edit/regenerate action on an asset writes a row to `asset_feedback_events`, edited rows get an async Voyage embedding via `apps/worker/src/processors/embed-feedback-event.ts`, and `apps/cron/src/aggregate-feedback-insights.ts` clusters the edits by `(asset_type, category)` via pgvector cosine similarity, writing one `strategy_insights` row per cluster with `insight_type='edit_pattern'`.
+
+What's **deliberately NOT shipped in Phase 7**: the prompt-feedback closure where agents read those `edit_pattern` insights and bake them into prompt context. This is a clean ~2-3 hour follow-up after Phase 9:
+
+1. Every prompted agent (`launch-strategy-agent`, `written-asset-agent`, `commit-marketability-agent`, etc.) already pulls past insights via `getInsightsForCategory(category)` from `apps/worker/src/tools/project-insight-memory.ts:82-104`. That function currently returns ALL insight types — extend it (or add a sibling) that filters to `insight_type='edit_pattern'` for the agents that should consume them.
+2. Add an "Edit patterns from past projects" section to each consuming agent's user prompt builder, formatted as a bullet list of the cluster-representative edit text values.
+3. The agents already accept past insights as context — no schema change, no new tool surface, just a prompt template extension and a category-filtered insight read.
+
+The placeholder cluster representative (the longest edit text in each cluster) is also a follow-up upgrade target: a future PR can add `ANTHROPIC_API_KEY` to the cron env (per `apps/cron/src/env.ts:26-31` which currently calls it "dead config") and call Claude for a one-sentence human-readable summary per cluster. The clustering work is the load-bearing piece — the summary is a 30-minute polish pass on top of the data.
+
 ---
 
 ## CI/CD philosophy

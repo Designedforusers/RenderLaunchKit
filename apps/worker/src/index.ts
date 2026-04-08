@@ -25,6 +25,7 @@ import { reviewGeneratedProjectAssets } from './processors/review-generated-asse
 import { processCommitMarketingRun } from './processors/process-commit-marketing-run.js';
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
 import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
+import { processEmbedFeedbackEvent } from './processors/embed-feedback-event.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { getInsightsForCategory } from './tools/project-insight-memory.js';
 import { database as db, databasePool } from './lib/database.js';
@@ -209,6 +210,10 @@ const trendingWorker = new Worker(
     }
     if (job.name === JOB_NAMES.ENRICH_DEV_INFLUENCERS) {
       await processEnrichDevInfluencers(job);
+      return;
+    }
+    if (job.name === JOB_NAMES.EMBED_FEEDBACK_EVENT) {
+      await processEmbedFeedbackEvent(job);
       return;
     }
     console.warn(

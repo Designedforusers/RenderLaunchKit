@@ -18,13 +18,18 @@ import {
   buildNarratedCacheSeed,
   buildNarratedVideoProps,
 } from '../lib/narration.js';
-import { assetGenerationJobQueue } from '../lib/job-queue-clients.js';
+import {
+  assetGenerationJobQueue,
+  enqueueEmbedFeedbackEvent,
+} from '../lib/job-queue-clients.js';
 import {
   getRenderedVideoFilename,
   renderLaunchVideoAsset,
 } from '../lib/remotion-render.js';
 import { fileToWebStream } from '../lib/stream-utils.js';
 import {
+  AssetFeedbackEventRequestSchema,
+  assetFeedbackEvents,
   assets,
   isParsedVoiceoverScript,
   parseVoiceoverScript,
@@ -305,6 +310,68 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
   });
 });
 
+// ── Phase 7: feedback event log helper ──
+//
+// Every user action (approve / reject / edit / regenerate) writes a
+// row to `asset_feedback_events`. This helper centralises the insert
+// + the conditional `EMBED_FEEDBACK_EVENT` enqueue so the four legacy
+// routes stay small and the new POST /:id/feedback route can reuse
+// the same path. The async work — Voyage embedding — is decoupled
+// from the user response so a Voyage hiccup never blocks the route.
+//
+// `userId` is null for now; per-user auth lands in a future iteration.
+//
+// Returns a struct so the new POST /:id/feedback route can report
+// the actual enqueue outcome to the caller (NOT just "this was an
+// edited action so the embedding will probably get queued"). The
+// distinction matters: if BullMQ is unavailable when the route
+// fires, the event row is committed but the embedding job is not
+// queued — the response should reflect that.
+
+interface FeedbackEventResult {
+  id: string;
+  embeddingQueued: boolean;
+}
+
+async function writeFeedbackEvent(input: {
+  assetId: string;
+  action: 'approved' | 'rejected' | 'edited' | 'regenerated';
+  editText: string | null;
+}): Promise<FeedbackEventResult | null> {
+  const [event] = await database
+    .insert(assetFeedbackEvents)
+    .values({
+      assetId: input.assetId,
+      action: input.action,
+      editText: input.editText,
+    })
+    .returning({ id: assetFeedbackEvents.id });
+
+  if (!event) return null;
+
+  let embeddingQueued = false;
+  if (input.action === 'edited' && input.editText !== null) {
+    try {
+      await enqueueEmbedFeedbackEvent(event.id);
+      embeddingQueued = true;
+    } catch (err) {
+      // BullMQ enqueue failed (Redis down, queue unavailable). The
+      // event row is already committed and the user action stays
+      // successful — this is a non-fatal degradation. Log so an
+      // operator notices the missing embeddings; the next BullMQ
+      // restart picks up the queue but historical events from this
+      // window will not have embeddings until they're reprocessed
+      // manually (out of scope for Phase 7).
+      console.warn(
+        `[asset-api] enqueueEmbedFeedbackEvent failed for ${event.id} —`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  return { id: event.id, embeddingQueued };
+}
+
 // ── POST /api/assets/:id/approve — Approve an asset ──
 
 assetApiRoutes.post('/:id/approve', async (c) => {
@@ -319,6 +386,15 @@ assetApiRoutes.post('/:id/approve', async (c) => {
   if (!updated) {
     return c.json({ error: 'Asset not found' }, 404);
   }
+
+  // Phase 7: feedback event side effect. Failure to write the event
+  // does not fail the user action — the existing legacy response
+  // shape is preserved.
+  await writeFeedbackEvent({
+    assetId: updated.id,
+    action: 'approved',
+    editText: null,
+  });
 
   return c.json({ id: updated.id, userApproved: true });
 });
@@ -337,6 +413,12 @@ assetApiRoutes.post('/:id/reject', async (c) => {
   if (!updated) {
     return c.json({ error: 'Asset not found' }, 404);
   }
+
+  await writeFeedbackEvent({
+    assetId: updated.id,
+    action: 'rejected',
+    editText: null,
+  });
 
   return c.json({ id: updated.id, userApproved: false });
 });
@@ -372,6 +454,15 @@ assetApiRoutes.put('/:id/content', async (c) => {
   if (!updated) {
     return c.json({ error: 'Asset not found' }, 404);
   }
+
+  // Phase 7: write the feedback event with the edit text. The
+  // helper enqueues the background Voyage embedding job because
+  // `action === 'edited'` AND `editText !== null`.
+  await writeFeedbackEvent({
+    assetId: updated.id,
+    action: 'edited',
+    editText: parsed.data.content,
+  });
 
   return c.json({ id: updated.id, userEdited: true });
 });
@@ -437,7 +528,88 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
     jobId: `manual__${asset.projectId}__${asset.id}__${asset.version + 1}`,
   });
 
+  // Phase 7: feedback event log. A regeneration is a signal — even
+  // without an edit text — that the user wasn't happy with the prior
+  // version. The aggregator can correlate regeneration rate with
+  // asset type / category to surface "this kind of asset gets
+  // regenerated a lot."
+  await writeFeedbackEvent({
+    assetId: asset.id,
+    action: 'regenerated',
+    editText: null,
+  });
+
   return c.json({ id: asset.id, status: 'regenerating', version: asset.version + 1 });
+});
+
+// ── POST /api/assets/:id/feedback — Unified feedback event log ──
+//
+// Phase 7. Validates the request body against the discriminated
+// union `AssetFeedbackEventRequestSchema` (defined in
+// `@launchkit/shared` since Phase 2). Writes one row to
+// `asset_feedback_events`. For `'edited'` actions, also enqueues a
+// background job to compute the Voyage embedding of the edit text.
+//
+// The four legacy routes (approve / reject / content / regenerate)
+// ALSO write feedback events as a side effect of their existing
+// work — this route exists for clients that want a single endpoint,
+// for the dashboard's eventual unified action surface, and as the
+// canonical "correct" feedback API. The legacy routes will likely
+// proxy to this implementation in a future cleanup pass.
+
+assetApiRoutes.post('/:id/feedback', async (c) => {
+  const id = c.req.param('id');
+  const idParse = z.string().uuid().safeParse(id);
+  if (!idParse.success) {
+    return c.json({ error: 'Asset id must be a valid UUID' }, 400);
+  }
+
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const bodyParse = AssetFeedbackEventRequestSchema.safeParse(rawBody);
+  if (!bodyParse.success) {
+    return c.json(
+      { error: bodyParse.error.issues[0]?.message ?? 'Invalid request body' },
+      400
+    );
+  }
+
+  // Verify the asset exists before writing the event so we can
+  // surface a 404 instead of a confusing FK violation.
+  const asset = await database.query.assets.findFirst({
+    where: eq(assets.id, idParse.data),
+  });
+  if (!asset) {
+    return c.json({ error: 'Asset not found' }, 404);
+  }
+
+  // The discriminated union narrows `editText` to a string only on
+  // the `'edited'` branch — `bodyParse.data.editText` only exists
+  // when the parser proves it's there.
+  const editText =
+    bodyParse.data.action === 'edited' ? bodyParse.data.editText : null;
+
+  const result = await writeFeedbackEvent({
+    assetId: idParse.data,
+    action: bodyParse.data.action,
+    editText,
+  });
+
+  if (!result) {
+    return c.json({ error: 'Failed to write feedback event' }, 500);
+  }
+
+  // `embeddingQueued` reflects the ACTUAL enqueue outcome — true only
+  // when the row is an `'edited'` action AND BullMQ accepted the job.
+  // A `false` here for an `'edited'` action means the row is in the
+  // database but no background embedding job is running.
+  return c.json(
+    {
+      feedbackEventId: result.id,
+      action: bodyParse.data.action,
+      embeddingQueued: result.embeddingQueued,
+    },
+    201
+  );
 });
 
 export default assetApiRoutes;

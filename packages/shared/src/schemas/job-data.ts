@@ -135,3 +135,30 @@ export const EnrichDevInfluencersJobDataSchema = z.object({
 export type EnrichDevInfluencersJobData = z.infer<
   typeof EnrichDevInfluencersJobDataSchema
 >;
+
+/**
+ * Background Voyage embedding of an asset feedback event's edit text
+ * (Phase 7). The user-facing route POSTs an `'edited'` action, the
+ * route writes the asset_feedback_events row immediately with
+ * edit_text populated and edit_embedding NULL, then enqueues this
+ * job. The worker picks it up, computes the Voyage embedding via
+ * `inputType: 'document'`, and writes back to
+ * asset_feedback_events.edit_embedding.
+ *
+ * Single field — the worker re-fetches the row by id rather than
+ * trusting the edit text from the job payload. The row is the source
+ * of truth; the job payload is just a wakeup signal. This also means
+ * a re-enqueue with the same id is naturally idempotent: if the row
+ * already has an embedding, the worker can skip the write.
+ *
+ * Phase 7 uses these embeddings in the weekly
+ * `aggregate-feedback-insights` cron to cluster edits by
+ * `(asset_type, category)` via pgvector cosine similarity, surfacing
+ * recurring edit patterns as `edit_pattern` strategy_insights rows.
+ */
+export const EmbedFeedbackEventJobDataSchema = z.object({
+  feedbackEventId: z.string().uuid(),
+});
+export type EmbedFeedbackEventJobData = z.infer<
+  typeof EmbedFeedbackEventJobDataSchema
+>;

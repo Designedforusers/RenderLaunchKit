@@ -31,6 +31,14 @@ export const JOB_NAMES = {
   // and writes them back. Same enqueue/execute split as the trending
   // signals ingest above.
   ENRICH_DEV_INFLUENCERS: 'enrich-dev-influencers',
+  // Phase 7: Background Voyage embedding of asset feedback edit text.
+  // The user-facing route writes the asset_feedback_events row
+  // immediately and enqueues this job; the worker picks it up, embeds
+  // the edit_text via Voyage, and writes back to
+  // asset_feedback_events.edit_embedding. Same enqueue/execute split
+  // as the two ingest jobs above — keeps the user request path off
+  // the Voyage latency.
+  EMBED_FEEDBACK_EVENT: 'embed-feedback-event',
 } as const;
 
 // ── Queue Configuration ──
@@ -113,6 +121,10 @@ export const JOB_TIMEOUTS = {
   // plus per-row update round trips. The 180s ceiling covers it
   // with headroom.
   [JOB_NAMES.ENRICH_DEV_INFLUENCERS]: 180_000,
+  // Phase 7 feedback event embedding. Single Voyage call (~500ms) +
+  // one raw SQL UPDATE (~10ms). 30s ceiling has plenty of headroom
+  // for transient Voyage latency without hiding real hangs.
+  [JOB_NAMES.EMBED_FEEDBACK_EVENT]: 30_000,
 } as const;
 
 // ── Asset Type Labels ──
