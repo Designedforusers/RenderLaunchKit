@@ -15,14 +15,21 @@ coverage/
 .claude/
 
 # `npx skills add` (agentskills.io) install artifacts.
+#
 # The installer drops a per-agent shadow directory for every supported
 # coding agent (.codebuddy, .commandcode, .crush, …) — each one a thin
-# symlink redirect to the canonical universal location at .agents/skills/.
-# We ignore the noise here so a `git status` after `skills add` stays
-# clean. A follow-up PR commits the canonical .agents/skills/ tree and
-# the skills-lock.json manifest with their own narrowed gitignore so PR
-# reviewers can see what skills are active without the symlink farm.
-.agents/
+# symlink redirect to the canonical universal location at
+# `.agents/skills/`. We track ONLY the canonical location plus the
+# `skills-lock.json` manifest so PR reviewers can see exactly which
+# skills are active without cloning the symlink farm. Everything else
+# (the per-agent shadow dirs, the top-level `skills/` symlink) is
+# ignored noise — a `git status` after `npx skills add -y` is clean.
+#
+# To add a new skill: `npx skills add <source> -y`, then `git add`
+# anything that lands under `.agents/skills/` and the updated
+# `skills-lock.json`. Anything outside that allowlist stays ignored.
+.agents/*
+!.agents/skills/
 .augment/
 .bob/
 .codebuddy/
@@ -48,5 +55,7 @@ coverage/
 .trae/
 .windsurf/
 .zencoder/
-skills/
-skills-lock.json
+# Top-level `skills/` symlink the installer drops (redirects to
+# `.agents/skills/`). Anchored to the repo root with a leading slash
+# so it does NOT match `.agents/skills/`, which we explicitly track.
+/skills/
