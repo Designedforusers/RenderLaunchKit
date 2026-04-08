@@ -9,6 +9,7 @@ import {
 } from '../agents/product-video-agent.js';
 import { generateVoiceCommercialAsset } from '../agents/voice-commercial-agent.js';
 import { generatePodcastScriptAsset } from '../agents/podcast-script-agent.js';
+import { generateWorldSceneAsset } from '../agents/world-scene-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
 
@@ -126,6 +127,26 @@ export async function generateProjectAsset(data: GenerateAssetJobData): Promise<
       });
       content = result.script;
       mediaUrl = `/api/assets/${assetId}/audio.mp3`;
+      metadata = result.metadata;
+    } else if (assetType === 'world_scene') {
+      // World Labs (Marble) 3D scene of the product in a real-world
+      // setting. Claude drafts the world prompt; the World Labs client
+      // kicks off the generation, polls until done, and returns the
+      // public viewer URL plus every supporting asset URL we might
+      // want to surface (thumbnail, panorama, splat, collider mesh).
+      // The dashboard renders the thumbnail and links the user out to
+      // `marbleUrl` for the interactive walk-through. The user-facing
+      // text content is the world prompt itself so it round-trips on
+      // regenerate without re-querying Claude for the same shape.
+      const result = await generateWorldSceneAsset({
+        repoName,
+        repoAnalysis,
+        research,
+        strategy,
+        generationInstructions,
+      });
+      content = result.prompt;
+      mediaUrl = result.marbleUrl;
       metadata = result.metadata;
     } else {
       // Writer agent handles all remaining text content (blog post,

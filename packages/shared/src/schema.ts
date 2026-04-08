@@ -76,6 +76,11 @@ export const assetTypeEnum = pgEnum('asset_type', [
   'outreach_draft',
   // 15-second Remotion card video summarising one commit's marketing kit
   'per_commit_teaser',
+  // ── World Labs (Marble) 3D scene of the product in a real-world
+  //    setting. The writer agent crafts a text prompt, the World Labs
+  //    API generates a Gaussian-splat world the user can walk
+  //    through, and the dashboard links out to the Marble viewer.
+  'world_scene',
 ]);
 
 // ── Source for a single trending signal ingested by the

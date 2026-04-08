@@ -88,6 +88,14 @@ services:
         sync: false
       - key: GITHUB_TOKEN
         sync: false
+      # World Labs (Marble) 3D world generation. Drives the
+      # `world_scene` asset type — Claude drafts the prompt, the
+      # worker calls Marble, polls the operation, and surfaces the
+      # public viewer URL on the asset. The worker degrades gracefully
+      # when the key is absent: only the world_scene branch fails,
+      # the rest of the asset fan-out keeps running.
+      - key: WORLD_LABS_API_KEY
+        sync: false
 
   - type: cron
     name: launchkit-cron
