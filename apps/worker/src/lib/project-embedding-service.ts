@@ -1,46 +1,32 @@
-import { EMBEDDING_DIMENSIONS } from '@launchkit/shared';
+import { generateVoyageEmbedding } from './voyage-embeddings.js';
 
 /**
- * Generate a deterministic lexical feature vector for pgvector
- * similarity search. This is a stand-in for a real embedding API so
- * the demo stays self-contained.
+ * Generate a semantic embedding vector for a piece of project text
+ * using Voyage AI (`voyage-3-large`, 1024 dim).
  *
- * The function returns synchronously today, but the type signature
- * is `Promise<number[]>` so a future swap to a network embedding
- * service (Voyage, OpenAI, Cohere) is a one-line replacement of the
- * body — every call site already `await`s the result. The
- * `require-await` lint rule cannot tell the difference, so we
- * disable it on this single function with the explicit reason
- * spelled out.
+ * Replaces the previous deterministic lexical hash that populated
+ * the `projects.embedding` pgvector column with a vector that had no
+ * semantic meaning ("fast HTTP server" and "speedy web framework"
+ * produced unrelated vectors despite being semantically identical).
+ *
+ * The function signature is unchanged from the lexical-hash version
+ * so every existing call site keeps working — they just get real
+ * embeddings now. Throws `VoyageEmbeddingError` if `VOYAGE_API_KEY`
+ * is not set or the upstream API call fails. See
+ * `apps/worker/src/lib/voyage-embeddings.ts` for the full failure
+ * surface.
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function generateEmbedding(text: string): Promise<number[]> {
-  // Create a deterministic pseudo-embedding from text content
-  // This gives us consistent vectors for similarity search
-  const vector: number[] = new Array<number>(EMBEDDING_DIMENSIONS).fill(0);
-
-  // Use a combination of character codes and position to create a spread vector
-  const normalizedText = text.toLowerCase().trim();
-
-  for (let i = 0; i < normalizedText.length; i++) {
-    const charCode = normalizedText.charCodeAt(i);
-    const idx = (charCode * (i + 1) * 31) % EMBEDDING_DIMENSIONS;
-    vector[idx] = (vector[idx] ?? 0) + 1.0 / Math.sqrt(normalizedText.length);
-  }
-
-  // Normalize to unit length
-  const magnitude = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0));
-  if (magnitude > 0) {
-    for (let i = 0; i < vector.length; i++) {
-      vector[i] = (vector[i] ?? 0) / magnitude;
-    }
-  }
-
-  return vector;
+  return generateVoyageEmbedding(text, { inputType: 'document' });
 }
 
 /**
- * Create a text summary suitable for embedding from project data.
+ * Build the canonical text representation of a project for
+ * embedding. Combines repo name + description + language + tech
+ * stack + category + topics into a single line that captures the
+ * project's semantic identity. The result is fed straight into
+ * `generateEmbedding` so the same project always produces the same
+ * embedding regardless of when it's regenerated.
  */
 export function createProjectEmbeddingText(data: {
   repoName: string;

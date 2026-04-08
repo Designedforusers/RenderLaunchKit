@@ -5,6 +5,7 @@ import {
   generateEmbedding,
   createProjectEmbeddingText,
 } from '../lib/project-embedding-service.js';
+import { VoyageEmbeddingError } from '../lib/voyage-embeddings.js';
 import type { StrategyInsight } from '@launchkit/shared';
 import { database as db } from '../lib/database.js';
 
@@ -64,6 +65,12 @@ export async function findSimilarProjects(
       };
     });
   } catch (err) {
+    // Voyage configuration errors must surface — silently swallowing
+    // them produces an "always-empty similarity search" failure mode
+    // that's invisible until someone notices the strategist never
+    // gets past-project context. Re-throw so the caller (and the
+    // worker's error handler) sees the real cause.
+    if (err instanceof VoyageEmbeddingError) throw err;
     console.error('[Memory] Error finding similar projects:', err);
     return [];
   }
@@ -120,6 +127,9 @@ export async function storeProjectEmbedding(
       WHERE id = ${projectId}
     `);
   } catch (err) {
+    // Same rationale as `findSimilarProjects` above — Voyage config
+    // errors must surface, not get swallowed.
+    if (err instanceof VoyageEmbeddingError) throw err;
     console.error('[Memory] Error storing embedding:', err);
   }
 }
