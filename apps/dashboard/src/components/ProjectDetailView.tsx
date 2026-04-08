@@ -7,6 +7,7 @@ import { useProjectEventStream } from '../hooks/useProjectEventStream.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
+import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import {
   PipelineStageStrip,
   AgentToolCallStream,
@@ -35,25 +36,11 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   const detailsByPhase = useMemo(() => latestDetailByPhase(events), [events]);
 
   if (loading && !project) {
-    return (
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="skeleton h-8 w-64 mb-4" />
-        <div className="skeleton h-4 w-96 mb-8" />
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="skeleton h-64 lg:col-span-2" />
-          <div className="skeleton h-64" />
-        </div>
-      </div>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   if (error || !project) {
-    return (
-      <div className="max-w-6xl mx-auto px-6 py-8 text-center">
-        <p className="text-red-400">{error ?? 'Project not found'}</p>
-        <Link to="/" className="btn-ghost mt-4 inline-block">Back to projects</Link>
-      </div>
-    );
+    return <ProjectDetailErrorCard message={error ?? 'Project not found'} />;
   }
 
   const isInProgress = !['complete', 'failed'].includes(project.status);
@@ -115,6 +102,15 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           </div>
         )}
       </div>
+
+      {/* Outcome banner — only mounts on `complete` or `failed`.
+          AnimatePresence inside the component handles enter/exit so
+          the banner slides in once the pipeline finishes and slides
+          out cleanly on a regenerate. */}
+      <LaunchOutcomeBanner
+        status={project.status}
+        reviewScore={project.reviewScore}
+      />
 
       {/* Pipeline Strip — visible at every status so reviewers can
           see the flow even for completed projects. */}
@@ -278,9 +274,15 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           )}
 
           {project.assets.length === 0 && !isInProgress && (
-            <div className="text-center py-12 text-surface-500">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="text-center py-12 text-surface-500 border border-dashed border-surface-800 rounded-2xl"
+            >
+              <span className="block mb-2 text-2xl text-surface-700">~</span>
               No assets generated yet
-            </div>
+            </motion.div>
           )}
         </div>
 
@@ -360,6 +362,184 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Animated detail-view skeleton. Mirrors the real layout of the
+ * project page (header strip + pipeline strip + 2-col grid) so the
+ * jump to the loaded view doesn't reflow the document, only fades in.
+ * Each block uses framer-motion for a stagger entrance and tailwind's
+ * `animate-shimmer-sweep` for the diagonal sheen effect.
+ */
+function ProjectDetailSkeleton() {
+  const blocks = [
+    { className: 'h-7 w-72', delay: 0 },
+    { className: 'h-4 w-48', delay: 0.04 },
+  ];
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="space-y-3 mb-8">
+        {blocks.map((b, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: b.delay, duration: 0.4 }}
+            className="relative h-7 overflow-hidden rounded-md bg-surface-900"
+            style={{ width: undefined }}
+          >
+            <div className={`relative h-full ${b.className} bg-surface-800/80`} />
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-accent-500/10 to-transparent" />
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Pipeline strip skeleton — six pill placeholders */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.4 }}
+        className="relative mb-6 flex gap-3 overflow-hidden rounded-2xl border border-surface-800 bg-surface-900/60 p-5"
+      >
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="flex-1 space-y-2">
+            <div className="h-2 w-full animate-pulse rounded-full bg-surface-800" />
+            <div className="h-3 w-2/3 animate-pulse rounded-full bg-surface-800/60" />
+          </div>
+        ))}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-accent-500/8 to-transparent" />
+        </div>
+      </motion.div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          {[0, 1].map((i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 + i * 0.06, duration: 0.4 }}
+              className="relative h-56 overflow-hidden rounded-2xl border border-surface-800 bg-surface-900/60"
+            >
+              <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-accent-500/8 to-transparent" />
+              </div>
+              <div className="relative space-y-3 p-6">
+                <div className="h-3 w-32 animate-pulse rounded-full bg-surface-800" />
+                <div className="h-2 w-full animate-pulse rounded-full bg-surface-800/80" />
+                <div className="h-2 w-5/6 animate-pulse rounded-full bg-surface-800/80" />
+                <div className="h-2 w-2/3 animate-pulse rounded-full bg-surface-800/80" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.24, duration: 0.4 }}
+          className="relative h-56 overflow-hidden rounded-2xl border border-surface-800 bg-surface-900/60"
+        >
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-accent-500/8 to-transparent" />
+          </div>
+          <div className="relative space-y-3 p-6">
+            <div className="h-3 w-24 animate-pulse rounded-full bg-surface-800" />
+            <div className="h-2 w-full animate-pulse rounded-full bg-surface-800/80" />
+            <div className="h-2 w-3/4 animate-pulse rounded-full bg-surface-800/80" />
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Motion-aware error card for the detail view. Replaces the previous
+ * flat red `<p>` so a missing project / failed fetch reads as a
+ * proper UI state rather than a debug message.
+ */
+function ProjectDetailErrorCard({ message }: { message: string }) {
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-16 flex justify-center">
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent p-8 text-center"
+      >
+        <motion.div
+          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-red-300"
+          initial={{ scale: 0.5, rotate: -45 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{
+            delay: 0.1,
+            type: 'spring',
+            stiffness: 360,
+            damping: 18,
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-7 w-7"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </motion.div>
+        <motion.p
+          className="font-mono text-[11px] uppercase tracking-[0.18em] text-red-300/70"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          Something went wrong
+        </motion.p>
+        <motion.p
+          className="mt-2 text-base text-surface-200"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+        >
+          {message}
+        </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.36 }}
+        >
+          <Link
+            to="/"
+            className="btn-secondary mt-6 inline-flex items-center gap-2"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+            Back to projects
+          </Link>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
