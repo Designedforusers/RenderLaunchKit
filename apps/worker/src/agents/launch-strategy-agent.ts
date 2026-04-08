@@ -19,7 +19,7 @@ You MUST output valid JSON matching this schema:
   ],
   "assetsToGenerate": [
     {
-      "type": "blog_post|twitter_thread|linkedin_post|product_hunt_description|hacker_news_post|faq|changelog_entry|og_image|social_card|product_video|voiceover_script|video_storyboard",
+      "type": "blog_post|twitter_thread|linkedin_post|product_hunt_description|hacker_news_post|faq|changelog_entry|og_image|social_card|product_video|voiceover_script|video_storyboard|tips|voice_commercial|podcast_script",
       "generationInstructions": "specific instructions for generating this asset",
       "priority": 1-5
     }
@@ -42,6 +42,9 @@ Key strategic principles:
 - Libraries → focus on README, Twitter thread, HN
 - Always generate at least: blog_post, og_image, and one social channel
 - Video is high-impact but expensive. Only recommend for visually interesting products.
+- Always include "tips" — it's cheap to generate, high utility, and every developer appreciates a concrete "what to do next" list.
+- Recommend "voice_commercial" when the product has a clear single value prop and a developer audience that listens to podcasts or screencasts (DevOps, ML, infra tools).
+- Recommend "podcast_script" when the product has technical depth worth discussing — the multi-host format excels at frameworks, libraries, and complex tooling where back-and-forth dialogue surfaces nuance.
 
 If past insights from similar projects are provided, factor them into your decisions.
 For example, if insights say "CLI tools: users delete LinkedIn posts 60%", skip LinkedIn for CLI tools.`;

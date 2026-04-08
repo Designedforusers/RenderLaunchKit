@@ -308,6 +308,10 @@ const SEED_PROJECTS = [
         { type: 'og_image', brief: 'OG image with the LaunchKit lightning bolt', priority: 2 },
         { type: 'product_video', brief: '10s demo showing the full flow', priority: 1 },
         { type: 'faq', brief: 'Common questions about how it works', priority: 2 },
+        // ── Phase 4 asset types ──
+        { type: 'tips', brief: 'Five actionable launch tips a developer can run today', priority: 2 },
+        { type: 'voice_commercial', brief: '30-second ad-style voice script for a developer audience', priority: 3 },
+        { type: 'podcast_script', brief: 'Two-host dev podcast dialogue introducing the project', priority: 3 },
       ],
       skipAssets: [],
     },
@@ -412,6 +416,52 @@ async function seed() {
         } else if (assetSpec.type === 'product_video') {
           mediaUrl = '';
           metadata = { ...metadata, thumbnailUrl: `https://placehold.co/1280x720/0f172a/10b981?text=${encodeURIComponent('Video')}`, duration: 8 };
+        } else if (assetSpec.type === 'tips') {
+          // Phase 4: actionable launch tips. Pure-text asset, no audio
+          // or video render — the writer agent emits a numbered list.
+          content = `1. Push your most marketable commit on Tuesday morning UTC; that's when the dev Twitter feed is sharpest.\n2. Open the Show HN thread before you tweet — early HN momentum drags Twitter, not the other way around.\n3. Write the README hero line as a single sentence a tired engineer can scan in 4 seconds.\n4. Reply to the first three comments on every post yourself, even on LinkedIn — it doubles second-day reach.\n5. Pin the launch tweet for 72 hours, then replace it with the most-quoted reply screenshot.`;
+          metadata = { ...metadata, tipCount: 5 };
+        } else if (assetSpec.type === 'voice_commercial') {
+          // Phase 4: 30-second voice commercial. The seed ships the
+          // script and metadata only — the worker performs the real
+          // ElevenLabs render at generation time and writes the MP3
+          // to `.cache/elevenlabs-rendered/${audioCacheKey}.mp3`.
+          //
+          // The cache key uses an all-zero 16-char hex stub on
+          // purpose: the audio streaming route validates against
+          // `^[a-f0-9]{16}$` and a non-hex string would fail the
+          // schema with a 422 ("metadata shape wrong") instead of
+          // the 404 we actually want ("file missing"). Hex stub →
+          // route 404 → dashboard error card with the right copy.
+          //
+          // `mediaUrl` is intentionally null in the seed; the
+          // dashboard derives the streaming URL from `asset.id`
+          // post-insert via `useProjectData`, so embedding a literal
+          // here would only ever be wrong for one row.
+          content = `Stop wrestling with launch checklists. ${seedProject.repoName} reads your repo, drafts the marketing kit, renders the video, and lines up the dev voices who'd actually amplify it. One push, one launch, one teammate that ships while you sleep. ${seedProject.repoName} dot dev — go build something worth shipping.`;
+          metadata = {
+            ...metadata,
+            audioCacheKey: '0000000000000000',
+            audioDurationSeconds: 30,
+            wordCount: 60,
+            estimatedDurationSeconds: 24,
+          };
+        } else if (assetSpec.type === 'podcast_script') {
+          // Phase 4: multi-speaker podcast script. Same seeding model
+          // as `voice_commercial` above — content + metadata stub
+          // with a hex-format placeholder cache key so the streaming
+          // route 404s on the missing file rather than 422-ing on
+          // the schema mismatch. No bundled audio file.
+          content = `Alex: Welcome back to the launch loop. Today we're digging into ${seedProject.repoName}.\nSam: I've been waiting for this one. The pitch is 'AI go-to-market for developers shipping on Render', right?\nAlex: That's the headline. The reality is more interesting — it reads your repo, picks the marketing angle, and fans out fourteen artifacts in parallel.\nSam: Fourteen? What's actually in the kit?\nAlex: Blog post, twitter thread, LinkedIn post, Show HN draft, FAQ, OG image, social card, product video with voiceover, voice commercial, this podcast, launch tips, and personalized outreach drafts to dev influencers.\nSam: That's the whole launch checklist in one push.\nAlex: And every user edit feeds a self-learning loop that refines the next push. The cron clusters edits and writes the patterns back to strategy insights.\nSam: So the next launch is sharper than the last one.\nAlex: Without anyone tuning a prompt by hand. That's the whole point.\nSam: Where do people start?\nAlex: Paste a GitHub URL on the dashboard, install the webhook, push a commit. The first launch kit lands in about ninety seconds.`;
+          metadata = {
+            ...metadata,
+            audioCacheKey: '0000000000000001',
+            audioDurationSeconds: 165,
+            lineCount: 11,
+            speakerTurns: 11,
+            estimatedDurationSeconds: 175,
+            dialogueLineCount: 11,
+          };
         }
       }
 

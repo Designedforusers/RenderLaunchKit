@@ -5,7 +5,11 @@ import path from 'node:path';
 import { bundle } from '@remotion/bundler';
 import type { WebpackOverrideFn } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
-import type { LaunchKitVideoProps } from '@launchkit/video';
+import type {
+  LaunchKitVideoProps,
+  PodcastWaveformProps,
+  VoiceCommercialProps,
+} from '@launchkit/video';
 import { env } from '../env.js';
 
 const REMOTION_ENTRY = path.resolve(
@@ -17,7 +21,29 @@ const REMOTION_CACHE_DIR = path.resolve(
   process.cwd(),
   '.cache/remotion-renders'
 );
-const REMOTION_COMPOSITION_ID = 'LaunchKitProductVideo';
+
+/**
+ * Discriminated union of every Remotion composition the renderer
+ * knows about. The composition id narrows `inputProps` to the
+ * matching props type, so callers cannot accidentally feed voice
+ * commercial props to the product video composition (or vice versa)
+ * without TypeScript catching it at the call site.
+ */
+export type RemotionRenderInput =
+  | {
+      compositionId: 'LaunchKitProductVideo';
+      inputProps: LaunchKitVideoProps;
+    }
+  | {
+      compositionId: 'LaunchKitVoiceCommercial';
+      inputProps: VoiceCommercialProps;
+    }
+  | {
+      compositionId: 'LaunchKitPodcastWaveform';
+      inputProps: PodcastWaveformProps;
+    };
+
+export type RemotionCompositionId = RemotionRenderInput['compositionId'];
 
 let bundlePromise: Promise<string> | null = null;
 const renderJobs = new Map<string, Promise<string>>();
@@ -64,13 +90,22 @@ function buildRenderBasename(input: {
   assetId: string;
   version: number;
   variant: 'visual' | 'narrated';
+  compositionId: RemotionCompositionId;
   cacheSeed?: string;
 }): string {
   const suffix = input.cacheSeed
     ? `-${createHash('sha1').update(input.cacheSeed).digest('hex').slice(0, 12)}`
     : '';
 
-  return `${input.assetId}-v${input.version}-${input.variant}${suffix}`;
+  // The product video composition predates Phase 4 and its cache
+  // filenames are stable, so we keep the legacy layout for it. New
+  // compositions embed the composition id in the basename so renders
+  // for the same asset id never collide across compositions.
+  if (input.compositionId === 'LaunchKitProductVideo') {
+    return `${input.assetId}-v${input.version}-${input.variant}${suffix}`;
+  }
+
+  return `${input.assetId}-${input.compositionId}-v${input.version}-${input.variant}${suffix}`;
 }
 
 function buildOutputLocation(basename: string): string {
@@ -92,10 +127,39 @@ export async function renderLaunchVideoAsset(input: {
   variant?: 'visual' | 'narrated';
   cacheSeed?: string;
 }): Promise<{ outputPath: string; cached: boolean }> {
+  return renderRemotionComposition({
+    assetId: input.assetId,
+    version: input.version,
+    compositionId: 'LaunchKitProductVideo',
+    inputProps: input.inputProps,
+    ...(input.variant !== undefined ? { variant: input.variant } : {}),
+    ...(input.cacheSeed !== undefined ? { cacheSeed: input.cacheSeed } : {}),
+  });
+}
+
+/**
+ * Render any registered Remotion composition. The
+ * `compositionId` discriminates the `inputProps` type so callers
+ * cannot pass the wrong props shape for a given composition.
+ *
+ * The two new Phase 4 compositions (`LaunchKitVoiceCommercial`,
+ * `LaunchKitPodcastWaveform`) default to the `'visual'` variant —
+ * the `'narrated'` variant is product-video specific and only
+ * `renderLaunchVideoAsset` exposes it as a parameter.
+ */
+export async function renderRemotionComposition(
+  input: RemotionRenderInput & {
+    assetId: string;
+    version: number;
+    variant?: 'visual' | 'narrated';
+    cacheSeed?: string;
+  }
+): Promise<{ outputPath: string; cached: boolean }> {
   const basename = buildRenderBasename({
     assetId: input.assetId,
     version: input.version,
     variant: input.variant ?? 'visual',
+    compositionId: input.compositionId,
     ...(input.cacheSeed !== undefined ? { cacheSeed: input.cacheSeed } : {}),
   });
   const outputPath = buildOutputLocation(basename);
@@ -122,7 +186,7 @@ export async function renderLaunchVideoAsset(input: {
       const serveUrl = await getBundle();
       const composition = await selectComposition({
         serveUrl,
-        id: REMOTION_COMPOSITION_ID,
+        id: input.compositionId,
         inputProps: input.inputProps,
         logLevel: 'error',
       });

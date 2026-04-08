@@ -13,6 +13,7 @@ import type {
   StoryboardResult,
   StrategyBrief,
 } from '@launchkit/shared';
+import { accentColorForTone } from '../lib/strategy-style.js';
 import { env } from '../env.js';
 
 interface VideoDirectorInput {
@@ -50,20 +51,6 @@ Guidelines:
 - The caption must be under 22 words
 - First shot: establish the problem/context
 - Last shot: show the satisfying result/solution`;
-
-function accentColorForTone(tone: StrategyBrief['tone']): string {
-  switch (tone) {
-    case 'technical':
-      return '#38bdf8';
-    case 'casual':
-      return '#f59e0b';
-    case 'authoritative':
-      return '#f97316';
-    case 'enthusiastic':
-    default:
-      return '#10b981';
-  }
-}
 
 function toFrames(durationSeconds: number): number {
   return Math.max(Math.round(durationSeconds * VIDEO_FPS), 30);

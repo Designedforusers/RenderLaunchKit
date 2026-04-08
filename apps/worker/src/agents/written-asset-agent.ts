@@ -128,6 +128,54 @@ Output in markdown format.`,
 Output format:
 [SCREEN: description]
 "Voiceover text"`,
+
+  tips: `You are a developer marketing strategist who has shipped many launches. Write a list of actionable, opinionated launch tips that:
+- Are specific to this product's positioning, tone, and category
+- Speak directly to a developer audience (no generic marketing platitudes)
+- Are action-oriented — every tip tells the reader what to do, not what to think
+- Reference concrete details from the strategy and research context where it sharpens the advice
+- Are one sentence each, tight and confident
+- Number 5-8 tips total
+
+Output format:
+1. First tip as a single sentence.
+2. Second tip as a single sentence.
+3. ...
+
+No preamble, no closing remarks, no markdown headings — just the numbered list.`,
+
+  voice_commercial: `You are a copywriter for developer-tool radio ads. Write a 30-second commercial script meant to be read aloud by a single voice that:
+- Is plain prose, 80-120 words total
+- Opens with a hook that names the pain
+- Lands a single product punch in one clean line
+- Highlights exactly one differentiator (the strongest one from the strategy)
+- Closes with a clear, spoken call to action on its own final line
+- Stays conversational but tight — every word earns its place
+- Contains no stage directions, no speaker labels, no markdown, no headings, no bullets, no quotation marks around the script
+
+Output the commercial as flowing prose. Nothing else.`,
+
+  podcast_script: `You are a podcast script writer. Write a 2-3 minute dialogue between two hosts named Alex and Sam discussing this product.
+
+Format requirements (strict — output is parsed line-by-line):
+- Every line begins with either "Alex:" or "Sam:" followed by a single space and the spoken text
+- Lines alternate between Alex and Sam
+- 18-30 lines total
+- No markdown, no stage directions, no narrator, no blank lines between turns, no headings
+- No parenthetical asides like "(laughs)" — just spoken words
+
+Content guidance:
+- Alex sets up topics and asks the questions a curious developer would ask
+- Sam adds technical depth, counterpoints, and specifics drawn from the product context
+- The product is the subject of the conversation throughout
+- Natural rhythm — short reactions are fine, but each line should add something
+- End on a clear "where to go next" line that points listeners to the product
+
+Output format (literal):
+Alex: First line of dialogue.
+Sam: Reply line of dialogue.
+Alex: Next line.
+Sam: ...`,
 } as const satisfies Record<string, string>;
 
 type WriterAssetType = keyof typeof ASSET_PROMPTS;
@@ -208,6 +256,41 @@ ${input.pastInsights.length > 0 ? `## Insights from Similar Projects\n${input.pa
       segments: parsed.segments,
       plainText: parsed.plainText,
       segmentCount: parsed.segmentCount,
+    };
+  } else if (input.assetType === 'tips') {
+    const tipCount = content
+      .split('\n')
+      .filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
+    extraMetadata = { tipCount };
+  } else if (input.assetType === 'voice_commercial') {
+    const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
+    extraMetadata = {
+      wordCount,
+      estimatedDurationSeconds: Math.round(wordCount / 2.5),
+    };
+  } else if (input.assetType === 'podcast_script') {
+    const lines = content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^(Alex|Sam):\s/.test(line));
+    let speakerTurns = 0;
+    let lastSpeaker: string | null = null;
+    let totalWords = 0;
+    for (const line of lines) {
+      const speaker = line.startsWith('Alex:') ? 'Alex' : 'Sam';
+      if (speaker !== lastSpeaker) {
+        speakerTurns += 1;
+        lastSpeaker = speaker;
+      }
+      const spoken = line.slice(speaker.length + 1).trim();
+      totalWords += spoken.split(/\s+/).filter((w) => w.length > 0).length;
+    }
+    const speechSeconds = totalWords / 2.3;
+    const gapSeconds = speakerTurns * 0.4;
+    extraMetadata = {
+      lineCount: lines.length,
+      speakerTurns,
+      estimatedDurationSeconds: Math.round(speechSeconds + gapSeconds),
     };
   }
 

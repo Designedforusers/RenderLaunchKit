@@ -7,6 +7,8 @@ import {
   generateProductVideoAsset,
   generateVideoStoryboardAsset,
 } from '../agents/product-video-agent.js';
+import { generateVoiceCommercialAsset } from '../agents/voice-commercial-agent.js';
+import { generatePodcastScriptAsset } from '../agents/podcast-script-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
 
@@ -90,8 +92,46 @@ export async function generateProjectAsset(data: GenerateAssetJobData): Promise<
         thumbnailUrl: result.thumbnailUrl,
         storyboard: result.storyboard,
       };
+    } else if (assetType === 'voice_commercial') {
+      // 30-second ad-style script + ElevenLabs single-voice render.
+      // The audio MP3 is cached on disk by the worker; the dashboard
+      // streams it from the new /api/assets/:id/audio.mp3 route, which
+      // resolves the cache file via `metadata.audioCacheKey`.
+      const result = await generateVoiceCommercialAsset({
+        assetId,
+        repoName,
+        repoAnalysis,
+        research,
+        strategy,
+        pastInsights,
+        generationInstructions,
+        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
+      });
+      content = result.script;
+      mediaUrl = `/api/assets/${assetId}/audio.mp3`;
+      metadata = result.metadata;
+    } else if (assetType === 'podcast_script') {
+      // Multi-speaker dialogue + ElevenLabs multi-voice render. Same
+      // serving model as `voice_commercial` above — the cached MP3 is
+      // surfaced through the audio streaming route.
+      const result = await generatePodcastScriptAsset({
+        assetId,
+        repoName,
+        repoAnalysis,
+        research,
+        strategy,
+        pastInsights,
+        generationInstructions,
+        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
+      });
+      content = result.script;
+      mediaUrl = `/api/assets/${assetId}/audio.mp3`;
+      metadata = result.metadata;
     } else {
-      // Writer agent handles all text content
+      // Writer agent handles all remaining text content (blog post,
+      // twitter thread, FAQ, voiceover script, tips, …). The new
+      // `tips` branch lives in this catch-all because it produces a
+      // pure text asset with no audio or video render attached.
       const result = await generateWrittenAsset({
         repoAnalysis,
         research,

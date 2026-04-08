@@ -39,6 +39,39 @@ export default tseslint.config(
       'apps/cron/dist/**',
       'packages/shared/dist/**',
       'packages/video/dist/**',
+      // Agentskills.io install artifacts. The skills bundle ships
+      // example .tsx files inside the per-rule docs directory; they
+      // are documentation, not source we own, and they live outside
+      // any tsconfig project so the type-aware lint rules cannot
+      // analyse them anyway. Match every shadow location the
+      // installer drops them into.
+      '.agents/**',
+      '.augment/**',
+      '.bob/**',
+      '.codebuddy/**',
+      '.commandcode/**',
+      '.continue/**',
+      '.cortex/**',
+      '.crush/**',
+      '.factory/**',
+      '.goose/**',
+      '.junie/**',
+      '.kilocode/**',
+      '.kiro/**',
+      '.kode/**',
+      '.mcpjam/**',
+      '.mux/**',
+      '.neovate/**',
+      '.openhands/**',
+      '.pi/**',
+      '.pochi/**',
+      '.qoder/**',
+      '.qwen/**',
+      '.roo/**',
+      '.trae/**',
+      '.windsurf/**',
+      '.zencoder/**',
+      'skills/**',
     ],
   },
 

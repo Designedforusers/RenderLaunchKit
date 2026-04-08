@@ -13,3 +13,40 @@ coverage/
 
 # Local editor / agent tooling — not tracked across the team.
 .claude/
+
+# `npx skills add` (agentskills.io) install artifacts.
+# The installer drops a per-agent shadow directory for every supported
+# coding agent (.codebuddy, .commandcode, .crush, …) — each one a thin
+# symlink redirect to the canonical universal location at .agents/skills/.
+# We ignore the noise here so a `git status` after `skills add` stays
+# clean. A follow-up PR commits the canonical .agents/skills/ tree and
+# the skills-lock.json manifest with their own narrowed gitignore so PR
+# reviewers can see what skills are active without the symlink farm.
+.agents/
+.augment/
+.bob/
+.codebuddy/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.factory/
+.goose/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
+skills/
+skills-lock.json

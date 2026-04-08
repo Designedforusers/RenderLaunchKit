@@ -109,6 +109,20 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(7 * 24),
+
+  // ── ElevenLabs (Phase 4 audio synthesis) ──────────────────────
+  // Drives the eager voice-commercial and multi-speaker podcast
+  // generation in the worker. All four fields are optional at the
+  // schema level so the worker can boot without them; the synthesis
+  // helpers in `apps/worker/src/lib/elevenlabs.ts` throw a structured
+  // error at call time if the API key or primary voice id is missing.
+  // `ELEVENLABS_VOICE_ID_ALT` is the second voice for the podcast's
+  // `sam` speaker; when absent, both speakers fall back to the
+  // primary voice and the dialogue still renders (just monotonally).
+  ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_VOICE_ID: z.string().optional(),
+  ELEVENLABS_VOICE_ID_ALT: z.string().optional(),
+  ELEVENLABS_MODEL_ID: z.string().optional(),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;
