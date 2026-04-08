@@ -32,6 +32,11 @@ services:
         value: production
       - key: GITHUB_WEBHOOK_SECRET
         sync: false
+      # Base64 32-byte secret for encrypting user-supplied GitHub
+      # personal access tokens on the projects row. Must match the
+      # worker's copy. See `.env.example` for the generation command.
+      - key: GITHUB_TOKEN_SECRET
+        sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
       - key: ELEVENLABS_VOICE_ID
@@ -95,6 +100,12 @@ services:
       # when the key is absent: only the world_scene branch fails,
       # the rest of the asset fan-out keeps running.
       - key: WORLD_LABS_API_KEY
+        sync: false
+      # Base64 32-byte secret for decrypting the per-project GitHub
+      # PAT the web service stored on the projects row. Must match
+      # the web service's copy exactly; a mismatch degrades every
+      # private-repo analyze job to the unauthenticated path.
+      - key: GITHUB_TOKEN_SECRET
         sync: false
 
   - type: cron

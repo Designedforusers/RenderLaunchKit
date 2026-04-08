@@ -177,6 +177,17 @@ export const projects = pgTable(
     webhookEnabled: boolean('webhook_enabled').default(false).notNull(),
     lastCommitSha: varchar('last_commit_sha', { length: 40 }),
 
+    // Private-repo support. When the user submits a GitHub personal
+    // access token alongside the repo URL, the web service encrypts
+    // it with AES-256-GCM using the server-side `GITHUB_TOKEN_SECRET`
+    // and persists the `iv:tag:ciphertext` blob here. The analyze
+    // worker decrypts the blob once at the start of the job and
+    // routes every GitHub fetch for the project through the
+    // user-scoped token. NULL for public repos — the fetch tools
+    // then fall back to the global `GITHUB_TOKEN` (if set) or to
+    // unauthenticated access.
+    githubTokenEncrypted: text('github_token_encrypted'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

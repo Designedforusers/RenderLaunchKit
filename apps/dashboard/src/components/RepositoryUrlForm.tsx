@@ -7,6 +7,8 @@ interface RepositoryUrlFormProps {
 
 export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) {
   const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [showTokenField, setShowTokenField] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,9 +20,15 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
     setError(null);
 
     try {
-      const result = await api.createProject(url.trim());
+      const trimmedToken = token.trim();
+      const result = await api.createProject(
+        url.trim(),
+        trimmedToken.length > 0 ? trimmedToken : undefined
+      );
       onProjectCreated(result.id);
       setUrl('');
+      setToken('');
+      setShowTokenField(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
@@ -59,6 +67,51 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
             )}
           </button>
         </div>
+
+        <div className="mt-2 flex items-center justify-between text-sm">
+          <button
+            type="button"
+            onClick={() => { setShowTokenField((v) => !v); }}
+            className="text-gray-400 hover:text-gray-200 transition-colors"
+            disabled={loading}
+          >
+            {showTokenField ? '− Hide private-repo options' : '+ Private repo? Use an access token'}
+          </button>
+        </div>
+
+        {showTokenField && (
+          <div className="mt-3 animate-fade-in">
+            <label htmlFor="github-token" className="block text-sm text-gray-300 mb-1">
+              GitHub personal access token
+            </label>
+            <input
+              id="github-token"
+              type="password"
+              value={token}
+              onChange={(e) => { setToken(e.target.value); }}
+              placeholder="github_pat_..."
+              className="input w-full font-mono text-sm"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={loading}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Create a fine-grained token at{' '}
+              <a
+                href="https://github.com/settings/personal-access-tokens/new"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-gray-300"
+              >
+                github.com/settings/personal-access-tokens
+              </a>
+              {' '}with read access to the target repo. Stored encrypted at
+              rest (AES-256-GCM) and used only to fetch this project&apos;s
+              metadata.
+            </p>
+          </div>
+        )}
+
         {error && (
           <p className="mt-2 text-red-400 text-sm animate-fade-in">{error}</p>
         )}

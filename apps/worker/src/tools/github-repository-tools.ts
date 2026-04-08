@@ -34,7 +34,7 @@ function hashCacheKey(input: string): string {
   return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
 
-const headers: Record<string, string> = {
+const BASE_HEADERS: Readonly<Record<string, string>> = {
   Accept: 'application/vnd.github.v3+json',
   'User-Agent': 'LaunchKit/1.0',
 };
@@ -48,9 +48,35 @@ const redis = env.REDIS_URL
 
 const DEFAULT_CACHE_TTL_SECONDS = env.GITHUB_CACHE_TTL_SECONDS;
 
-// Add auth token if available (increases rate limits)
-if (env.GITHUB_TOKEN) {
-  headers['Authorization'] = `token ${env.GITHUB_TOKEN}`;
+/**
+ * Resolve the GitHub `Authorization` header for a fetch. A per-call
+ * `authToken` beats the global `GITHUB_TOKEN` env var — that's how a
+ * private-repo analyze job routes through the user's own token even
+ * when the process has a shared public-repo token configured.
+ *
+ * Returning `{}` (no header) rather than `undefined` lets the caller
+ * spread the result directly into a headers object with no extra
+ * null-coalescing boilerplate.
+ */
+function authHeader(authToken?: string): Record<string, string> {
+  const token = authToken ?? env.GITHUB_TOKEN;
+  return token ? { Authorization: `token ${token}` } : {};
+}
+
+/**
+ * Per-call options accepted by every exported GitHub fetch tool. A
+ * single narrow shape means new analyze-time context (auth token,
+ * custom cache TTL, future per-request headers) can be added here
+ * without widening every tool's parameter list.
+ */
+export interface GithubFetchOptions {
+  /**
+   * GitHub personal access token to route this fetch through. When
+   * present, overrides the global `GITHUB_TOKEN` env var for this
+   * call only. Used by the analyze processor to run a private-repo
+   * job with the user-scoped token decrypted from the project row.
+   */
+  authToken?: string;
 }
 
 function cacheKey(kind: string, input: string): string {
@@ -95,11 +121,19 @@ async function writeCache(key: string, value: unknown, ttlSeconds: number): Prom
 async function githubFetch<S extends z.ZodType>(
   path: string,
   schema: S,
-  options?: { cacheTtlSeconds?: number }
+  options?: { cacheTtlSeconds?: number; authToken?: string }
 ): Promise<z.infer<S>> {
   const url = `${GITHUB_API_BASE}${path}`;
   const cacheTtlSeconds = options?.cacheTtlSeconds ?? DEFAULT_CACHE_TTL_SECONDS;
-  const key = cacheKey('api', url);
+  // Per-project auth tokens are mixed into the cache key so two
+  // projects pointing at the same private repo with different tokens
+  // (distinct OAuth scopes, org vs. personal) do not poison each
+  // other's cached payloads. Public-repo fetches use an empty token
+  // slot and keep sharing a single cache entry across projects.
+  const tokenFingerprint = options?.authToken
+    ? hashCacheKey(options.authToken)
+    : 'pub';
+  const key = cacheKey('api', `${tokenFingerprint}:${url}`);
 
   const cached = await readCache(key);
   if (cached !== null) {
@@ -111,8 +145,13 @@ async function githubFetch<S extends z.ZodType>(
     // re-fetch.
   }
 
+  const requestHeaders: Record<string, string> = {
+    ...BASE_HEADERS,
+    ...authHeader(options?.authToken),
+  };
+
   const response: unknown = await retry(async () => {
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers: requestHeaders });
     if (!res.ok) {
       throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     }
@@ -134,10 +173,13 @@ async function githubFetch<S extends z.ZodType>(
 async function githubRawJsonFetch<S extends z.ZodType>(
   url: string,
   schema: S,
-  options?: { cacheTtlSeconds?: number }
+  options?: { cacheTtlSeconds?: number; authToken?: string }
 ): Promise<z.infer<S> | null> {
   const cacheTtlSeconds = options?.cacheTtlSeconds ?? DEFAULT_CACHE_TTL_SECONDS;
-  const key = cacheKey('raw', url);
+  const tokenFingerprint = options?.authToken
+    ? hashCacheKey(options.authToken)
+    : 'pub';
+  const key = cacheKey('raw', `${tokenFingerprint}:${url}`);
 
   const cached = await readCache(key);
   if (cached !== null) {
@@ -151,9 +193,7 @@ async function githubRawJsonFetch<S extends z.ZodType>(
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'LaunchKit/1.0',
-        ...(env.GITHUB_TOKEN
-          ? { Authorization: `token ${env.GITHUB_TOKEN}` }
-          : {}),
+        ...authHeader(options?.authToken),
       },
     });
     if (!res.ok) return null;
@@ -172,16 +212,34 @@ async function githubRawJsonFetch<S extends z.ZodType>(
 /**
  * Fetch repo metadata.
  */
-export async function getRepo(owner: string, name: string): Promise<GitHubRepo> {
-  return githubFetch(`/repos/${owner}/${name}`, GitHubRepoSchema);
+export async function getRepo(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<GitHubRepo> {
+  return githubFetch(`/repos/${owner}/${name}`, GitHubRepoSchema, {
+    ...(options?.authToken !== undefined ? { authToken: options.authToken } : {}),
+  });
 }
 
 /**
  * Fetch repo README content.
  */
-export async function getReadme(owner: string, name: string): Promise<string> {
+export async function getReadme(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<string> {
   try {
-    const data = await githubFetch(`/repos/${owner}/${name}/readme`, GitHubReadmeSchema);
+    const data = await githubFetch(
+      `/repos/${owner}/${name}/readme`,
+      GitHubReadmeSchema,
+      {
+        ...(options?.authToken !== undefined
+          ? { authToken: options.authToken }
+          : {}),
+      }
+    );
     const content = Buffer.from(data.content, 'base64').toString('utf-8');
     return truncate(content, 10_000);
   } catch {
@@ -192,11 +250,20 @@ export async function getReadme(owner: string, name: string): Promise<string> {
 /**
  * Fetch repo file tree (top-level + key directories).
  */
-export async function getFileTree(owner: string, name: string): Promise<string[]> {
+export async function getFileTree(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<string[]> {
   try {
     const data = await githubFetch(
       `/repos/${owner}/${name}/git/trees/HEAD?recursive=1`,
-      GitHubTreeSchema
+      GitHubTreeSchema,
+      {
+        ...(options?.authToken !== undefined
+          ? { authToken: options.authToken }
+          : {}),
+      }
     );
     return (data.tree ?? [])
       .filter((item) => item.type === 'blob')
@@ -210,20 +277,37 @@ export async function getFileTree(owner: string, name: string): Promise<string[]
 /**
  * Fetch package.json to understand dependencies.
  */
-export async function getPackageJson(owner: string, name: string): Promise<PackageJson | null> {
+export async function getPackageJson(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<PackageJson | null> {
   const url = `${GITHUB_RAW_BASE}/${owner}/${name}/HEAD/package.json`;
-  return githubRawJsonFetch(url, PackageJsonSchema, { cacheTtlSeconds: 3600 });
+  return githubRawJsonFetch(url, PackageJsonSchema, {
+    cacheTtlSeconds: 3600,
+    ...(options?.authToken !== undefined ? { authToken: options.authToken } : {}),
+  });
 }
 
 /**
  * Fetch recent commits.
  */
-export async function getRecentCommits(owner: string, name: string, count: number = 10) {
+export async function getRecentCommits(
+  owner: string,
+  name: string,
+  count: number = 10,
+  options?: GithubFetchOptions
+) {
   try {
     const commits = await githubFetch(
       `/repos/${owner}/${name}/commits?per_page=${count}`,
       GitHubCommitListSchema,
-      { cacheTtlSeconds: 120 }
+      {
+        cacheTtlSeconds: 120,
+        ...(options?.authToken !== undefined
+          ? { authToken: options.authToken }
+          : {}),
+      }
     );
     return commits.map((c) => {
       const firstLine = c.commit.message.split('\n')[0] ?? '';
@@ -265,9 +349,21 @@ export async function searchRepos(query: string, limit: number = 5) {
 /**
  * Get repo languages breakdown.
  */
-export async function getLanguages(owner: string, name: string): Promise<Record<string, number>> {
+export async function getLanguages(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<Record<string, number>> {
   try {
-    return await githubFetch(`/repos/${owner}/${name}/languages`, GitHubLanguagesSchema);
+    return await githubFetch(
+      `/repos/${owner}/${name}/languages`,
+      GitHubLanguagesSchema,
+      {
+        ...(options?.authToken !== undefined
+          ? { authToken: options.authToken }
+          : {}),
+      }
+    );
   } catch {
     return {};
   }
@@ -276,9 +372,21 @@ export async function getLanguages(owner: string, name: string): Promise<Record<
 /**
  * Get repo topics.
  */
-export async function getTopics(owner: string, name: string): Promise<string[]> {
+export async function getTopics(
+  owner: string,
+  name: string,
+  options?: GithubFetchOptions
+): Promise<string[]> {
   try {
-    const data = await githubFetch(`/repos/${owner}/${name}/topics`, GitHubTopicsSchema);
+    const data = await githubFetch(
+      `/repos/${owner}/${name}/topics`,
+      GitHubTopicsSchema,
+      {
+        ...(options?.authToken !== undefined
+          ? { authToken: options.authToken }
+          : {}),
+      }
+    );
     return data.names ?? [];
   } catch {
     return [];
