@@ -72,6 +72,43 @@ const envSchema = z.object({
   FAL_API_KEY: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CACHE_TTL_SECONDS: z.coerce.number().int().nonnegative().default(900),
+
+  // ── Trending signals (Phase 3) ────────────────────────────────
+  // Grok is the only source with live X (Twitter) search; xAI's Live
+  // Search mode restricted to `x` returns posts the other free APIs
+  // cannot see. Exa is a semantic web-search MCP server plugged into
+  // the Agent SDK for niche dev content the built-in WebSearch misses.
+  // Both are optional — the trending-signals agent degrades gracefully
+  // to the five free APIs when either key is absent.
+  GROK_API_KEY: z.string().optional(),
+  GROK_MODEL: z.string().default('grok-4-latest'),
+  EXA_API_KEY: z.string().optional(),
+  // Product Hunt v2 GraphQL developer token. Free to obtain at
+  // https://api.producthunt.com/v2/oauth/applications; the tool
+  // returns an empty array when absent so the rest of the fan-out
+  // still runs.
+  PRODUCT_HUNT_TOKEN: z.string().optional(),
+  // Cache TTL for all trending-signal source calls (Grok, HN Algolia,
+  // dev.to, Reddit, Product Hunt, GitHub influencer search). Short by
+  // default so the hourly cron still sees fresh data; bumpable in
+  // tests to avoid hammering the upstreams.
+  TRENDING_SIGNAL_CACHE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(600),
+  // How long a freshly-ingested trend survives before the cleanup
+  // cron drops it. Seven days is the default in the plan — long
+  // enough for weekly-cadence commits, short enough that stale
+  // "what's hot" signals do not pollute the matcher. Shared with
+  // the cron env module so a worker-side processor that inserts a
+  // trend can compute the same TTL as the cron that enqueued the
+  // job when the cron did not pass an explicit `expiresAt` override.
+  TRENDING_SIGNAL_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(7 * 24),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;

@@ -23,6 +23,7 @@ import { buildProjectLaunchStrategy } from './processors/build-project-launch-st
 import { generateProjectAsset } from './processors/generate-project-assets.js';
 import { reviewGeneratedProjectAssets } from './processors/review-generated-assets.js';
 import { filterWebhookEventForRegeneration } from './processors/process-webhook-regeneration.js';
+import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { getInsightsForCategory } from './tools/project-insight-memory.js';
 import { database as db, databasePool } from './lib/database.js';
@@ -185,6 +186,32 @@ const generationWorker = new Worker(
   {
     connection,
     concurrency: QUEUE_CONFIG[QUEUE_NAMES.GENERATION].concurrency,
+  }
+);
+
+// ── Trending Worker ──
+// Handles: ingest-trending-signals (scheduled by the cron)
+//
+// Jobs on this queue are fire-and-forget from the cron's perspective.
+// Each job runs the trending-signals agent for a single project
+// category and writes clustered rows into `trend_signals`. The
+// processor validates its own job payload at the boundary and keeps
+// a single category failure from affecting the others.
+
+const trendingWorker = new Worker(
+  QUEUE_NAMES.TRENDING,
+  async (job) => {
+    if (job.name !== JOB_NAMES.INGEST_TRENDING_SIGNALS) {
+      console.warn(
+        `[Worker:Trending] unknown job name "${job.name}" — skipping`
+      );
+      return;
+    }
+    await processIngestTrendingSignals(job);
+  },
+  {
+    connection,
+    concurrency: QUEUE_CONFIG[QUEUE_NAMES.TRENDING].concurrency,
   }
 );
 
@@ -366,6 +393,7 @@ for (const [name, worker] of Object.entries({
   analysis: analysisWorker,
   generation: generationWorker,
   review: reviewWorker,
+  trending: trendingWorker,
 })) {
   worker.on('completed', (job) => {
     console.log(`[${name}] Job ${job.name}:${job.id ?? '<unknown>'} completed`);
@@ -385,11 +413,11 @@ for (const [name, worker] of Object.entries({
 // ── Startup ──
 
 console.log(`
-╔══════════════════════════════════════════╗
-║  LaunchKit Worker Service                ║
-║  Queues: analysis, generation, review    ║
-║  Env: ${env.NODE_ENV.padEnd(34)}║
-╚══════════════════════════════════════════╝
+╔══════════════════════════════════════════════════╗
+║  LaunchKit Worker Service                        ║
+║  Queues: analysis, generation, review, trending  ║
+║  Env: ${env.NODE_ENV.padEnd(42)}║
+╚══════════════════════════════════════════════════╝
 `);
 
 // ── Graceful Shutdown ──
@@ -400,6 +428,7 @@ async function shutdown() {
     analysisWorker.close(),
     generationWorker.close(),
     reviewWorker.close(),
+    trendingWorker.close(),
   ]);
   await databasePool.end();
   process.exit(0);

@@ -1,6 +1,7 @@
 import { syncGitHubProjectActivity } from './sync-github-project-activity.js';
 import { aggregateFeedbackInsights } from './aggregate-feedback-insights.js';
 import { cleanupStaleLaunchData } from './cleanup-stale-launch-data.js';
+import { ingestTrendingSignals } from './ingest-trending-signals.js';
 import { env } from './env.js';
 
 async function main() {
@@ -21,10 +22,15 @@ async function main() {
     // 1. Check repos for new activity
     await syncGitHubProjectActivity();
 
-    // 2. Aggregate learning insights
+    // 2. Enqueue trending-signal ingest jobs for every active
+    //    project category. Fires BullMQ jobs the worker picks up;
+    //    the cron does not wait for completion.
+    await ingestTrendingSignals();
+
+    // 3. Aggregate learning insights
     await aggregateFeedbackInsights();
 
-    // 3. Clean up stale data
+    // 4. Clean up stale data
     await cleanupStaleLaunchData();
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
