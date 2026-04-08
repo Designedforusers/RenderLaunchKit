@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { Player } from '@remotion/player';
 import {
   LaunchKitVideo,
@@ -26,20 +27,16 @@ export function LaunchVideoPreview({
   onLoadedData,
 }: LaunchVideoPreviewProps) {
   if (!videoUrl && !remotionProps) {
-    return (
-      <div className="w-full aspect-video bg-surface-800 rounded-lg flex items-center justify-center">
-        <div className="text-center text-surface-500">
-          <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-          <p className="text-sm">Video generating...</p>
-        </div>
-      </div>
-    );
+    return <VideoGeneratingPlaceholder />;
   }
 
   return (
-    <div className="rounded-lg overflow-hidden bg-surface-800">
+    <motion.div
+      className="rounded-lg overflow-hidden bg-surface-800 border border-surface-800/80 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)]"
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
       {videoUrl ? (
         <video
           src={videoUrl}
@@ -71,6 +68,71 @@ export function LaunchVideoPreview({
           <p className="text-sm text-surface-300">{title}</p>
         </div>
       )}
+    </motion.div>
+  );
+}
+
+/**
+ * Animated placeholder shown while a video asset is still rendering.
+ * Three concentric halo rings pulse outward from a centered film-
+ * reel icon; the copy shimmers between two opacities so the state
+ * reads as "still working" without any CSS keyframe class that
+ * would disappear under reduced-motion.
+ */
+function VideoGeneratingPlaceholder() {
+  return (
+    <div className="w-full aspect-video bg-surface-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+      {/* Soft grid backdrop */}
+      <div
+        className="absolute inset-0 opacity-[0.05]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, rgba(148,163,184,0.5) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.5) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
+      <div className="relative text-center text-surface-500">
+        <div className="relative mx-auto mb-3 h-14 w-14">
+          {/* Three pulsing halos staggered so they read as one wave */}
+          {[0, 0.4, 0.8].map((delay) => (
+            <motion.span
+              key={delay}
+              className="absolute inset-0 rounded-full border border-accent-500/50"
+              initial={{ scale: 0.6, opacity: 0.6 }}
+              animate={{ scale: [0.6, 1.4, 1.4], opacity: [0.6, 0, 0] }}
+              transition={{
+                duration: 2,
+                delay,
+                repeat: Infinity,
+                ease: 'easeOut',
+              }}
+            />
+          ))}
+          <motion.svg
+            className="relative h-14 w-14 text-accent-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            animate={{ y: [0, -2, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </motion.svg>
+        </div>
+        <motion.p
+          className="text-sm"
+          animate={{ opacity: [0.55, 1, 0.55] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          Rendering video...
+        </motion.p>
+      </div>
     </div>
   );
 }

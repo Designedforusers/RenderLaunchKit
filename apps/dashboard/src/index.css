@@ -7,19 +7,39 @@
     @apply border-surface-800;
   }
 
+  html {
+    /* Prefers-reduced-motion aware. We keep transform hardware
+       acceleration enabled for framer-motion but respect the user
+       setting globally — motion components also honor it via the
+       `useReducedMotion` hook where they render content-critical
+       animation. */
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-surface-950 text-surface-100;
     font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'JetBrains Mono', monospace;
   }
 
+  /* Selection color — accent tint so copy-pasting reads as
+     intentional brand feedback. */
+  ::selection {
+    background-color: rgba(16, 185, 129, 0.25);
+    color: #ecfdf5;
+  }
+
   /* Custom scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
@@ -27,17 +47,38 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-700 rounded-full;
+    @apply bg-surface-700 rounded-full border-2 border-surface-950;
   }
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-surface-600;
   }
+
+  /* Focus ring — never use `outline-none` without replacing it. All
+     focus states go through a shared accent-tinted ring so keyboard
+     users have a consistent, visible focus anchor. */
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(52 211 153 / 0.8);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  button, a, [role="button"] {
+    cursor: pointer;
+  }
+
+  button:disabled, [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {
   .card {
-    @apply bg-surface-900 border border-surface-800 rounded-xl p-6;
+    @apply bg-surface-900/80 border border-surface-800 rounded-xl p-6 backdrop-blur-sm;
   }
 
   .card-hover {
@@ -46,17 +87,20 @@
 
   .btn-primary {
     @apply bg-accent-500 hover:bg-accent-600 text-white font-medium px-4 py-2 rounded-lg
-           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed
+           focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2
+           focus-visible:ring-offset-surface-950;
   }
 
   .btn-secondary {
     @apply bg-surface-800 hover:bg-surface-700 text-surface-200 font-medium px-4 py-2 rounded-lg
-           border border-surface-700 transition-colors duration-150;
+           border border-surface-700 transition-colors duration-150
+           focus-visible:ring-2 focus-visible:ring-accent-500/60;
   }
 
   .btn-ghost {
     @apply hover:bg-surface-800 text-surface-400 hover:text-surface-200 px-3 py-1.5 rounded-lg
-           transition-colors duration-150;
+           transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent-500/50;
   }
 
   .input {
@@ -71,6 +115,21 @@
 
   .skeleton {
     @apply animate-pulse bg-surface-800 rounded;
+  }
+
+  /* Shared card hover affordance — tiny lift, slightly brighter
+     border. Used by any motion-wrapped card that should feel
+     interactive. */
+  .card-interactive {
+    @apply card-hover relative;
+  }
+
+  /* Subtle accent outer-glow for hero elements. Applied to the
+     home hero logo + the complete banner to lift them from the
+     background without being loud. */
+  .glow-accent {
+    box-shadow: 0 0 0 1px rgb(16 185 129 / 0.2),
+                0 20px 60px -20px rgb(16 185 129 / 0.35);
   }
 }
 
@@ -100,4 +159,17 @@
 
 .animate-pulse-dot {
   animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Reduced motion — kill every CSS keyframe animation that doesn't
+   have a meaning-carrying purpose. Framer-motion components detect
+   the same media query via `useReducedMotion()` and degrade
+   gracefully. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
