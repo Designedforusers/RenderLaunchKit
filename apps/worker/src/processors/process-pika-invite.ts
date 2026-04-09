@@ -151,16 +151,20 @@ export async function processPikaInvite(job: Job): Promise<void> {
     // join subprocess exits — the extra delay avoids a spurious
     // "not yet ready" branch on the very first poll.
     //
-    // The jobId includes a timestamp so a retry of the invite
-    // that bumped the row back into `joining` can re-enqueue a
-    // fresh poll chain without colliding with the old one.
+    // The jobId is a fixed function of `sessionRowId` (no
+    // timestamp suffix) so BullMQ dedups this against any
+    // subsequent self-reenqueue from the poll loop itself. See
+    // `process-pika-poll.ts:reenqueuePoll` for the matching
+    // dedup logic — both enqueue sites MUST use the same fixed
+    // jobId form for the "at most one pending poll per session"
+    // invariant to hold.
     const FIRST_POLL_DELAY_MS = 5 * 1000;
     await pikaControlQueue.add(
       JOB_NAMES.PIKA_POLL,
       { sessionRowId },
       {
         delay: FIRST_POLL_DELAY_MS,
-        jobId: `pika-poll__${sessionRowId}__${String(startedAt.getTime())}`,
+        jobId: `pika-poll__${sessionRowId}`,
       }
     );
 

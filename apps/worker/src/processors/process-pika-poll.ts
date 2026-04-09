@@ -120,18 +120,26 @@ export async function processPikaPoll(job: Job): Promise<void> {
     return;
   }
 
-  // 60-minute safety cap. `startedAt` was set when the invite
-  // processor flipped the row to `active`, so `now - startedAt` is
-  // the bot's runtime in the meeting.
-  if (sessionRow.startedAt) {
-    const ageMs = Date.now() - sessionRow.startedAt.getTime();
-    if (ageMs > SAFETY_CAP_MS) {
-      console.log(
-        `[PikaPoll] session ${sessionRowId} exceeded ${String(SAFETY_CAP_MS / 60_000)}-min safety cap, enqueueing leave`
-      );
-      await enqueueLeave(sessionRowId, 'safety_cap');
-      return;
-    }
+  // 60-minute safety cap. `startedAt` is normally set when the
+  // invite processor flips the row to `active`. In a crash window
+  // between status='active' and the set of started_at, the column
+  // can be null — in that case we fall back to `createdAt` as the
+  // age baseline so the safety cap ALWAYS fires eventually. An
+  // `active` session without a safety cap is the worst possible
+  // failure mode: it could run forever and drain credits. Using
+  // `createdAt` as a fallback is slightly generous (the bot has
+  // been in the meeting for less time than `now - createdAt`), but
+  // the baseline is still bounded and the session WILL terminate.
+  const ageBaseline = sessionRow.startedAt ?? sessionRow.createdAt;
+  const ageMs = Date.now() - ageBaseline.getTime();
+  if (ageMs > SAFETY_CAP_MS) {
+    console.log(
+      `[PikaPoll] session ${sessionRowId} exceeded ${String(SAFETY_CAP_MS / 60_000)}-min safety cap ` +
+        `(ageMs=${String(ageMs)}, baseline=${sessionRow.startedAt === null ? 'createdAt' : 'startedAt'}), ` +
+        `enqueueing leave`
+    );
+    await enqueueLeave(sessionRowId, 'safety_cap');
+    return;
   }
 
   // Fetch Pika's session state. On HTTP 404, the session is
@@ -190,10 +198,20 @@ export async function processPikaPoll(job: Job): Promise<void> {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Re-enqueue the poll job with a 30-s delay. The jobId is
- * deterministic on `sessionRowId` so at most one poll job per
- * session is pending at any time — the second `add` with the
- * same jobId is a BullMQ no-op.
+ * Re-enqueue the poll job with a 30-s delay. The jobId is a fixed
+ * function of `sessionRowId` (no timestamp suffix) so at most one
+ * poll job per session can be pending at any time — if a second
+ * `add` arrives while the first is still in `delayed` state,
+ * BullMQ drops it as a duplicate.
+ *
+ * The load-bearing invariant: without this dedup, a transient
+ * upstream error on the PIKA_CONTROL queue (which retries 3x
+ * with exponential backoff) could interact with the poll's
+ * self-reenqueue to produce O(N) concurrent poll chains per
+ * session. A session that experiences three attempts would spawn
+ * three independent 30-s poll loops, each reenqueueing the next,
+ * multiplying indefinitely. The fixed jobId is what keeps this
+ * bounded to exactly one poll per session at any moment.
  */
 async function reenqueuePoll(sessionRowId: string): Promise<void> {
   await pikaControlQueue.add(
@@ -201,7 +219,7 @@ async function reenqueuePoll(sessionRowId: string): Promise<void> {
     { sessionRowId },
     {
       delay: POLL_INTERVAL_MS,
-      jobId: `pika-poll__${sessionRowId}__${String(Date.now())}`,
+      jobId: `pika-poll__${sessionRowId}`,
     }
   );
 }
