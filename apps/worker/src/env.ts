@@ -146,13 +146,43 @@ const envSchema = z.object({
   ELEVENLABS_VOICE_ID_ALT: z.string().optional(),
   ELEVENLABS_MODEL_ID: z.string().optional(),
 
+  // ── Generation runtime (BullMQ vs Render Workflows) ──────────
+  // Phase 10 migration flag. When set to `workflows`, the strategize
+  // handler triggers a `generateAllAssetsForProject` run on the
+  // Render Workflows service instead of enqueuing BullMQ jobs for
+  // every asset on the generation queue. Default is `bullmq` so a
+  // fresh deploy without the new env vars keeps the existing code
+  // path. The cutover PR deletes this flag and the BullMQ generation
+  // queue entirely.
+  GENERATION_RUNTIME: z.enum(['bullmq', 'workflows']).default('bullmq'),
+  // Render API key used to trigger task runs from the worker. Only
+  // required when `GENERATION_RUNTIME=workflows`. The trigger helper
+  // throws at call time if the flag is set but the key is missing
+  // rather than making this `.min(1)` and failing every worker boot
+  // that doesn't use Workflows.
+  RENDER_API_KEY: z.string().optional(),
+  // Slug of the workflow service that hosts `generateAllAssetsForProject`.
+  // Format is `<workflow-service-slug>` — the helper prepends it to
+  // the task name when calling `render.workflows.startTask`. Only
+  // required when `GENERATION_RUNTIME=workflows`.
+  RENDER_WORKFLOW_SLUG: z.string().optional(),
+  // Opt-in flag for routing SDK calls to the local Render CLI task
+  // server (`render workflows dev`, port 8120) instead of the cloud
+  // control plane. The Render SDK reads `process.env.RENDER_USE_LOCAL_DEV`
+  // directly in its `get-base-url` helper — declaring the var here
+  // keeps it visible in the typed env surface and documents the
+  // local-dev path even though nothing in this module reads it.
+  RENDER_USE_LOCAL_DEV: z
+    .enum(['true', 'false'])
+    .optional(),
+
   // ── World Labs (Marble) 3D world generation ───────────────────
   // Drives the `world_scene` asset type — the writer agent crafts a
   // text prompt describing the product being used in a real-world
   // setting, the World Labs API generates a 3D Gaussian-splat scene,
   // and the dashboard links the user out to the interactive Marble
   // viewer. Optional at the schema level so the worker boots without
-  // it; the helper in `apps/worker/src/lib/world-labs-client.ts`
+  // it; the helper in `packages/asset-generators/src/clients/world-labs.ts`
   // throws a structured error at call time if the key is missing.
   // The model defaults to `marble-1.1`; bump to `marble-1.1-plus` via
   // env override when an outdoor or larger indoor scene is requested.
