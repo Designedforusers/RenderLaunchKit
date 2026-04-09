@@ -8,12 +8,33 @@ import { fileURLToPath } from 'node:url';
 import {
   PikaLeaveResponseSchema,
   PikaNeedsTopupPayloadSchema,
+  PikaSessionStateSchema,
   PikaSessionUpdateSchema,
   type PikaLeaveResponse,
+  type PikaSessionState,
   type PikaSessionUpdate,
 } from '@launchkit/shared';
 
 import { env } from '../env.js';
+
+// ── Pika API base URLs ─────────────────────────────────────────────
+//
+// Matches the constants at the top of
+// `vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py`:
+//
+//   DEFAULT_API_BASE      = "https://srkibaanghvsriahb.pika.art"
+//   api_base              = f"{base_url}/proxy/realtime"
+//
+// Two different URL spaces live on the same host:
+//
+//   - /developer/*                      (balance, topup, etc.)
+//   - /proxy/realtime/session/{id}      (session lifecycle)
+//
+// The pure-TS helpers below only hit the `/proxy/realtime/session`
+// subset — the developer endpoints are reserved for the Python
+// subprocess's pre-flight funding check.
+const PIKA_API_ROOT = 'https://srkibaanghvsriahb.pika.art';
+const PIKA_SESSION_BASE = `${PIKA_API_ROOT}/proxy/realtime/session`;
 
 /**
  * TypeScript subprocess wrapper around the vendored
@@ -383,7 +404,23 @@ export async function startMeeting(
   }
 }
 
-// ── endMeeting ──────────────────────────────────────────────────────
+// ── endMeeting — pure-TS HTTPS DELETE ────────────────────────────────
+//
+// The Python CLI's `cmd_leave` at
+// `vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py:560`
+// is literally three lines: `requests.delete` + print a synthetic
+// `{session_id, closed: true}` JSON on 2xx. Nothing about the
+// Python CLI's leave path requires Python — it does not read the
+// system prompt file, does not upload the avatar, does not poll a
+// subprocess. A ~10-line pure-TS `fetch()` call does the same job
+// without a subprocess spawn, without the Python install, and
+// without the 5-second subprocess startup overhead.
+//
+// This is the load-bearing decision that lets the `pika-leave`
+// BullMQ job type live on the SHARED worker (which has no Python
+// install) while `pika-invite` lives on a dedicated dyno (which
+// does). Only the invite burst needs Python; the control-plane
+// operations are pure HTTPS.
 
 export interface EndMeetingInput {
   pikaSessionId: string;
@@ -391,14 +428,22 @@ export interface EndMeetingInput {
 }
 
 /**
- * Spawn the Python CLI's `leave` subcommand for a previously
- * captured Pika session id. Idempotent on the Python side: leaving
- * a session that Pika has already closed returns HTTP 404 which the
- * Python code surfaces as exit 3, but our wrapper can safely ignore
- * that specific failure mode if the caller passes `ignoreMissing:
- * true`. For now we just propagate the error — the web route
- * returns a 409 to the dashboard on double-leave, which is the
- * simpler contract for the MVP.
+ * Terminate a Pika meeting session via a direct HTTPS DELETE.
+ * Returns the synthetic `{session_id, closed: true}` shape on
+ * success, matching the historical Python-backed signature so
+ * existing callers keep compiling without touching the call sites.
+ *
+ * Idempotency: Pika's backend returns 404 when the session is
+ * already closed. The caller decides whether to swallow or
+ * propagate — the web route already has a 409 guard for
+ * double-leave, so we propagate here and let the caller handle
+ * the specific HTTP error class.
+ *
+ * Errors map to:
+ *
+ *   - `PikaMissingKeyError`  — `PIKA_API_KEY` unset
+ *   - `PikaTimeoutError`     — `AbortSignal.timeout` fired (30 s default)
+ *   - `PikaHttpError`        — non-2xx response with the body in `stderr`
  */
 export async function endMeeting(
   input: EndMeetingInput
@@ -411,48 +456,152 @@ export async function endMeeting(
     );
   }
 
-  const wallClockMs = input.timeoutMs ?? DEFAULT_LEAVE_WALL_CLOCK_MS;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_LEAVE_WALL_CLOCK_MS;
+  const url = `${PIKA_SESSION_BASE}/${encodeURIComponent(input.pikaSessionId)}`;
 
-  const args: string[] = [
-    VENDORED_SCRIPT,
-    'leave',
-    '--session-id',
-    input.pikaSessionId,
-  ];
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `DevKey ${apiKey}`,
+        'X-Skill-Name': 'pikastream-video-meeting',
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    // `AbortSignal.timeout()` rejects with `DOMException` whose
+    // `name === 'TimeoutError'` on timeout; network errors land
+    // here too. Map either to a typed Pika error so the caller can
+    // branch on instance type instead of string-matching.
+    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new PikaTimeoutError(
+        `Pika leave fetch timed out after ${String(timeoutMs)}ms`,
+        { exitCode: null, stdout: '', stderr: message }
+      );
+    }
+    throw new PikaHttpError(`Pika leave fetch failed: ${message}`, {
+      exitCode: null,
+      stdout: '',
+      stderr: message,
+    });
+  }
 
-  const run = await runPikaSubprocess({
-    args,
-    apiKey,
-    wallClockMs,
-    context: `leave (${input.pikaSessionId})`,
-  });
-
-  if (run.exitCode !== 0) {
-    throw mapExitCodeToError(
-      run.exitCode,
-      `Pika leave failed (exit ${String(run.exitCode)}): ${lastStderrLine(run.stderr)}`,
+  if (!response.ok) {
+    // Pull the error body but bound the included slice so a
+    // multi-MB HTML 500 page does not land in our log aggregator.
+    const body = await response.text().catch(() => '<no body>');
+    throw new PikaHttpError(
+      `Pika leave failed (HTTP ${String(response.status)}): ${body.slice(0, 200)}`,
       {
-        stdout: run.stdout,
-        stderr: run.stderr,
-        checkoutUrl: run.checkoutUrl,
+        exitCode: response.status,
+        stdout: '',
+        stderr: body.slice(0, 2000),
       }
     );
   }
 
-  // Parse the terminal line, which is the only line `leave` emits
-  // on success. Uses `.at(-1)` rather than indexing because a
-  // future schema tweak could add a progress line above the
-  // terminal one; grabbing the last parseable line is forward
-  // compatible and still lands on the single-line response in the
-  // common case.
-  const terminal = run.leaveResponses.at(-1);
-  if (!terminal) {
-    throw new PikaSubprocessError(
-      'Pika leave exited 0 but produced no parseable stdout lines',
-      { exitCode: 0, stdout: run.stdout, stderr: run.stderr }
+  // Return the synthetic shape that the historical Python-backed
+  // implementation produced. This keeps every downstream consumer
+  // (tests, logs, the leave processor's return-type expectations)
+  // compiling without change.
+  return PikaLeaveResponseSchema.parse({
+    session_id: input.pikaSessionId,
+    closed: true,
+  });
+}
+
+// ── fetchPikaSessionState — pure-TS HTTPS GET ────────────────────────
+//
+// Used by the `pika-poll` BullMQ job to check whether a live
+// session is still healthy or should be terminated. The polling
+// job reads the returned state and decides to either enqueue a
+// `pika-leave`, re-enqueue itself for another 30-s tick, or
+// surface a failure on the session row.
+//
+// We treat a 404 as a special "session no longer exists" case
+// (the bot was already kicked or the meeting ended) rather than
+// a generic HTTP error. The caller can branch on
+// `PikaHttpError.exitCode === 404` if it wants specific behavior,
+// but the default polling processor treats any HTTP failure as
+// "leave immediately" — a degraded session is indistinguishable
+// from a dead one for our purposes.
+
+export interface FetchPikaSessionStateInput {
+  pikaSessionId: string;
+  timeoutMs?: number;
+}
+
+export async function fetchPikaSessionState(
+  input: FetchPikaSessionStateInput
+): Promise<PikaSessionState> {
+  const apiKey = env.PIKA_API_KEY;
+  if (!apiKey) {
+    throw new PikaMissingKeyError(
+      'PIKA_API_KEY is required for fetchPikaSessionState',
+      { exitCode: null, stdout: '', stderr: '' }
     );
   }
-  return terminal;
+
+  const timeoutMs = input.timeoutMs ?? 15_000;
+  const url = `${PIKA_SESSION_BASE}/${encodeURIComponent(input.pikaSessionId)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `DevKey ${apiKey}`,
+        'X-Skill-Name': 'pikastream-video-meeting',
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new PikaTimeoutError(
+        `Pika session state fetch timed out after ${String(timeoutMs)}ms`,
+        { exitCode: null, stdout: '', stderr: message }
+      );
+    }
+    throw new PikaHttpError(
+      `Pika session state fetch failed: ${message}`,
+      { exitCode: null, stdout: '', stderr: message }
+    );
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '<no body>');
+    throw new PikaHttpError(
+      `Pika session state fetch failed (HTTP ${String(response.status)}): ${body.slice(0, 200)}`,
+      {
+        exitCode: response.status,
+        stdout: '',
+        stderr: body.slice(0, 2000),
+      }
+    );
+  }
+
+  const payload: unknown = await response.json();
+  const parsed = PikaSessionStateSchema.safeParse(payload);
+  if (!parsed.success) {
+    const formatted = parsed.error.issues
+      .map((issue) => {
+        const path = issue.path.length > 0 ? issue.path.join('.') : '<root>';
+        return `${path}: ${issue.message}`;
+      })
+      .join('; ');
+    throw new PikaHttpError(
+      `Pika session state response did not match expected shape: ${formatted}`,
+      {
+        exitCode: response.status,
+        stdout: JSON.stringify(payload).slice(0, 2000),
+        stderr: formatted,
+      }
+    );
+  }
+  return parsed.data;
 }
 
 // ── Subprocess runner (private) ─────────────────────────────────────

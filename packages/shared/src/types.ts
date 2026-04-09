@@ -108,6 +108,7 @@ export type {
   PikaSessionUpdate,
   PikaLeaveResponse,
   PikaNeedsTopupPayload,
+  PikaSessionState,
   PikaInviteRequest,
   PikaInviteJobData,
   PikaLeaveJobData,
