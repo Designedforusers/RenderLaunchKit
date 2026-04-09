@@ -135,7 +135,7 @@ export function buildPikaSystemPrompt(
 
   // ── Research ──────────────────────────────────────────────────
   let competitors: string[] = [];
-  let targetPersona: string | null = null;
+  let targetAudience: string | null = null;
   try {
     const parsed = parseJsonbColumn(
       ResearchResultSchema,
@@ -145,7 +145,13 @@ export function buildPikaSystemPrompt(
     competitors = parsed.competitors
       .slice(0, 3)
       .map((c) => `${c.name} — ${c.description.slice(0, 80)}`);
-    targetPersona = (parsed as { targetPersona?: string }).targetPersona ?? null;
+    // `targetAudience` is the actual field name on ResearchResultSchema;
+    // an earlier revision of this builder read a non-existent
+    // `targetPersona` field via an `as`-cast, which silently returned
+    // `null` for every project because the field did not exist. Read
+    // through the schema-parsed value directly so the type system
+    // catches a future rename at compile time.
+    targetAudience = parsed.targetAudience;
   } catch {
     // Research not done — competitors stay empty.
   }
@@ -194,9 +200,11 @@ export function buildPikaSystemPrompt(
     sections.push(strategyLines.join('\n'));
   }
 
-  if (targetPersona ?? competitors.length > 0) {
+  if (targetAudience !== null || competitors.length > 0) {
     const researchLines: string[] = ['**Market context**'];
-    if (targetPersona) researchLines.push(`- Target: ${targetPersona}`);
+    if (targetAudience !== null && targetAudience.length > 0) {
+      researchLines.push(`- Target: ${targetAudience}`);
+    }
     for (const competitor of competitors) {
       researchLines.push(`- Competitor: ${competitor}`);
     }

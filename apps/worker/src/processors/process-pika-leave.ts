@@ -111,6 +111,16 @@ export async function processPikaLeave(job: Job): Promise<void> {
   }
 
   // Compute the billable duration from started_at → now.
+  //
+  // `startedAt` is normally populated by the invite processor when
+  // status flips to 'active'. The `?? endedAt` fallback only fires
+  // if the invite processor crashed between status='joining' and
+  // status='active' (leaving an orphan row with pika_session_id
+  // set but startedAt null) AND a later leave was enqueued against
+  // that row. In that case the fallback yields durationSeconds=0
+  // and the 0-duration guard in `computePikaMeetingCostCents`
+  // short-circuits to 0 cents — the right behaviour for a session
+  // that never successfully reached `active` state.
   const endedAt = new Date();
   const startedAt = sessionRow.startedAt ?? endedAt;
   const durationSeconds = Math.max(

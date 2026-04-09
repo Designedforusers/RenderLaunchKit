@@ -128,6 +128,15 @@ export const VOYAGE_PRICING: Record<string, { centsPerMillionTokens: number }> =
 // The session duration is computed at leave time as
 // `ended_at - started_at` in seconds and converted to cents here.
 //
+// **Non-integer rate intentional.** The per-minute rate is 27.5
+// cents, a fractional value. This matches the FAL FLUX rate pattern
+// (5.5 cents/image) where storing the exact provider rate and
+// applying `Math.ceil` at the compute-helper boundary gives the
+// right semantics for any future bulk computation. DO NOT read
+// `PIKA_PRICING.centsPerMinute` directly at a write site — always
+// go through `computePikaMeetingCostCents(durationSeconds)` below
+// so the integer-cents invariant holds at every persistence layer.
+//
 // A 5-minute meeting lands at $1.375 ≈ 138 cents. A 30-minute meeting
 // (the auto-timeout ceiling) maxes out at $8.25 ≈ 825 cents. The
 // operator sees the running total on the project cost chip on the
