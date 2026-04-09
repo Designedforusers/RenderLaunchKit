@@ -15,7 +15,7 @@
   "dependencies": {
     "@launchkit/shared": "*",
     "@launchkit/video": "*",
-    "@fal-ai/client": "^1.2.0",
+    "@fal-ai/client": "^1.9.5",
     "zod": "^4.0.0"
   },
   "devDependencies": {
