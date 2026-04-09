@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Player } from '@remotion/player';
 import {
   LaunchKitVideo,
@@ -80,6 +80,7 @@ export function LaunchVideoPreview({
  * would disappear under reduced-motion.
  */
 function VideoGeneratingPlaceholder() {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <div className="w-full aspect-video bg-surface-800 rounded-lg flex items-center justify-center relative overflow-hidden">
       {/* Soft grid backdrop */}
@@ -94,28 +95,35 @@ function VideoGeneratingPlaceholder() {
 
       <div className="relative text-center text-surface-500">
         <div className="relative mx-auto mb-3 h-14 w-14">
-          {/* Three pulsing halos staggered so they read as one wave */}
-          {[0, 0.4, 0.8].map((delay) => (
-            <motion.span
-              key={delay}
-              className="absolute inset-0 rounded-full border border-accent-500/50"
-              initial={{ scale: 0.6, opacity: 0.6 }}
-              animate={{ scale: [0.6, 1.4, 1.4], opacity: [0.6, 0, 0] }}
-              transition={{
-                duration: 2,
-                delay,
-                repeat: Infinity,
-                ease: 'easeOut',
-              }}
-            />
-          ))}
+          {/* Three pulsing halos staggered so they read as one wave —
+              suppressed under reduced-motion so the halo does not
+              loop forever. */}
+          {!shouldReduceMotion &&
+            [0, 0.4, 0.8].map((delay) => (
+              <motion.span
+                key={delay}
+                className="absolute inset-0 rounded-full border border-accent-500/50"
+                initial={{ scale: 0.6, opacity: 0.6 }}
+                animate={{ scale: [0.6, 1.4, 1.4], opacity: [0.6, 0, 0] }}
+                transition={{
+                  duration: 2,
+                  delay,
+                  repeat: Infinity,
+                  ease: 'easeOut',
+                }}
+              />
+            ))}
           <motion.svg
             className="relative h-14 w-14 text-accent-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            animate={{ y: [0, -2, 0] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            animate={shouldReduceMotion ? { y: 0 } : { y: [0, -2, 0] }}
+            transition={
+              shouldReduceMotion
+                ? { duration: 0 }
+                : { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }
+            }
           >
             <path
               strokeLinecap="round"
@@ -127,8 +135,12 @@ function VideoGeneratingPlaceholder() {
         </div>
         <motion.p
           className="text-sm"
-          animate={{ opacity: [0.55, 1, 0.55] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [0.55, 1, 0.55] }}
+          transition={
+            shouldReduceMotion
+              ? { duration: 0 }
+              : { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }
+          }
         >
           Rendering video...
         </motion.p>

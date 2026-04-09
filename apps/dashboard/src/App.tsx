@@ -6,7 +6,7 @@ import {
   useLocation,
   Link,
 } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { RepositoryUrlForm } from './components/RepositoryUrlForm.js';
 import { ProjectSummaryList } from './components/ProjectSummaryList.js';
 import { ProjectDetailView } from './components/ProjectDetailView.js';
@@ -15,6 +15,7 @@ import { useProjectListData } from './hooks/useProjectData.js';
 function HomePage() {
   const navigate = useNavigate();
   const { projects, loading, refresh } = useProjectListData();
+  const shouldReduceMotion = useReducedMotion();
 
   const handleProjectCreated = (id: string) => {
     void navigate(`/projects/${id}`);
@@ -30,12 +31,16 @@ function HomePage() {
         <motion.div
           className="absolute left-1/2 top-0 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-accent-500/10 blur-[120px]"
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0.4, 0.7, 0.4] }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          animate={shouldReduceMotion ? { opacity: 0.5 } : { opacity: [0.4, 0.7, 0.4] }}
+          transition={
+            shouldReduceMotion
+              ? { duration: 0.4, ease: 'easeOut' }
+              : {
+                  duration: 6,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }
+          }
         />
       </div>
 
