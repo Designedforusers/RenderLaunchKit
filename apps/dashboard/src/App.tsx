@@ -7,6 +7,7 @@ import {
   Link,
 } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { Lightning } from '@phosphor-icons/react';
 import { RepositoryUrlForm } from './components/RepositoryUrlForm.js';
 import { ProjectSummaryList } from './components/ProjectSummaryList.js';
 import { ProjectDetailView } from './components/ProjectDetailView.js';
@@ -63,28 +64,16 @@ function HomePage() {
               whileHover={{ scale: 1.08, rotate: -4 }}
               transition={{ type: 'spring', stiffness: 360, damping: 20 }}
             >
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
+              <Lightning weight="fill" size={18} className="text-white" />
               {/* Soft glow halo */}
               <span className="absolute inset-0 rounded-lg bg-accent-500/40 blur-md -z-10" />
             </motion.div>
-            <h1 className="font-mono text-xl font-bold tracking-tight">
+            <h1 className="font-display text-display-md text-text-primary">
               LaunchKit
             </h1>
           </motion.div>
           <motion.p
-            className="text-surface-400 text-lg max-w-xl"
+            className="text-body-lg text-text-secondary max-w-xl"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.18, duration: 0.5 }}
@@ -115,10 +104,8 @@ function HomePage() {
         transition={{ delay: 0.35, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-mono font-semibold text-surface-400 text-sm uppercase tracking-wider">
-            Projects
-          </h2>
-          <button onClick={refresh} className="btn-ghost text-xs">
+          <h2 className="label">Projects</h2>
+          <button onClick={refresh} className="btn-ghost text-body-xs">
             Refresh
           </button>
         </div>
@@ -148,21 +135,9 @@ function ProjectPage() {
               whileHover={{ scale: 1.12, rotate: -6 }}
               transition={{ type: 'spring', stiffness: 360, damping: 20 }}
             >
-              <svg
-                className="w-3.5 h-3.5 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
+              <Lightning weight="fill" size={14} className="text-white" />
             </motion.div>
-            <span className="font-mono text-sm font-bold tracking-tight group-hover:text-accent-400 transition-colors">
+            <span className="font-display text-heading-md text-text-primary group-hover:text-accent-400 transition-colors">
               LaunchKit
             </span>
           </Link>

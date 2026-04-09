@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Check, CircleNotch } from '@phosphor-icons/react';
 import { api } from '../lib/api.js';
 
 interface RepositoryUrlFormProps {
@@ -75,7 +76,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                 if (state === 'error') setState('idle');
               }}
               placeholder="https://github.com/owner/repo"
-              className="input w-full text-lg font-mono pr-10"
+              className="input w-full text-body-lg font-mono pr-10"
               disabled={isSubmitting || state === 'success'}
               autoFocus
             />
@@ -97,19 +98,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
                 >
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-500/15 text-accent-400">
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={3}
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
+                    <Check weight="bold" size={12} />
                   </span>
                 </motion.span>
               )}
@@ -119,7 +108,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
           <motion.button
             type="submit"
             disabled={isSubmitting || state === 'success' || !trimmed}
-            className="btn-primary text-lg px-8 whitespace-nowrap min-w-[10rem] flex items-center justify-center"
+            className="btn-primary text-heading-md px-8 whitespace-nowrap min-w-[10rem] flex items-center justify-center"
             // Hover/tap motions only when the button is interactive.
             // Spread pattern keeps `exactOptionalPropertyTypes` happy
             // — explicit `undefined` is rejected for those props.
@@ -154,22 +143,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                   transition={{ duration: 0.22 }}
                   className="flex items-center gap-2"
                 >
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
+                  <CircleNotch weight="bold" size={20} className="animate-spin" />
                   Launching
                 </motion.span>
               )}
@@ -182,25 +156,14 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                   transition={{ duration: 0.22 }}
                   className="flex items-center gap-2"
                 >
-                  <motion.svg
-                    className="h-5 w-5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ duration: 0.32, ease: 'easeOut' }}
+                  <motion.span
+                    initial={{ scale: 0.4, rotate: -18, opacity: 0 }}
+                    animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                    className="flex items-center"
                   >
-                    <motion.path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5 13l4 4L19 7"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 0.32, ease: 'easeOut' }}
-                    />
-                  </motion.svg>
+                    <Check weight="bold" size={20} />
+                  </motion.span>
                   Launched
                 </motion.span>
               )}
@@ -219,11 +182,11 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
           </motion.button>
         </div>
 
-        <div className="mt-2 flex items-center justify-between text-sm">
+        <div className="mt-2 flex items-center justify-between text-body-sm">
           <button
             type="button"
             onClick={() => { setShowTokenField((v) => !v); }}
-            className="text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
+            className="text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-50"
             disabled={isSubmitting || state === 'success'}
           >
             {showTokenField ? '− Hide private-repo options' : '+ Private repo? Use an access token'}
@@ -241,7 +204,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
               className="overflow-hidden"
             >
               <div className="mt-3">
-                <label htmlFor="github-token" className="block text-sm text-gray-300 mb-1">
+                <label htmlFor="github-token" className="label mb-2 block">
                   GitHub personal access token
                 </label>
                 <input
@@ -250,12 +213,12 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                   value={token}
                   onChange={(e) => { setToken(e.target.value); }}
                   placeholder="github_pat_..."
-                  className="input w-full font-mono text-sm"
+                  className="input w-full font-mono text-body-sm"
                   autoComplete="off"
                   spellCheck={false}
                   disabled={isSubmitting || state === 'success'}
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-2 text-body-xs text-text-muted">
                   Create a fine-grained token at{' '}
                   <a
                     href="https://github.com/settings/personal-access-tokens/new"
@@ -292,7 +255,7 @@ export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) 
                 duration: 0.5,
                 x: { duration: 0.4, ease: 'easeOut' },
               }}
-              className="mt-2 text-red-400 text-sm"
+              className="mt-2 text-red-400 text-body-sm"
             >
               {error}
             </motion.p>

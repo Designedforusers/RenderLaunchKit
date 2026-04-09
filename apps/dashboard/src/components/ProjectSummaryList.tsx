@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, LinkSimple } from '@phosphor-icons/react';
 import type { ProjectSummary } from '../lib/api.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 
@@ -74,10 +75,10 @@ export function ProjectSummaryList({
           >
             <div className="flex items-start justify-between mb-3">
               <div>
-                <h3 className="font-mono font-semibold text-lg group-hover:text-accent-400 transition-colors">
+                <h3 className="font-display text-heading-lg text-text-primary group-hover:text-accent-400 transition-colors">
                   {project.repoOwner}/{project.repoName}
                 </h3>
-                <p className="text-surface-500 text-sm mt-0.5">
+                <p className="text-text-muted text-body-sm mt-1">
                   {new Date(project.createdAt).toLocaleDateString()}
                 </p>
               </div>
@@ -85,25 +86,13 @@ export function ProjectSummaryList({
             </div>
 
             <div className="flex items-center gap-4 mt-4">
-              <div className="flex items-center gap-1.5 text-sm text-surface-400">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+              <div className="flex items-center gap-1.5 text-body-sm text-text-tertiary">
+                <FileText weight="regular" size={16} />
                 {project.completedAssets}/{project.assetCount} assets
               </div>
 
               {project.reviewScore && (
-                <div className="flex items-center gap-1.5 text-sm">
+                <div className="flex items-center gap-1.5 text-body-sm">
                   <div
                     className={`w-2 h-2 rounded-full ${
                       project.reviewScore >= 7
@@ -113,27 +102,15 @@ export function ProjectSummaryList({
                           : 'bg-red-500'
                     }`}
                   />
-                  <span className="text-surface-300">
+                  <span className="font-mono text-mono-sm text-text-secondary">
                     {project.reviewScore.toFixed(1)}
                   </span>
                 </div>
               )}
 
               {project.webhookEnabled && (
-                <div className="flex items-center gap-1.5 text-sm text-surface-500">
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                    />
-                  </svg>
+                <div className="flex items-center gap-1.5 text-body-sm text-text-muted">
+                  <LinkSimple weight="regular" size={14} />
                   webhook
                 </div>
               )}
@@ -255,7 +232,7 @@ function ProjectListEmptyState() {
         </motion.div>
 
         <motion.p
-          className="text-surface-200 text-lg font-medium"
+          className="font-display text-display-md text-text-primary"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -263,7 +240,7 @@ function ProjectListEmptyState() {
           No projects yet
         </motion.p>
         <motion.p
-          className="text-surface-500 mt-1"
+          className="text-body-md text-text-muted mt-2"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.28 }}
