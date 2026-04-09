@@ -213,6 +213,15 @@ export type PikaLeaveJobData = z.infer<typeof PikaLeaveJobDataSchema>;
 // line, the row is left with `pikaSessionId = null` and `status =
 // 'joining'`, which a follow-up cron can reconcile (documented in
 // CLAUDE.md as a deferred cleanup task).
+// `z.coerce.date()` on every datetime field so the SAME schema
+// parses both drizzle row reads (Date instances) and HTTP response
+// reads (ISO strings after JSON round-trip). The alternative —
+// two parallel schemas, one per boundary — is the pattern used by
+// `AssetResponseSchema` in `./api.ts`, but that doubles the
+// surface area and forces the web route to transform every row
+// before return. A single coerced schema is less code and the
+// output type is `Date` on both sides, which is the more useful
+// type for the dashboard's elapsed-time math anyway.
 export const PikaMeetingSessionRowSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
@@ -224,11 +233,11 @@ export const PikaMeetingSessionRowSchema = z.object({
   pikaSessionId: z.string().nullable(),
   status: PikaSessionStatusSchema,
   error: z.string().nullable(),
-  startedAt: z.date().nullable(),
-  endedAt: z.date().nullable(),
+  startedAt: z.coerce.date().nullable(),
+  endedAt: z.coerce.date().nullable(),
   costCents: z.number().int().nonnegative(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 });
 export type PikaMeetingSessionRow = z.infer<typeof PikaMeetingSessionRowSchema>;
 
