@@ -45,6 +45,25 @@ const envSchema = z.object({
 
   // ── Remotion render ────────────────────────────────────────────
   REMOTION_CONCURRENCY: z.string().default('50%'),
+
+  // ── Render Workflows (asset generation trigger) ────────────────
+  // The `/api/assets/:id/regenerate` route triggers a
+  // `generateAllAssetsForProject` task run on the Render Workflows
+  // service instead of enqueuing to the legacy BullMQ generation
+  // queue (deleted in PR 3). Both are required at call time on the
+  // regen code path; the trigger helper throws a structured error
+  // if either is missing. Optional at the schema level so the web
+  // service can boot without them when the regen route is not in
+  // use (e.g. dashboard-only local dev against seed data).
+  //
+  // Local dev: set `RENDER_USE_LOCAL_DEV=true` to route the SDK
+  // calls to the local `render workflows dev` task server on
+  // http://localhost:8120. The Render SDK reads that env var
+  // directly from `process.env` in its `get-base-url` helper; we
+  // declare it here so the typed env surface documents it.
+  RENDER_API_KEY: z.string().optional(),
+  RENDER_WORKFLOW_SLUG: z.string().optional(),
+  RENDER_USE_LOCAL_DEV: z.enum(['true', 'false']).optional(),
 });
 
 export type WebEnv = z.infer<typeof envSchema>;

@@ -15,36 +15,32 @@ import { getInsightsForCategory } from './project-insight-memory.js';
 /**
  * Core dispatch function for a single asset generation.
  *
- * This is the workflows-side counterpart to
- * `apps/worker/src/processors/generate-project-assets.ts`. The two
- * coexist during PR 2 (gated by the worker's `GENERATION_RUNTIME`
- * feature flag); PR 3 deletes the worker's copy once the workflow
- * path has run in prod for a release cycle.
+ * Entered from every child task in `apps/workflows/src/tasks/` after
+ * the task's Zod input parse. Responsible for loading project
+ * context from the DB, routing to the right agent in
+ * `assetGenerators`, persisting the generated content, and
+ * publishing progress events.
  *
- * Key differences from the worker version:
+ * Design notes:
  *
- *   1. **Context is re-read from the DB, not passed in.** The worker's
- *      `generateProjectAsset(data: GenerateAssetJobData)` receives a
- *      bundle of `repoAnalysis`, `research`, `strategy`, and
- *      `pastInsights` inline from the BullMQ payload. Here we accept
- *      only `{ projectId, assetId }` and re-read everything from the
- *      `projects` + `assets` + `strategy_insights` tables. Smaller
- *      task inputs, no drift between enqueue-time and run-time
- *      payloads, idempotent retries.
+ *   1. **Context is re-read from the DB at run time.** Each task
+ *      takes only `{ projectId, assetId }` and re-reads `repoAnalysis`,
+ *      `research`, `strategy`, and `strategy_insights` rows. Keeps
+ *      task inputs tiny, avoids drift between enqueue-time and
+ *      run-time payloads, and makes retries naturally idempotent.
  *
  *   2. **Per-task scope validation.** The caller passes
- *      `allowedTypes` — the subset of asset types the calling task is
- *      allowed to handle. If the asset's actual type is outside that
- *      subset, we throw before doing any work. This is the safety net
- *      against a routing bug in `generateAllAssetsForProject`
+ *      `allowedTypes` — the subset of asset types the calling task
+ *      is allowed to handle. If the asset's actual type is outside
+ *      that subset, we throw before doing any work. This is the
+ *      safety net against a routing bug in `generateAllAssetsForProject`
  *      accidentally landing a 10-minute video render on a starter
  *      instance sized for a 20-second blog post.
  *
- *   3. **Same DB writes, same progress events.** Every update to the
- *      `assets` row and every `projectProgressPublisher` call mirrors
- *      the worker's behaviour exactly. The web service's SSE
- *      subscription cannot tell which code path emitted an event — by
- *      design, so the dashboard does not need to change.
+ *   3. **Dashboard parity.** Every update to the `assets` row and
+ *      every `projectProgressPublisher` call matches the shape the
+ *      web service's SSE subscription already consumes — the
+ *      dashboard does not need to change to support this path.
  */
 
 export interface DispatchAssetInput {
@@ -125,10 +121,11 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
 
   const pastInsights = await getInsightsForCategory(repoAnalysis.category);
 
-  // Pull generation instructions off the asset metadata. The old
-  // BullMQ payload stamped this inline; here we read the same field
-  // back from the row that `fanOutGeneration` (or the strategist)
-  // persisted it on.
+  // Pull generation instructions off the asset metadata. The
+  // strategist persists this on each asset row at the end of its
+  // phase; revision paths (creative review, commit marketing, user
+  // regen) update it in place before flipping the asset back to
+  // `queued` for the workflow parent task to re-dispatch.
   const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
   const generationInstructions =
     (typeof assetMetadata['generationInstructions'] === 'string'

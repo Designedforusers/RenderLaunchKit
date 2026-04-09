@@ -20,7 +20,13 @@ export const redisConnection = {
   password: redisUrl.password || undefined,
 };
 
+// The generation queue was removed in Phase 10 — every asset
+// generation now runs on the Render Workflows service
+// (`apps/workflows/`). The worker retains only the analysis,
+// review, and trending queues because the strategize handler
+// still triggers the workflow via the `triggerWorkflowGeneration`
+// helper (which uses the Render SDK, not BullMQ) and the review
+// and trending queues have no workflow equivalent.
 export const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, { connection: redisConnection });
-export const generationQueue = new Queue(QUEUE_NAMES.GENERATION, { connection: redisConnection });
 export const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection: redisConnection });
 export const trendingQueue = new Queue(QUEUE_NAMES.TRENDING, { connection: redisConnection });

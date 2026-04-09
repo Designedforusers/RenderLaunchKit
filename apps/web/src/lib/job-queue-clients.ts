@@ -3,9 +3,7 @@ import { JOB_NAMES, QUEUE_NAMES, QUEUE_CONFIG } from '@launchkit/shared';
 import type {
   AnalyzeRepoJobData,
   EmbedFeedbackEventJobData,
-  GenerateAssetJobData,
   JobData,
-  ReviewJobData,
 } from '@launchkit/shared';
 import { env } from '../env.js';
 
@@ -17,20 +15,23 @@ const connection = {
   password: redisUrl.password || undefined,
 };
 
-// Create queues
+// BullMQ queues the web service produces to.
+//
+// The asset generation queue is gone as of PR 3 — every consumer now
+// triggers the `generateAllAssetsForProject` Render Workflows task
+// via the lazy SDK client in `./trigger-workflow-generation.ts`
+// (web) or the parallel helper in `apps/worker/src/lib/` (worker).
+//
+// The review queue client used to live here too (as
+// `creativeReviewJobQueue` + `enqueueCreativeReview`) but nothing in
+// the web service ever enqueued to it — the review path was always
+// producer-owned by the worker's `checkAndTriggerReview` (deleted in
+// PR 3) and now by the workflow parent task's
+// `apps/workflows/src/lib/review-enqueue.ts`. Removed in PR 3 with
+// the rest of the dead generation-queue code.
 export const analysisJobQueue = new Queue<JobData>(QUEUE_NAMES.ANALYSIS, {
   connection,
   defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.ANALYSIS].defaultJobOptions,
-});
-
-export const assetGenerationJobQueue = new Queue<JobData>(QUEUE_NAMES.GENERATION, {
-  connection,
-  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.GENERATION].defaultJobOptions,
-});
-
-export const creativeReviewJobQueue = new Queue<JobData>(QUEUE_NAMES.REVIEW, {
-  connection,
-  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.REVIEW].defaultJobOptions,
 });
 
 // Phase 7: trending queue is shared between heterogeneous background
@@ -52,25 +53,6 @@ export async function enqueueRepositoryAnalysis(data: AnalyzeRepoJobData) {
   return analysisJobQueue.add('analyze-repo', data, {
     priority: 1,
     jobId: `analyze__${data.projectId}`,
-  });
-}
-
-// Helper to add generation jobs
-export async function enqueueAssetGeneration(
-  jobName: string,
-  data: GenerateAssetJobData
-) {
-  return assetGenerationJobQueue.add(jobName, data, {
-    priority: data.assetType.includes('video') ? 3 : 2,
-    jobId: `${jobName}__${data.projectId}__${data.assetId}__${data.assetType}`,
-  });
-}
-
-// Helper to add review jobs
-export async function enqueueCreativeReview(data: ReviewJobData) {
-  return creativeReviewJobQueue.add('creative-review', data, {
-    priority: 2,
-    jobId: `review__${data.projectId}`,
   });
 }
 

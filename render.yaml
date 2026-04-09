@@ -45,6 +45,16 @@ services:
         sync: false
       - key: API_KEY
         sync: false
+      # Render Workflows trigger — the `/api/assets/:id/regenerate`
+      # route calls `render.workflows.startTask` to re-fire asset
+      # generation instead of enqueuing a BullMQ job. Both fields
+      # are required at call time; the web service still boots
+      # without them but the regen route throws a structured error
+      # if either is missing.
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_WORKFLOW_SLUG
+        sync: false
 
   - type: worker
     name: launchkit-worker
@@ -61,9 +71,10 @@ services:
     # the dashboard (New > Workflow) and is not defined in this
     # Blueprint. See README.md § "Create the workflow service" for
     # the one-time dashboard setup. The worker trigger helper
-    # (`apps/worker/src/lib/trigger-workflow-generation.ts`) reads
-    # `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` from the worker
-    # env below when `GENERATION_RUNTIME=workflows` is set.
+    # (`apps/worker/src/lib/trigger-workflow-generation.ts`) and the
+    # web trigger helper (`apps/web/src/lib/trigger-workflow-generation.ts`)
+    # both read `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` from
+    # their respective service env pages.
     buildCommand: npm ci && npm run build
     startCommand: npm run start:worker
     buildFilter:
@@ -116,26 +127,17 @@ services:
       # private-repo analyze job to the unauthenticated path.
       - key: GITHUB_TOKEN_SECRET
         sync: false
-      # Generation runtime flag. `bullmq` (default) keeps every
-      # asset generation on the worker's BullMQ generation queue.
-      # `workflows` routes the strategize handler to trigger a
-      # `generateAllAssetsForProject` task run on the Render
-      # Workflows service instead. The workflow service itself is
-      # created via the dashboard — see README § "Create the
-      # workflow service". The cutover PR will delete this flag and
-      # the BullMQ generation queue entirely.
-      - key: GENERATION_RUNTIME
-        value: bullmq
       # Render API key used by `trigger-workflow-generation.ts` to
-      # call `render.workflows.startTask` when GENERATION_RUNTIME is
-      # `workflows`. Required only on that code path; left unset on
-      # the default BullMQ path. Generated from the Render dashboard
+      # call `render.workflows.startTask` for every asset-generation
+      # run. Required — every fan-out (strategize → generate, review
+      # re-queue, commit-marketing refresh) now routes through the
+      # workflow service. Generated from the Render dashboard
       # account settings.
       - key: RENDER_API_KEY
         sync: false
       # Slug of the workflow service that hosts the task
       # definitions, copied from the dashboard after one-time
-      # creation. Required only when GENERATION_RUNTIME=workflows.
+      # creation. Required.
       - key: RENDER_WORKFLOW_SLUG
         sync: false
 
