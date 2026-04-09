@@ -19,7 +19,7 @@ You MUST output valid JSON matching this schema:
   ],
   "assetsToGenerate": [
     {
-      "type": "blog_post|twitter_thread|linkedin_post|product_hunt_description|hacker_news_post|faq|changelog_entry|og_image|social_card|product_video|voiceover_script|video_storyboard|tips|voice_commercial|podcast_script",
+      "type": "blog_post|twitter_thread|linkedin_post|product_hunt_description|hacker_news_post|faq|changelog_entry|og_image|social_card|product_video|voiceover_script|video_storyboard|tips|voice_commercial|podcast_script|world_scene",
       "generationInstructions": "specific instructions for generating this asset",
       "priority": 1-5
     }
@@ -45,6 +45,7 @@ Key strategic principles:
 - Always include "tips" — it's cheap to generate, high utility, and every developer appreciates a concrete "what to do next" list.
 - Recommend "voice_commercial" when the product has a clear single value prop and a developer audience that listens to podcasts or screencasts (DevOps, ML, infra tools).
 - Recommend "podcast_script" when the product has technical depth worth discussing — the multi-host format excels at frameworks, libraries, and complex tooling where back-and-forth dialogue surfaces nuance.
+- Recommend "world_scene" when the product benefits from being *seen in context* — an interactive 3D walk-through of the natural setting where developers actually use it. Good examples: a home office for a local developer tool, a data center aisle for infrastructure, a lab bench for research software, a busy conference floor for SaaS, a terminal setup for a CLI. World Labs (Marble) generates a shareable 3D scene the user can walk around in, which makes abstract software feel tactile. Especially strong for libraries and invisible tooling where there's nothing physical to show — the scene gives reviewers something to remember. Skip for products that are already visually self-explanatory in a 2D video (those should get product_video instead).
 
 If past insights from similar projects are provided, factor them into your decisions.
 For example, if insights say "CLI tools: users delete LinkedIn posts 60%", skip LinkedIn for CLI tools.`;
