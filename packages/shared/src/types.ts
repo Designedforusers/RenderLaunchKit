@@ -56,6 +56,23 @@ export type {
   // voiceover
   ParsedVoiceoverScript,
   VoiceoverSegment,
+  // written asset content
+  BlogPostContent,
+  BlogPostSection,
+  ChangelogEntryContent,
+  FaqContent,
+  FaqEntry,
+  FaqGroup,
+  HackerNewsPostContent,
+  LinkedInPostContent,
+  PodcastLine,
+  PodcastScriptContent,
+  ProductHuntContent,
+  ProductHuntFeature,
+  TipsContent,
+  TwitterThreadContent,
+  TwitterTweet,
+  VoiceCommercialContent,
   // strategy insight
   StrategyInsight,
   // job data

@@ -6,3 +6,4 @@ export * from './constants.js';
 export * from './pricing.js';
 export * from './utils.js';
 export * from './voiceover.js';
+export * from './written-asset-serializers.js';

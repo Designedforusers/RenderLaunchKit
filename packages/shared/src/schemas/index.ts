@@ -19,6 +19,7 @@ export * from './strategy-insight.js';
 export * from './strategy.js';
 export * from './trend-signal.js';
 export * from './voiceover.js';
+export * from './written-asset-content.js';
 
 /**
  * Validate a value read from a Postgres `jsonb` column against a Zod
