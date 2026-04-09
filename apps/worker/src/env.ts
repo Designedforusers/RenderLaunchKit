@@ -204,6 +204,34 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional(),
 
+  // ── Pika video meeting (AI teammate video calling) ──────────────
+  // Drives the `pika` BullMQ queue — one job per "Invite AI teammate
+  // to a meet" click on the dashboard. The worker shells out to the
+  // vendored Python CLI at
+  // `vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py`
+  // via `./lib/pika-stream.ts`, which maps `PIKA_API_KEY` here to
+  // the `PIKA_DEV_KEY` env var the subprocess expects — the upstream
+  // Python reads from that name so we keep our internal naming
+  // consistent with the rest of the `*_API_KEY` convention and do
+  // the rename at the subprocess spawn site.
+  //
+  // `PIKA_AVATAR` is the raw value passed to the Python CLI's
+  // `--image` flag. It accepts EITHER an absolute path to a local
+  // image file OR an https:// URL — the Python CLI transparently
+  // downloads the URL to a tempfile before upload (see vendored
+  // source at pikastreaming_videomeeting.py:232-247). Keeping both
+  // forms under a single env var means the TypeScript wrapper does
+  // no form detection at all and any avatar change is a one-line
+  // .env edit. The value is user-private and must NEVER be committed
+  // to the repo or echoed in logs.
+  //
+  // Both are optional at the schema level so the worker boots on
+  // the BullMQ-only code path when Pika is not configured; the
+  // `./lib/pika-stream.ts` helpers throw `PikaMissingKeyError` /
+  // `PikaMissingAvatarError` at call time if either is missing.
+  PIKA_API_KEY: z.string().optional(),
+  PIKA_AVATAR: z.string().optional(),
+
   // ── World Labs (Marble) 3D world generation ───────────────────
   // Drives the `world_scene` asset type — the writer agent crafts a
   // text prompt describing the product being used in a real-world
