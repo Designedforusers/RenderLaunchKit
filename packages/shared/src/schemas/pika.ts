@@ -130,11 +130,53 @@ export type PikaSessionUpdate = z.infer<typeof PikaSessionUpdateSchema>;
 // on exit 0. Any other exit code implies a non-zero response body was
 // printed to stderr; the wrapper never parses this schema in the
 // failure path.
+//
+// Note: since the pure-TS leave helper at `apps/worker/src/lib/
+// pika-stream.ts:pikaDeleteSession` calls Pika's DELETE endpoint
+// directly (bypassing the Python subprocess entirely), this schema
+// is now primarily validating the SYNTHETIC return shape constructed
+// by the leave helper after a successful HTTP DELETE. The subprocess
+// is only used during the `join` flow; `leave` is pure HTTPS.
 export const PikaLeaveResponseSchema = z.object({
   session_id: z.string().min(1),
   closed: z.literal(true),
 });
 export type PikaLeaveResponse = z.infer<typeof PikaLeaveResponseSchema>;
+
+// ── Session state (GET /proxy/realtime/session/{id}) ────────────────
+//
+// The `pika-poll` background job hits Pika's session GET endpoint
+// every 30 seconds while a session is `active` to decide whether
+// the bot should stay or leave. This schema validates the fields
+// the poller reads — anything else Pika returns is accepted via
+// `.passthrough()` so a future backend field addition does not
+// force a schema update.
+//
+// Field meanings from `cmd_join:305-318` in the vendored Python:
+//
+//   status                  — "created" | "connecting" | "ready" |
+//                              "error" | "closed" | (future states)
+//   video_worker_connected  — Pika's video worker (the avatar render
+//                              pipeline) has joined and is streaming
+//   video_connected         — alias on some responses
+//   meeting_bot_connected   — the Meet participant seat is occupied
+//                              by Pika's bot
+//
+// The poller treats `status === 'closed' | 'error'` as the signal
+// to leave. A future participant-count field would enable the "bot
+// is alone in the room for N polls" idle-detect heuristic; for the
+// MVP we rely on Google Meet auto-closing solo meets after ~1 min
+// and Pika's session flipping to `closed` in response.
+export const PikaSessionStateSchema = z
+  .object({
+    status: z.string().optional(),
+    video_worker_connected: z.boolean().optional(),
+    video_connected: z.boolean().optional(),
+    meeting_bot_connected: z.boolean().optional(),
+    error_message: z.string().optional(),
+  })
+  .passthrough();
+export type PikaSessionState = z.infer<typeof PikaSessionStateSchema>;
 
 // ── Insufficient-credits JSON ────────────────────────────────────────
 //

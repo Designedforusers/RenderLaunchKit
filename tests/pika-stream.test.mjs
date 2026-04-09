@@ -12,6 +12,11 @@
 
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/launchkit_test';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
+// The pure-TS endMeeting / fetchPikaSessionState helpers read
+// env.PIKA_API_KEY at call time via the lazy env proxy. Provide a
+// dummy so the pre-flight `if (!apiKey)` branches do not throw
+// PikaMissingKeyError in tests that exercise the HTTP path.
+process.env.PIKA_API_KEY ??= 'dk_test_placeholder';
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -285,6 +290,165 @@ test('every Pika error class preserves stderr / stdout / exitCode for triage', a
   assert.equal(err.exitCode, 3);
   assert.match(err.stdout, /session_id/);
   assert.match(err.stderr, /HTTP 500/);
+});
+
+// ── Pure-TS endMeeting + fetchPikaSessionState ──────────────────────
+//
+// Stub `globalThis.fetch` for each test so we never hit the real
+// Pika API. The stub captures the request URL + headers so we can
+// assert the wrapper built the right HTTPS call.
+
+function stubFetch(handler) {
+  const original = globalThis.fetch;
+  globalThis.fetch = handler;
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
+function jsonResponse(status, body) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+test('endMeeting: hits the right URL with DevKey auth and returns synthetic shape on 2xx', async () => {
+  const { endMeeting } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  let capturedUrl = '';
+  let capturedMethod = '';
+  let capturedAuth = '';
+  const restore = stubFetch(async (url, init) => {
+    capturedUrl = String(url);
+    capturedMethod = String(init?.method ?? 'GET');
+    capturedAuth = String(init?.headers?.['Authorization'] ?? '');
+    return jsonResponse(200, {});
+  });
+  try {
+    const result = await endMeeting({ pikaSessionId: 'rs_abc123' });
+    assert.equal(
+      capturedUrl,
+      'https://srkibaanghvsriahb.pika.art/proxy/realtime/session/rs_abc123'
+    );
+    assert.equal(capturedMethod, 'DELETE');
+    assert.equal(capturedAuth, 'DevKey dk_test_placeholder');
+    assert.equal(result.session_id, 'rs_abc123');
+    assert.equal(result.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+test('endMeeting: throws PikaHttpError with bounded body slice on non-2xx', async () => {
+  const { endMeeting, PikaHttpError } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  const restore = stubFetch(async () => {
+    return new Response('multi\nline\nerror body', { status: 500 });
+  });
+  try {
+    await assert.rejects(
+      () => endMeeting({ pikaSessionId: 'rs_abc123' }),
+      (err) => {
+        assert.ok(err instanceof PikaHttpError);
+        assert.equal(err.exitCode, 500);
+        assert.match(err.message, /HTTP 500/);
+        return true;
+      }
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('endMeeting: maps AbortSignal timeout to PikaTimeoutError', async () => {
+  const { endMeeting, PikaTimeoutError } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  const restore = stubFetch(async () => {
+    // Simulate an AbortSignal.timeout() rejection by throwing a
+    // DOMException-like error with name 'TimeoutError'. The wrapper's
+    // error mapper branches on `err.name === 'TimeoutError'`.
+    const err = new Error('simulated timeout');
+    err.name = 'TimeoutError';
+    throw err;
+  });
+  try {
+    await assert.rejects(
+      () => endMeeting({ pikaSessionId: 'rs_abc123' }),
+      (err) => {
+        assert.ok(err instanceof PikaTimeoutError);
+        assert.match(err.message, /timed out/);
+        return true;
+      }
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('fetchPikaSessionState: parses a ready-state response', async () => {
+  const { fetchPikaSessionState } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  const restore = stubFetch(async () => {
+    return jsonResponse(200, {
+      status: 'ready',
+      video_worker_connected: true,
+      meeting_bot_connected: true,
+      some_future_field: 'ignored by passthrough',
+    });
+  });
+  try {
+    const state = await fetchPikaSessionState({ pikaSessionId: 'rs_abc123' });
+    assert.equal(state.status, 'ready');
+    assert.equal(state.video_worker_connected, true);
+    assert.equal(state.meeting_bot_connected, true);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchPikaSessionState: parses a closed-state response (terminal)', async () => {
+  const { fetchPikaSessionState } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  const restore = stubFetch(async () => {
+    return jsonResponse(200, {
+      status: 'closed',
+      error_message: 'Meeting ended',
+    });
+  });
+  try {
+    const state = await fetchPikaSessionState({ pikaSessionId: 'rs_abc123' });
+    assert.equal(state.status, 'closed');
+    assert.equal(state.error_message, 'Meeting ended');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchPikaSessionState: throws PikaHttpError on 404 (session gone)', async () => {
+  const { fetchPikaSessionState, PikaHttpError } = await import(
+    '../apps/worker/dist/lib/pika-stream.js'
+  );
+  const restore = stubFetch(async () => {
+    return new Response('Session not found', { status: 404 });
+  });
+  try {
+    await assert.rejects(
+      () => fetchPikaSessionState({ pikaSessionId: 'rs_missing' }),
+      (err) => {
+        assert.ok(err instanceof PikaHttpError);
+        assert.equal(err.exitCode, 404);
+        return true;
+      }
+    );
+  } finally {
+    restore();
+  }
 });
 
 // ── Per-project system prompt builder ───────────────────────────────
