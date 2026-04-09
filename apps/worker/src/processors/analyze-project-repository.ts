@@ -179,7 +179,12 @@ export async function analyzeProjectRepository(data: AnalyzeRepoJobData): Promis
     })
     .where(eq(schema.projects.id, projectId));
 
-  // Store embedding for similarity search
+  // Store embedding for similarity search. Fire-and-forget — the
+  // helper never throws (all errors are logged internally and the
+  // promise resolves). See `project-insight-memory.ts` for the
+  // rationale: the embedding is a pgvector side effect with no
+  // in-pipeline consumer, so a Voyage outage must not fail the
+  // primary analyze work that already committed above.
   await storeProjectEmbedding(projectId, {
     repoName,
     description: repoAnalysis.description,

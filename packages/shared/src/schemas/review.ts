@@ -15,7 +15,17 @@ export const AssetReviewSchema = z.object({
   score: z.number().min(0).max(10),
   strengths: z.array(z.string()),
   issues: z.array(z.string()),
-  revisionInstructions: z.string().optional(),
+  // `.nullish()` (accepts string, null, or undefined) rather than
+  // `.optional()` (string or undefined only). On review round 2+,
+  // when an asset passes quality and no revision is needed, Claude
+  // correctly returns `null` for this field instead of omitting it
+  // — a strict `.optional()` schema then blows up with a Zod parse
+  // error and the whole review job crashes mid-pipeline, leaving
+  // the project stuck in `reviewing` status forever. The downstream
+  // consumers in `review-generated-assets.ts` already treat the
+  // field with `?? fallback` / truthy checks, so a `null` value
+  // flows through cleanly without code changes.
+  revisionInstructions: z.string().nullish(),
 });
 export type AssetReview = z.infer<typeof AssetReviewSchema>;
 
