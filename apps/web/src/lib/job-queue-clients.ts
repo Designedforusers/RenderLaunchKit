@@ -50,14 +50,31 @@ export const trendingJobQueue = new Queue<unknown>(QUEUE_NAMES.TRENDING, {
   defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.TRENDING].defaultJobOptions,
 });
 
-// Pika video meeting lifecycle queue. Same pattern as trending:
-// two heterogeneous job names (`pika-invite` and `pika-leave`)
-// share the queue and each processor validates its own payload
-// at the boundary, so the queue type is intentionally `unknown`.
-export const pikaJobQueue = new Queue<unknown>(QUEUE_NAMES.PIKA, {
-  connection,
-  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA].defaultJobOptions,
-});
+// Pika video-meeting queues. Split into two:
+//
+//   - PIKA_INVITE queue — consumed ONLY by the dedicated
+//     `launchkit-pika-worker` service. Every job on this queue
+//     spawns the Python `join` subprocess for ~90 s.
+//   - PIKA_CONTROL queue — consumed by the shared worker alongside
+//     analysis/review/trending. Carries pure-TS poll + leave jobs.
+//
+// The web service enqueues to BOTH queues depending on the action:
+//   - POST /meetings           → PIKA_INVITE queue
+//   - POST /meetings/:id/leave → PIKA_CONTROL queue (pika-leave)
+export const pikaInviteJobQueue = new Queue<unknown>(
+  QUEUE_NAMES.PIKA_INVITE,
+  {
+    connection,
+    defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA_INVITE].defaultJobOptions,
+  }
+);
+export const pikaControlJobQueue = new Queue<unknown>(
+  QUEUE_NAMES.PIKA_CONTROL,
+  {
+    connection,
+    defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA_CONTROL].defaultJobOptions,
+  }
+);
 
 // Helper to add analysis jobs
 export async function enqueueRepositoryAnalysis(data: AnalyzeRepoJobData) {
@@ -101,24 +118,30 @@ export async function enqueueEmbedFeedbackEvent(
  * handler has created the `pika_meeting_sessions` row at
  * `status='pending'`. The deterministic jobId dedupes a double-
  * click on the dashboard.
+ *
+ * Routes to the PIKA_INVITE queue, which is consumed only by the
+ * dedicated `launchkit-pika-worker` dyno.
  */
 export async function enqueuePikaInvite(
   data: PikaInviteJobData
 ): Promise<void> {
-  await pikaJobQueue.add(JOB_NAMES.PIKA_INVITE, data, {
+  await pikaInviteJobQueue.add(JOB_NAMES.PIKA_INVITE, data, {
     jobId: `pika-invite__${data.sessionRowId}`,
   });
 }
 
 /**
- * Enqueue an immediate user-initiated pika-leave job. Does NOT
- * cancel the delayed auto-leave job scheduled by the invite
- * processor — both will fire but the second sees a terminal
- * status and no-ops (see `process-pika-leave.ts` idempotency
- * guard).
+ * Enqueue a user-initiated pika-leave job. Routes to the
+ * PIKA_CONTROL queue, which is consumed by the shared worker.
+ *
+ * A user leave does NOT cancel the poll loop's `pika-leave` jobs
+ * (e.g. from a safety cap or pika_closed detection) — all leave
+ * triggers share the same terminal-status idempotency guard in
+ * the leave processor, so whichever fires first terminates the
+ * session and subsequent jobs no-op.
  */
 export async function enqueuePikaLeave(data: PikaLeaveJobData): Promise<void> {
-  await pikaJobQueue.add(JOB_NAMES.PIKA_LEAVE, data, {
+  await pikaControlJobQueue.add(JOB_NAMES.PIKA_LEAVE, data, {
     jobId: `pika-leave-user__${data.sessionRowId}`,
   });
 }

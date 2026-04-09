@@ -8,16 +8,27 @@ export const QUEUE_NAMES = {
   // runs the agentic fan-out (Grok + Exa + 5 free APIs) and writes
   // clustered rows to the `trend_signals` table.
   TRENDING: 'trending',
-  // Pika video-meeting session lifecycle. The web service enqueues
-  // one PIKA_INVITE job per "Invite AI teammate to a meet" click;
-  // the invite processor spawns the vendored Python CLI via
-  // `pika-stream.ts` and schedules a delayed PIKA_LEAVE job at the
-  // 30-minute auto-timeout ceiling. User-initiated leaves enqueue
-  // an immediate PIKA_LEAVE job instead. Both leave paths are
-  // idempotent: the first to run terminates the session and
-  // marks the row `ended`; the second sees a terminal status
-  // and no-ops.
-  PIKA: 'pika',
+  // Pika video-meeting invite queue. Single-purpose queue consumed
+  // ONLY by the dedicated `launchkit-pika-worker` Render service.
+  // Every job on this queue spawns the vendored Python CLI's `join`
+  // subcommand for ~90 s. The dedicated dyno exists so the subprocess
+  // burst has a warm, single-purpose event loop to spawn into — no
+  // contention with analysis/research/trending jobs, no Python
+  // install on the shared worker.
+  PIKA_INVITE: 'pika-invite',
+  // Pika video-meeting control queue. Consumed by the shared
+  // `launchkit-worker` service alongside analysis/review/trending.
+  // Carries two job types, both pure-TypeScript (no Python):
+  //   - `pika-poll`  — HTTPS GET to Pika every 30 s while active,
+  //                    detects closed/error/safety-cap and enqueues
+  //                    a leave when appropriate
+  //   - `pika-leave` — HTTPS DELETE to Pika's session endpoint,
+  //                    fires on user click OR when the poll loop
+  //                    detects termination OR on the 60-minute cap
+  // Both are single-HTTP-call jobs taking <1 s each, perfectly fine
+  // to share the shared worker's event loop with the existing
+  // analysis/review/trending jobs.
+  PIKA_CONTROL: 'pika-control',
   // Phase 10 note: the `generation` queue was removed when asset
   // generation moved to Render Workflows (`apps/workflows/`). Every
   // generation run now lives on per-task VMs sized per compute
@@ -50,10 +61,20 @@ export const JOB_NAMES = {
   // as the two ingest jobs above — keeps the user request path off
   // the Voyage latency.
   EMBED_FEEDBACK_EVENT: 'embed-feedback-event',
-  // Pika video meeting lifecycle. Enqueued by the web service on
-  // a user click (invite + leave) and by the invite processor
-  // itself for the 30-minute auto-leave delayed job.
+  // Pika video meeting lifecycle. Three job types split across two
+  // queues (see QUEUE_NAMES.PIKA_INVITE and QUEUE_NAMES.PIKA_CONTROL
+  // below):
+  //
+  //   PIKA_INVITE  — spawns the Python `join` subprocess; burst of
+  //                  ~90 s compute. Lives on the dedicated
+  //                  launchkit-pika-worker dyno.
+  //   PIKA_POLL    — periodic HTTPS GET to Pika's session endpoint
+  //                  to detect closed/error state and enforce the
+  //                  60-min safety cap. Lives on the shared worker.
+  //   PIKA_LEAVE   — HTTPS DELETE to Pika's session endpoint.
+  //                  Lives on the shared worker. Pure TS, no Python.
   PIKA_INVITE: 'pika-invite',
+  PIKA_POLL: 'pika-poll',
   PIKA_LEAVE: 'pika-leave',
 } as const;
 
@@ -92,21 +113,37 @@ export const QUEUE_CONFIG = {
       removeOnFail: { count: 25 },
     },
   },
-  // Pika video meeting sessions. Concurrency of 2 is a deliberate
-  // soft cap — a single worker process can host up to two active
-  // joins at once without saturating the Python subprocess pool or
-  // the Pika backend's per-key rate limits. Attempts is 1 because
-  // the subprocess wrapper already bounds every run by a
-  // wall-clock timeout and maps exit codes to typed errors; a
-  // failed join with a structured error is not going to get better
-  // on retry, and a second attempt would burn Pika credits for
-  // nothing. The retry story is the user clicking "Invite" again,
-  // not a BullMQ retry loop.
-  [QUEUE_NAMES.PIKA]: {
+  // Pika invite queue — the 90-second Python subprocess burst.
+  // Concurrency of 2 is a deliberate soft cap: a single dyno can
+  // host up to two active joins at once without saturating the
+  // Python subprocess pool or Pika's per-key rate limits.
+  // Attempts is 1 because the subprocess wrapper already bounds
+  // every run by a wall-clock timeout and maps exit codes to typed
+  // errors — a failed join with a structured error is not going to
+  // get better on retry, and a second attempt would burn Pika
+  // credits for nothing. The retry story is the user clicking
+  // "Invite" again, not a BullMQ retry loop.
+  [QUEUE_NAMES.PIKA_INVITE]: {
     concurrency: 2,
     defaultJobOptions: {
       attempts: 1,
       removeOnComplete: { count: 50 },
+      removeOnFail: { count: 50 },
+    },
+  },
+  // Pika control queue — the poll + leave background loop.
+  // Concurrency of 5 because each job is a single pure-HTTP call
+  // taking <1 s; the ceiling is only there to stop a pathological
+  // backlog from pinning the event loop. Attempts is 3 with
+  // exponential backoff because transient network errors to Pika
+  // SHOULD retry — unlike the invite, the control calls are
+  // idempotent and cost nothing to retry.
+  [QUEUE_NAMES.PIKA_CONTROL]: {
+    concurrency: 5,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 2000 },
+      removeOnComplete: { count: 100 },
       removeOnFail: { count: 50 },
     },
   },
@@ -155,10 +192,14 @@ export const JOB_TIMEOUTS = {
   // bound inside this ceiling so a stuck run surfaces as a typed
   // `PikaTimeoutError` well before BullMQ times the job out.
   [JOB_NAMES.PIKA_INVITE]: 300_000,
-  // Pika video meeting leave: single HTTP DELETE + cost persist.
-  // ~5s in practice; 90s ceiling has headroom for a transient
-  // network blip without hiding a hang.
-  [JOB_NAMES.PIKA_LEAVE]: 90_000,
+  // Pika poll: single HTTPS GET to Pika + a handful of DB reads +
+  // a conditional BullMQ enqueue. ~500 ms in practice; 30 s ceiling
+  // for a network blip. The poll re-enqueues itself on a 30-s
+  // delay so a slow tick does not compound.
+  [JOB_NAMES.PIKA_POLL]: 30_000,
+  // Pika video meeting leave: single HTTPS DELETE + cost persist.
+  // ~2 s in practice (no Python subprocess); 30 s ceiling.
+  [JOB_NAMES.PIKA_LEAVE]: 30_000,
 } as const;
 
 // ── Asset Type Labels ──

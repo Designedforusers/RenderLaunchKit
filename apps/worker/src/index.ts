@@ -16,8 +16,14 @@ import { processCommitMarketingRun } from './processors/process-commit-marketing
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
 import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
 import { processEmbedFeedbackEvent } from './processors/embed-feedback-event.js';
-import { processPikaInvite } from './processors/process-pika-invite.js';
+// Note: `processPikaInvite` is NOT imported here. The invite
+// path spawns a Python subprocess for ~90 s per invocation and
+// lives on the dedicated `launchkit-pika-worker` service (see
+// `apps/pika-worker/src/index.ts`) so the shared worker's event
+// loop never competes with it. The imports below cover only the
+// pure-TS poll + leave jobs that run on this shared worker.
 import { processPikaLeave } from './processors/process-pika-leave.js';
+import { processPikaPoll } from './processors/process-pika-poll.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { database as db, databasePool } from './lib/database.js';
 import {
@@ -160,18 +166,23 @@ const trendingWorker = new Worker(
   }
 );
 
-// ── Pika Worker ──
-// Handles: pika-invite (user click) + pika-leave (user click AND
-// the 30-minute auto-timeout delayed job enqueued by the invite
-// processor). Two job names share the queue because they form a
-// single session lifecycle and the invite processor itself needs
-// a queue client to enqueue the delayed leave.
+// ── Pika Control Worker ──
+// Handles: pika-poll (health check / safety cap) and pika-leave
+// (HTTPS DELETE to Pika's session endpoint). Both are pure-TS
+// single-HTTP-call jobs that take <1 s each, so they share the
+// shared worker's event loop with analysis/review/trending.
+//
+// The PIKA_INVITE queue (spawns the Python join subprocess) is
+// deliberately NOT registered here — it lives on a dedicated
+// `launchkit-pika-worker` service so the 90-second subprocess
+// burst has an isolated dyno. See `apps/pika-worker/src/index.ts`
+// (Commit 12) for the invite worker.
 
-const pikaWorker = new Worker(
-  QUEUE_NAMES.PIKA,
+const pikaControlWorker = new Worker(
+  QUEUE_NAMES.PIKA_CONTROL,
   async (job) => {
-    if (job.name === JOB_NAMES.PIKA_INVITE) {
-      await processPikaInvite(job);
+    if (job.name === JOB_NAMES.PIKA_POLL) {
+      await processPikaPoll(job);
       return;
     }
     if (job.name === JOB_NAMES.PIKA_LEAVE) {
@@ -179,12 +190,12 @@ const pikaWorker = new Worker(
       return;
     }
     console.warn(
-      `[Worker:Pika] unknown job name "${job.name}" — skipping`
+      `[Worker:PikaControl] unknown job name "${job.name}" — skipping`
     );
   },
   {
     connection,
-    concurrency: QUEUE_CONFIG[QUEUE_NAMES.PIKA].concurrency,
+    concurrency: QUEUE_CONFIG[QUEUE_NAMES.PIKA_CONTROL].concurrency,
   }
 );
 
@@ -244,7 +255,7 @@ for (const [name, worker] of Object.entries({
   analysis: analysisWorker,
   review: reviewWorker,
   trending: trendingWorker,
-  pika: pikaWorker,
+  'pika-control': pikaControlWorker,
 })) {
   worker.on('completed', (job) => {
     console.log(`[${name}] Job ${job.name}:${job.id ?? '<unknown>'} completed`);
@@ -264,12 +275,13 @@ for (const [name, worker] of Object.entries({
 // ── Startup ──
 
 console.log(`
-╔══════════════════════════════════════════════════╗
-║  LaunchKit Worker Service                        ║
-║  Queues: analysis, review, trending, pika        ║
-║  Generation: Render Workflows (apps/workflows/)  ║
-║  Env: ${env.NODE_ENV.padEnd(42)}║
-╚══════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════╗
+║  LaunchKit Worker Service                            ║
+║  Queues: analysis, review, trending, pika-control    ║
+║  Generation: Render Workflows (apps/workflows/)      ║
+║  Pika invites: launchkit-pika-worker (dedicated)     ║
+║  Env: ${env.NODE_ENV.padEnd(46)}║
+╚══════════════════════════════════════════════════════╝
 `);
 
 // ── Graceful Shutdown ──
@@ -280,7 +292,7 @@ async function shutdown() {
     analysisWorker.close(),
     reviewWorker.close(),
     trendingWorker.close(),
-    pikaWorker.close(),
+    pikaControlWorker.close(),
   ]);
   await databasePool.end();
   process.exit(0);

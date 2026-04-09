@@ -112,6 +112,7 @@ export type {
   PikaInviteRequest,
   PikaInviteJobData,
   PikaLeaveJobData,
+  PikaPollJobData,
   PikaMeetingSessionRow,
   PikaMeetingSessionListResponse,
   PikaMeetingSessionDetailResponse,

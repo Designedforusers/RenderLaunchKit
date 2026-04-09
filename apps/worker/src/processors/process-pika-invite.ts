@@ -17,7 +17,7 @@ import {
   PikaSubprocessError,
 } from '../lib/pika-stream.js';
 import { buildPikaSystemPrompt } from '../lib/pika-system-prompt-builder.js';
-import { pikaQueue } from '../lib/job-queues.js';
+import { pikaControlQueue } from '../lib/job-queues.js';
 
 /**
  * BullMQ handler for `pika-invite` jobs.
@@ -141,22 +141,31 @@ export async function processPikaInvite(job: Job): Promise<void> {
       })
       .where(eq(pikaMeetingSessions.id, sessionRowId));
 
-    // Schedule the auto-leave. The delayed job's `jobId` is
-    // deterministic on `sessionRowId` so a retry of the invite
-    // cannot stack up duplicate leave jobs — the second add
-    // with the same jobId is a BullMQ no-op.
-    const AUTO_LEAVE_MS = 30 * 60 * 1000;
-    await pikaQueue.add(
-      JOB_NAMES.PIKA_LEAVE,
-      { sessionRowId, triggeredBy: 'auto_timeout' },
+    // Enqueue the first poll tick 5 seconds after a successful
+    // join. The poll job re-enqueues itself every 30 seconds until
+    // the session reaches a terminal state (user leave, meeting
+    // closed on Pika's side, 60-min safety cap, or Pika error).
+    //
+    // 5 seconds (not 0) because Pika's backend may still be
+    // settling its `status=ready` signal immediately after the
+    // join subprocess exits — the extra delay avoids a spurious
+    // "not yet ready" branch on the very first poll.
+    //
+    // The jobId includes a timestamp so a retry of the invite
+    // that bumped the row back into `joining` can re-enqueue a
+    // fresh poll chain without colliding with the old one.
+    const FIRST_POLL_DELAY_MS = 5 * 1000;
+    await pikaControlQueue.add(
+      JOB_NAMES.PIKA_POLL,
+      { sessionRowId },
       {
-        delay: AUTO_LEAVE_MS,
-        jobId: `pika-leave-auto__${sessionRowId}`,
+        delay: FIRST_POLL_DELAY_MS,
+        jobId: `pika-poll__${sessionRowId}__${String(startedAt.getTime())}`,
       }
     );
 
     console.log(
-      `[PikaInvite] session ${sessionRowId} joined: pika_session=${result.pikaSessionId}, auto-leave in ${String(AUTO_LEAVE_MS / 1000)}s`
+      `[PikaInvite] session ${sessionRowId} joined: pika_session=${result.pikaSessionId}, first poll in ${String(FIRST_POLL_DELAY_MS / 1000)}s`
     );
   } catch (err) {
     // Dump the full forensic state before mapping to a message.
