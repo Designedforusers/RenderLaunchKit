@@ -173,7 +173,15 @@ pikaRoutes.post('/:projectId/meetings', async (c) => {
     );
   }
 
-  const botName = botNameInput ?? `${project.repoName} teammate`;
+  // Default bot name is `Bufo` — LaunchKit's AI teammate persona.
+  // The dashboard invite modal can still override this on a
+  // per-meeting basis by passing `botName` in the POST body, but
+  // the fallback is no longer derived from the repo name. Bufo
+  // is the persona across every project; the per-project context
+  // (repo, launch strategy, generated assets) is injected into
+  // the system prompt by `buildPikaSystemPrompt`, not into the
+  // display name.
+  const botName = botNameInput ?? 'Bufo';
 
   // `avatarRef` is stored on the row so the subprocess wrapper
   // can resolve it at spawn time and a regenerate path can
