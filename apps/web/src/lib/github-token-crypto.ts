@@ -42,8 +42,17 @@ export class GithubTokenEncryptionDisabledError extends Error {
   }
 }
 
+// These three constants MUST match the decrypt side in
+// `apps/worker/src/lib/github-token-crypto.ts`. The two files are
+// intentionally not sharing a module because `@launchkit/shared` is
+// browser-buildable and `node:crypto` is not — duplicating the
+// constants keeps the shared package clean while still documenting
+// the lockstep requirement at both call sites. AES-256-GCM fixes the
+// key at 32 bytes; the IV length (12) and auth-tag length (16) are
+// the GCM standard and must not drift between encrypt and decrypt.
 const KEY_BYTE_LENGTH = 32;
 const IV_BYTE_LENGTH = 12;
+const AUTH_TAG_BYTE_LENGTH = 16;
 
 function loadKey(): Buffer {
   const raw = env.GITHUB_TOKEN_SECRET;
@@ -76,6 +85,15 @@ export function encryptGithubToken(plaintext: string): string {
     cipher.final(),
   ]);
   const authTag = cipher.getAuthTag();
+
+  // Sanity check: the decrypt side enforces the canonical GCM
+  // auth-tag length, and a drift here would silently produce blobs
+  // the worker refuses to decrypt. Fail loudly at write time instead.
+  if (authTag.length !== AUTH_TAG_BYTE_LENGTH) {
+    throw new Error(
+      `GCM auth tag was ${String(authTag.length)} bytes; expected ${String(AUTH_TAG_BYTE_LENGTH)}.`
+    );
+  }
 
   return `${iv.toString('base64')}:${authTag.toString('base64')}:${ciphertext.toString('base64')}`;
 }

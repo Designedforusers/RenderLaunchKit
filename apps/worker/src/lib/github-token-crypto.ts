@@ -41,8 +41,15 @@ import { env } from '../env.js';
  * caller logs the failure so operators see it.
  */
 
+// These three constants MUST match the encrypt side in
+// `apps/web/src/lib/github-token-crypto.ts`. The two files are
+// intentionally not sharing a module because `@launchkit/shared` is
+// browser-buildable and `node:crypto` is not — duplicating the
+// constants keeps the shared package clean while still documenting
+// the lockstep requirement at both call sites.
 const KEY_BYTE_LENGTH = 32;
 const IV_BYTE_LENGTH = 12;
+const AUTH_TAG_BYTE_LENGTH = 16;
 
 function loadKey(): Buffer | null {
   const raw = env.GITHUB_TOKEN_SECRET;
@@ -95,10 +102,23 @@ export function decryptGithubToken(blob: string): string | null {
     return null;
   }
 
+  // GCM auth tags MUST be exactly 16 bytes. Node's `setAuthTag` will
+  // accept shorter tags on some versions, which weakens the
+  // authentication guarantee — a corrupted or adversarially-crafted
+  // stored blob with a short tag could otherwise slip past the
+  // integrity check. Reject anything that isn't the canonical length.
+  if (tag.length !== AUTH_TAG_BYTE_LENGTH) {
+    console.error(
+      `[GithubTokenCrypto] Encrypted token auth tag was ${String(tag.length)} bytes; expected ${String(AUTH_TAG_BYTE_LENGTH)}. Ignoring.`
+    );
+    return null;
+  }
+
+  let plaintext: Buffer | null = null;
   try {
     const decipher = createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([decipher.update(ct), decipher.final()]);
+    plaintext = Buffer.concat([decipher.update(ct), decipher.final()]);
     return plaintext.toString('utf8');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -106,5 +126,16 @@ export function decryptGithubToken(blob: string): string | null {
       `[GithubTokenCrypto] Failed to decrypt token (${message}); ignoring.`
     );
     return null;
+  } finally {
+    // Defense-in-depth: zero the intermediate plaintext Buffer so a
+    // later heap inspection or core-dump analysis cannot recover the
+    // decrypted token from a page that has not yet been reused. Node
+    // strings are immutable, so the returned string copy still lives
+    // on the V8 heap until GC — but the Buffer-backed allocation,
+    // which is the larger and longer-lived intermediate, is wiped
+    // here before the function returns either a value or null.
+    if (plaintext) {
+      plaintext.fill(0);
+    }
   }
 }
