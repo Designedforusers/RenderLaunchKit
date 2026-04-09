@@ -66,7 +66,11 @@ test('OperationSchema parses a completed world generation operation with full sn
       world_id: 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
     },
     response: {
-      id: 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
+      // The Marble API returns the identifier as `world_id`, not `id`.
+      // Verified against https://docs.worldlabs.ai/api/reference/operations/get.md
+      // and against a real 7-minute Marble render that surfaced the
+      // schema drift when an earlier version of this test used `id`.
+      world_id: 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
       display_name: '',
       tags: null,
       world_marble_url: 'https://marble.worldlabs.ai/world/dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
@@ -95,7 +99,7 @@ test('OperationSchema parses a completed world generation operation with full sn
   assert.equal(result.success, true, result.success ? '' : JSON.stringify(result.error.issues));
   assert.equal(result.data.done, true);
   assert.ok(result.data.response, 'response must be present on completed operations');
-  assert.equal(result.data.response.id, 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a');
+  assert.equal(result.data.response.world_id, 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a');
   assert.equal(
     result.data.response.world_marble_url,
     'https://marble.worldlabs.ai/world/dc2c65e4-68d3-4210-a01e-7a54cc9ded2a'
@@ -106,31 +110,34 @@ test('OperationSchema parses a completed world generation operation with full sn
   );
 });
 
-test('WorldEnvelopeSchema parses the canonical GET /worlds/{id} response', async () => {
-  const { WorldEnvelopeSchema } = await import(
+test('WorldSchema parses the canonical GET /worlds/{world_id} response', async () => {
+  // The Marble GET /worlds/{world_id} endpoint returns the World
+  // object DIRECTLY, not wrapped in a `{ world: ... }` envelope.
+  // Verified against https://docs.worldlabs.ai/api/reference/worlds/get.md
+  // after an earlier envelope-assuming version was proved wrong.
+  const { WorldSchema } = await import(
     '../packages/asset-generators/dist/clients/schemas/world-labs.js'
   );
 
-  const envelope = {
-    world: {
-      id: 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
-      display_name: 'Mystical Forest',
-      tags: null,
-      world_marble_url: 'https://marble.worldlabs.ai/world/dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
-      assets: {
-        caption: 'The scene is a fantastical forest...',
-        thumbnail_url: 'https://example.com/thumb.png',
-      },
-      created_at: '2025-01-15T10:30:00Z',
-      updated_at: '2025-01-15T10:35:00Z',
-      world_prompt: { type: 'text', text_prompt: 'A mystical forest...' },
-      model: 'marble-1.1',
+  const directResponse = {
+    world_id: 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
+    display_name: 'Mystical Forest',
+    tags: null,
+    world_marble_url: 'https://marble.worldlabs.ai/world/dc2c65e4-68d3-4210-a01e-7a54cc9ded2a',
+    assets: {
+      caption: 'The scene is a fantastical forest...',
+      thumbnail_url: 'https://example.com/thumb.png',
     },
+    created_at: '2025-01-15T10:30:00Z',
+    updated_at: '2025-01-15T10:35:00Z',
+    world_prompt: { type: 'text', text_prompt: 'A mystical forest...' },
+    model: 'marble-1.1',
   };
 
-  const result = WorldEnvelopeSchema.safeParse(envelope);
+  const result = WorldSchema.safeParse(directResponse);
   assert.equal(result.success, true, result.success ? '' : JSON.stringify(result.error.issues));
-  assert.equal(result.data.world.display_name, 'Mystical Forest');
+  assert.equal(result.data.display_name, 'Mystical Forest');
+  assert.equal(result.data.world_id, 'dc2c65e4-68d3-4210-a01e-7a54cc9ded2a');
 });
 
 test('OperationSchema rejects an envelope missing the operation_id field', async () => {
