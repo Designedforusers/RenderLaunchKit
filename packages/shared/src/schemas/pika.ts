@@ -110,14 +110,23 @@ export const PikaSessionUpdateSchema = z.object({
   // ignored by the wrapper, which only acts on `ready` and the
   // `video && bot` terminal condition.
   status: z.string().min(1),
-  platform: z.string().optional(),
-  video: z.boolean().optional(),
-  bot: z.boolean().optional(),
+  // Every optional field uses `.nullish()` (optional + nullable) for
+  // defensive forward compat: the subprocess stdout stream today
+  // does not emit null values for these fields, but the upstream
+  // CLI is out of our control and a future version could start
+  // passing `null` for absent values (which is the bug that hit us
+  // on `PikaSessionStateSchema.error_message` against the live
+  // Pika HTTP API — see the comment on that schema below). Keeping
+  // this permissive costs nothing and forecloses a whole class of
+  // parse-failure-on-vendor-refresh bugs.
+  platform: z.string().nullish(),
+  video: z.boolean().nullish(),
+  bot: z.boolean().nullish(),
   // When the session fails, Pika may emit an `error_message` field
   // alongside `status: "error"` (pikastreaming_videomeeting.py:317).
   // Stored on the wrapper's thrown `PikaSessionError` for surfacing
   // in the DB row's `error` column.
-  error_message: z.string().optional(),
+  error_message: z.string().nullish(),
 });
 export type PikaSessionUpdate = z.infer<typeof PikaSessionUpdateSchema>;
 
@@ -212,9 +221,11 @@ export type PikaNeedsTopupPayload = z.infer<typeof PikaNeedsTopupPayloadSchema>;
 // rejects anything that isn't a Google Meet or Zoom link (matches the
 // Python `infer_platform` function at lines 71-77).
 //
-// `botName` is optional at the HTTP boundary — the worker falls back
-// to a project-derived default (`{project.displayName} teammate`) if
-// the dashboard doesn't send one.
+// `botName` is optional at the HTTP boundary — the web route falls
+// back to the hardcoded persona name `Bufo` if the dashboard doesn't
+// send one (see `apps/web/src/routes/pika-routes.ts`). The dashboard
+// invite modal can still override this per-meeting by including
+// `botName` in the POST body.
 export const PikaInviteRequestSchema = z.object({
   meetUrl: z.string().url(),
   botName: z.string().min(1).max(80).optional(),
@@ -224,16 +235,25 @@ export type PikaInviteRequest = z.infer<typeof PikaInviteRequestSchema>;
 
 // ── BullMQ job payload shapes ────────────────────────────────────────
 //
-// The worker's `pika` queue carries two job types:
+// The integration uses TWO BullMQ queues, split at the process boundary
+// for isolation (see CLAUDE.md § "Pika video meeting integration"):
 //
-//   - `pika_invite` — fired by the web route on dashboard submit; the
-//     processor loads the project, builds the system prompt, inserts
-//     the session row, and spawns the `join` subprocess.
+//   PIKA_INVITE queue (consumed by dedicated launchkit-pika-worker):
+//     - `pika-invite` — fired by the web route on dashboard submit;
+//       the processor loads the project, builds the system prompt,
+//       and spawns the vendored Python `join` subprocess for ~90 s.
 //
-//   - `pika_leave` — fired by (a) the web route on dashboard End-click
-//     and (b) the 30-minute delayed job auto-scheduled by the invite
-//     processor after a successful join. The processor spawns the
-//     `leave` subprocess and persists the cost event.
+//   PIKA_CONTROL queue (consumed by shared launchkit-worker):
+//     - `pika-poll`  — fired by the invite processor after a
+//       successful join and re-enqueued every 30 s. Hits Pika's
+//       `GET /session/{id}` endpoint via pure-TS fetch(), detects
+//       closed/error/safety-cap, and enqueues a leave when
+//       appropriate.
+//     - `pika-leave` — fired by (a) the web route on user End click,
+//       (b) the poll processor when Pika reports closed/error, and
+//       (c) the poll processor when the 60-min safety cap is hit.
+//       Pure-TS fetch() DELETE, no Python subprocess. Idempotent
+//       against duplicate triggers via deterministic jobIds.
 
 export const PikaInviteJobDataSchema = z.object({
   sessionRowId: z.string().uuid(),
