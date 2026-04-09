@@ -287,9 +287,10 @@ The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`.
 
 ## Where the spec lives
 
-- `README.md` — what the product does and how to deploy it
+- `README.md` — what the product does, the architecture overview, and the 4-step deploy runbook
 - `CONTRIBUTING.md` — short-form contribution rules (points back here)
 - `CLAUDE.md` (this file) — engineering invariants and the review chain
+- `docs/cost-tracking.md` — long-form cost tracking explainer (the AsyncLocalStorage rationale, the four guard layers behind the non-blocking invariant, the schema, the recipe for adding a new provider)
 - `.github/workflows/ci.yml` — the CI gate
 - `.github/workflows/claude-review.yml` — the on-demand cloud reviewer
 - `lefthook.yml` — the local prepush gate

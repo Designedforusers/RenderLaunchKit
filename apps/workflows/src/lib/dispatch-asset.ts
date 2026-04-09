@@ -323,15 +323,33 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       .where(eq(schema.assets.id, assetId));
 
     // Flush the recorded cost events to `asset_cost_events` and
-    // update the denormalized summary on the asset row. The helper
-    // is non-throwing by design — a failure here logs and continues
-    // without rolling back the generation success above.
-    await persistCostEvents({
-      assetId,
-      projectId,
-      events: costTracker.getEvents(),
-      totalCents: costTracker.totalCents(),
-    });
+    // update the denormalized summary on the asset row.
+    //
+    // Belt-and-braces try/catch around the call: `persistCostEvents`
+    // is non-throwing today (its DB transaction is wrapped in its
+    // own try/catch that logs and returns), but a future maintainer
+    // who removes that internal guard must NOT be able to flip a
+    // successful asset generation to `failed` just because the cost
+    // write hiccupped. The asset row is already at `status='reviewing'`
+    // by this point — the generation succeeded and the user's content
+    // is persisted. A cost-tracking failure here is purely a
+    // bookkeeping miss, never a generation failure. The outer
+    // try/catch in `dispatchAsset` is our last line of defence and
+    // marks assets as `failed` on agent errors; we explicitly do
+    // NOT want to reach that path because of a cost write.
+    try {
+      await persistCostEvents({
+        assetId,
+        projectId,
+        events: costTracker.getEvents(),
+        totalCents: costTracker.totalCents(),
+      });
+    } catch (persistErr) {
+      console.error(
+        '[Workflows:Dispatch] cost persist failed on success path (non-blocking):',
+        persistErr instanceof Error ? persistErr.message : String(persistErr)
+      );
+    }
 
     await projectProgressPublisher.assetReady(projectId, assetId, assetType);
 
