@@ -55,7 +55,9 @@ It documents:
 - The CI/CD philosophy and the local + cloud review chain
 - The strict TypeScript flags and what they imply for new code
 - Boundary validation rules (every external input parses through Zod)
-- The env-module pattern (`apps/{web,worker,cron}/src/env.ts`)
+- The env-module pattern (`apps/{web,worker,cron,workflows}/src/env.ts`)
+- The Render Workflows architecture (the asset-generation fan-out lives there, behind a six-task registration; the worker still owns analyze/research/strategize/review)
+- The cost tracking design and the non-blocking invariant (long-form explainer at `docs/cost-tracking.md`)
 - The local `code-reviewer` subagent setup for contributors using Claude Code
 - The on-demand `@claude review` cloud reviewer for everyone else
 
