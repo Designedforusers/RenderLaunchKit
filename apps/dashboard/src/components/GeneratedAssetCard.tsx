@@ -1,11 +1,61 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import {
+  blogPostToMarkdown,
+  changelogEntryToMarkdown,
+  faqToMarkdown,
+  hackerNewsPostToMarkdown,
+  linkedInPostToMarkdown,
+  podcastScriptToMarkdown,
+  productHuntToMarkdown,
+  tipsToMarkdown,
+  twitterThreadToMarkdown,
+  voiceCommercialToMarkdown,
+} from '@launchkit/shared';
 import { api } from '../lib/api.js';
 import type { Asset } from '../lib/api.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchVideoPreview } from './LaunchVideoPreview.js';
 import { Tooltip, CopyButton, useToast } from './ui/index.js';
+import {
+  WrittenAssetContent,
+  parseStructuredAssetContent,
+  type StructuredAssetContent,
+} from './asset-content/index.js';
 import type { LaunchKitVideoProps } from '@launchkit/video';
+
+/**
+ * Render a structured asset to its markdown form using the shared
+ * per-type serializer. Returns a string for every kind in the
+ * union — the caller gates on whether the asset has structured
+ * content at all via `parseStructuredAssetContent`.
+ */
+function getMarkdownFromStructured(
+  structured: StructuredAssetContent
+): string {
+  switch (structured.kind) {
+    case 'blog_post':
+      return blogPostToMarkdown(structured.content);
+    case 'twitter_thread':
+      return twitterThreadToMarkdown(structured.content);
+    case 'linkedin_post':
+      return linkedInPostToMarkdown(structured.content);
+    case 'product_hunt':
+      return productHuntToMarkdown(structured.content);
+    case 'hacker_news_post':
+      return hackerNewsPostToMarkdown(structured.content);
+    case 'faq':
+      return faqToMarkdown(structured.content);
+    case 'changelog_entry':
+      return changelogEntryToMarkdown(structured.content);
+    case 'tips':
+      return tipsToMarkdown(structured.content);
+    case 'voice_commercial':
+      return voiceCommercialToMarkdown(structured.content);
+    case 'podcast_script':
+      return podcastScriptToMarkdown(structured.content);
+  }
+}
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   blog_post: 'Blog Post',
@@ -129,6 +179,21 @@ export function GeneratedAssetCard({
   const { toast } = useToast();
   const shouldReduceMotion = useReducedMotion();
 
+  // Structured content dispatch — null for legacy pre-migration
+  // assets and for non-written asset types. Drives both the
+  // typed body renderer and the copy-as-markdown button.
+  const structuredContent = useMemo(
+    () => parseStructuredAssetContent(asset),
+    [asset]
+  );
+  const markdownForCopy = useMemo(
+    () =>
+      structuredContent !== null
+        ? getMarkdownFromStructured(structuredContent)
+        : null,
+    [structuredContent]
+  );
+
   const isMedia = ['og_image', 'social_card', 'product_video', 'world_scene'].includes(asset.type);
   const isInProgress = ['queued', 'generating', 'regenerating'].includes(asset.status);
   const assetMetadata = asset.metadata ?? null;
@@ -188,7 +253,16 @@ export function GeneratedAssetCard({
   const label = ASSET_TYPE_LABELS[asset.type] ?? asset.type;
   const iconPath = ASSET_TYPE_ICONS[asset.type] ?? ASSET_TYPE_ICONS['blog_post'];
   const tint = ASSET_TYPE_TINTS[asset.type] ?? DEFAULT_TINT;
-  const contentNeedsClamp = (asset.content?.length ?? 0) > 400;
+  // Structured content is rendered via the per-type body components,
+  // which produce richer layouts than the character count of
+  // `asset.content` can predict — a short tips list with 5 items,
+  // for example, can exceed the 360px clamp even though its plain-
+  // text form is under the 400-char threshold. Force the clamp on
+  // for any asset with structured content so the "Show more"
+  // affordance is always available when the body renderer might
+  // overflow its container.
+  const contentNeedsClamp =
+    structuredContent !== null || (asset.content?.length ?? 0) > 400;
 
   // `exactOptionalPropertyTypes` rejects explicit `undefined` on
   // optional properties, so error descriptions are spread in only
@@ -437,24 +511,29 @@ export function GeneratedAssetCard({
         </div>
       ) : asset.content ? (
         <div className="mb-4 relative">
-          {/* Copy affordance in the top-right corner of the content
-              area, visible on hover so it doesn't clutter the resting
+          {/* Copy affordances in the top-right corner of the
+              content area. Shows a "Copy as markdown" button for
+              structured assets alongside the plain-text copy, both
+              visible on hover so they don't clutter the resting
               state. */}
-          <div className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+          <div className="absolute right-0 top-0 z-10 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+            {markdownForCopy !== null && (
+              <CopyButton value={markdownForCopy} label="Copy markdown" />
+            )}
             <CopyButton value={asset.content} />
           </div>
           <motion.div
             layout
-            className={`text-sm text-surface-300 leading-relaxed ${
-              expanded ? '' : 'line-clamp-6'
+            className={`relative text-sm text-surface-300 leading-relaxed ${
+              expanded ? '' : 'max-h-[360px] overflow-hidden'
             }`}
           >
-            <pre className="whitespace-pre-wrap font-sans">{asset.content}</pre>
+            <WrittenAssetContent asset={asset} />
           </motion.div>
           {/* Gradient fade when clamped so the cutoff reads as
               intentional, not arbitrary. */}
           {!expanded && contentNeedsClamp && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface-900 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface-900 to-transparent" />
           )}
           {contentNeedsClamp && (
             <motion.button
