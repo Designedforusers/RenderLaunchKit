@@ -20,6 +20,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   product_video: 'Product Video',
   voiceover_script: 'Voiceover',
   video_storyboard: 'Storyboard',
+  world_scene: '3D World Scene',
 };
 
 const ASSET_TYPE_ICONS: Record<string, string> = {
@@ -32,6 +33,9 @@ const ASSET_TYPE_ICONS: Record<string, string> = {
   product_video:
     'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
   faq: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  // Isometric cube — reads as a 3D object the user can walk around in
+  world_scene:
+    'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12',
 };
 
 // Tint palette per asset type — drives the icon halo + the quality
@@ -90,6 +94,14 @@ const ASSET_TYPE_TINTS: Record<string, { from: string; to: string; text: string 
     to: 'to-fuchsia-500/5',
     text: 'text-fuchsia-300',
   },
+  // Lime for the world_scene — tactile, organic, "the real world".
+  // Deliberately distinct from `changelog_entry`'s emerald so two
+  // cards in the grid don't read as identical siblings.
+  world_scene: {
+    from: 'from-lime-500/20',
+    to: 'to-lime-500/5',
+    text: 'text-lime-300',
+  },
 };
 
 const DEFAULT_TINT = {
@@ -117,7 +129,7 @@ export function GeneratedAssetCard({
   const { toast } = useToast();
   const shouldReduceMotion = useReducedMotion();
 
-  const isMedia = ['og_image', 'social_card', 'product_video'].includes(asset.type);
+  const isMedia = ['og_image', 'social_card', 'product_video', 'world_scene'].includes(asset.type);
   const isInProgress = ['queued', 'generating', 'regenerating'].includes(asset.status);
   const assetMetadata = asset.metadata ?? null;
   const remotionProps =
@@ -341,6 +353,20 @@ export function GeneratedAssetCard({
                     onLoadedData: () => setVideoError(null),
                   }
                 : {})}
+            />
+          ) : asset.type === 'world_scene' ? (
+            // World Labs (Marble) 3D walk-through. `mediaUrl` is the
+            // public Marble viewer URL the client can drop straight
+            // into an iframe. Thumbnail (if present in metadata) is
+            // rendered as a poster-style preview above the embed so
+            // the card has something to show before the heavy iframe
+            // resolves. Link-out overlay lets the user open the
+            // scene full-screen on the Marble site.
+            <WorldScenePreview
+              viewerUrl={asset.mediaUrl}
+              thumbnailUrl={thumbnailUrl}
+              title={label}
+              description={asset.content}
             />
           ) : (
             <motion.img
@@ -770,5 +796,138 @@ function FailedAssetBody() {
       </svg>
       Generation failed
     </motion.div>
+  );
+}
+
+// World Labs (Marble) 3D walk-through preview.
+//
+// Two-stage rendering: the thumbnail (if present) loads instantly as
+// a poster image; tapping "Launch walk-through" swaps to the iframe
+// embed so the heavy Marble viewer only loads when the user asks
+// for it. The description text under the preview gives the user
+// the prompt context — what the scene is depicting — so they can
+// decide whether to launch the viewer without spinning up the 3D
+// runtime. The "open in new tab" affordance lets the user escape
+// to a full-screen Marble experience for the demo.
+//
+// Sandbox on the iframe: we do NOT allow-forms or allow-popups or
+// allow-top-navigation because the embedded viewer should not be
+// able to navigate the host page. The Marble viewer needs
+// `allow-scripts` and `allow-same-origin` to run its WebGL runtime,
+// and we grant those because we trust the marble.worldlabs.ai
+// domain (it's the same domain we POST to from the worker). If
+// world-labs ever adds cross-origin iframe guidance, revisit this.
+function WorldScenePreview({
+  viewerUrl,
+  thumbnailUrl,
+  title,
+  description,
+}: {
+  viewerUrl: string;
+  thumbnailUrl: string | undefined;
+  title: string;
+  description: string | null;
+}) {
+  const [launched, setLaunched] = useState(false);
+
+  return (
+    <div className="relative">
+      <div className="relative overflow-hidden rounded-lg bg-surface-800 aspect-video">
+        {launched ? (
+          <iframe
+            key={viewerUrl}
+            src={viewerUrl}
+            title={title}
+            className="absolute inset-0 h-full w-full border-0"
+            sandbox="allow-scripts allow-same-origin"
+            loading="lazy"
+            allow="xr-spatial-tracking"
+          />
+        ) : thumbnailUrl !== undefined ? (
+          <>
+            <motion.img
+              src={thumbnailUrl}
+              alt={title}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              initial={{ opacity: 0, scale: 1.04 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface-900/90 via-surface-900/20 to-transparent" />
+          </>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-lime-300/60 text-xs font-mono">
+              3D scene ready · tap to walk through
+            </div>
+          </div>
+        )}
+
+        {!launched && (
+          <div className="absolute inset-0 flex items-end justify-center p-4">
+            <motion.button
+              type="button"
+              onClick={() => setLaunched(true)}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 rounded-full bg-lime-500/90 px-4 py-2 text-sm font-medium text-surface-950 shadow-lg shadow-lime-500/30 backdrop-blur"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Launch walk-through
+            </motion.button>
+          </div>
+        )}
+
+        <a
+          href={viewerUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-surface-950/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-lime-300 backdrop-blur hover:bg-surface-950/90 transition-colors"
+          title="Open in a new tab"
+        >
+          <svg
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
+          </svg>
+          Marble
+        </a>
+      </div>
+
+      {description !== null && description.length > 0 && (
+        <p className="mt-3 text-xs text-surface-400 leading-relaxed">
+          <span className="font-mono uppercase tracking-wide text-lime-400/70">
+            Scene prompt —{' '}
+          </span>
+          {description}
+        </p>
+      )}
+    </div>
   );
 }
