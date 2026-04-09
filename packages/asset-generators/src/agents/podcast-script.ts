@@ -9,13 +9,12 @@ import type {
   StrategyBrief,
   StrategyInsight,
 } from '@launchkit/shared';
-import { generateWrittenAsset } from './written-asset-agent.js';
-import {
-  buildAudioCacheKey,
-  synthesizeMultiVoiceDialogue,
-  type PodcastDialogueLine,
-} from '../lib/elevenlabs.js';
-import { accentColorForTone } from '../lib/strategy-style.js';
+import { accentColorForTone } from '../helpers/strategy-style.js';
+import type {
+  ElevenLabsClient,
+  PodcastDialogueLine,
+} from '../clients/elevenlabs.js';
+import type { GenerateWrittenAsset } from './written.js';
 
 /**
  * Podcast script pipeline (Phase 4).
@@ -37,7 +36,7 @@ import { accentColorForTone } from '../lib/strategy-style.js';
  * and is served by the `/api/assets/:id/audio.mp3` route in `apps/web`.
  */
 
-interface PodcastScriptInput {
+export interface PodcastScriptInput {
   assetId: string;
   repoName: string;
   repoAnalysis: RepoAnalysis;
@@ -52,6 +51,11 @@ export interface PodcastScriptResult {
   script: string;
   audioCacheKey: string;
   metadata: Record<string, unknown>;
+}
+
+export interface PodcastScriptAgentDeps {
+  elevenLabs: ElevenLabsClient;
+  writer: GenerateWrittenAsset;
 }
 
 // Conversational TTS lands around 2.3 spoken words per second; we add
@@ -115,69 +119,75 @@ function buildSegments(
   return { segments, totalFrames: cursor };
 }
 
-export async function generatePodcastScriptAsset(
-  input: PodcastScriptInput
-): Promise<PodcastScriptResult> {
-  const writerResult = await generateWrittenAsset({
-    repoAnalysis: input.repoAnalysis,
-    research: input.research,
-    strategy: input.strategy,
-    pastInsights: input.pastInsights,
-    assetType: 'podcast_script',
-    generationInstructions: input.generationInstructions,
-    ...(input.revisionInstructions !== undefined
-      ? { revisionInstructions: input.revisionInstructions }
-      : {}),
-  });
+export function makeGeneratePodcastScriptAsset(deps: PodcastScriptAgentDeps) {
+  return async function generatePodcastScriptAsset(
+    input: PodcastScriptInput
+  ): Promise<PodcastScriptResult> {
+    const writerResult = await deps.writer({
+      repoAnalysis: input.repoAnalysis,
+      research: input.research,
+      strategy: input.strategy,
+      pastInsights: input.pastInsights,
+      assetType: 'podcast_script',
+      generationInstructions: input.generationInstructions,
+      ...(input.revisionInstructions !== undefined
+        ? { revisionInstructions: input.revisionInstructions }
+        : {}),
+    });
 
-  const dialogueLines = parseDialogueLines(writerResult.content);
+    const dialogueLines = parseDialogueLines(writerResult.content);
 
-  if (dialogueLines.length === 0) {
-    // The writer prompt enforces the `Speaker: line` format, but we
-    // fail loud rather than silently rendering a zero-line podcast —
-    // the alternative is a 0-byte MP3 the dashboard would render as a
-    // broken player with no error context.
-    throw new Error(
-      `podcast-script-agent: writer produced 0 parseable dialogue lines from ${writerResult.content.length} chars of output`
+    if (dialogueLines.length === 0) {
+      // The writer prompt enforces the `Speaker: line` format, but we
+      // fail loud rather than silently rendering a zero-line podcast —
+      // the alternative is a 0-byte MP3 the dashboard would render as a
+      // broken player with no error context.
+      throw new Error(
+        `podcast-script-agent: writer produced 0 parseable dialogue lines from ${writerResult.content.length} chars of output`
+      );
+    }
+
+    const audioCacheKey = deps.elevenLabs.buildAudioCacheKey(
+      `${input.assetId}:podcast_script:${writerResult.content}`
     );
-  }
 
-  const audioCacheKey = buildAudioCacheKey(
-    `${input.assetId}:podcast_script:${writerResult.content}`
-  );
+    const audio = await deps.elevenLabs.synthesizeMultiVoiceDialogue({
+      cacheKey: audioCacheKey,
+      lines: dialogueLines,
+    });
 
-  const audio = await synthesizeMultiVoiceDialogue({
-    cacheKey: audioCacheKey,
-    lines: dialogueLines,
-  });
+    const { segments, totalFrames } = buildSegments(dialogueLines);
+    const durationInFrames = Math.max(
+      VIDEO_FPS,
+      totalFrames,
+      Math.ceil(audio.durationSeconds * VIDEO_FPS)
+    );
 
-  const { segments, totalFrames } = buildSegments(dialogueLines);
-  const durationInFrames = Math.max(
-    VIDEO_FPS,
-    totalFrames,
-    Math.ceil(audio.durationSeconds * VIDEO_FPS)
-  );
+    const remotionProps: PodcastWaveformProps = {
+      productName: input.repoName,
+      episodeTitle: `Inside ${input.repoName}: ${input.strategy.positioning.slice(0, 60)}`,
+      accentColor: accentColorForTone(input.strategy.tone),
+      backgroundColor: '#020617',
+      audioSrc: audio.audioPath,
+      durationInFrames,
+      segments,
+    };
 
-  const remotionProps: PodcastWaveformProps = {
-    productName: input.repoName,
-    episodeTitle: `Inside ${input.repoName}: ${input.strategy.positioning.slice(0, 60)}`,
-    accentColor: accentColorForTone(input.strategy.tone),
-    backgroundColor: '#020617',
-    audioSrc: audio.audioPath,
-    durationInFrames,
-    segments,
-  };
-
-  return {
-    script: writerResult.content,
-    audioCacheKey,
-    metadata: {
-      ...writerResult.metadata,
+    return {
+      script: writerResult.content,
       audioCacheKey,
-      audioCached: audio.cached,
-      audioDurationSeconds: audio.durationSeconds,
-      dialogueLineCount: dialogueLines.length,
-      remotionProps,
-    },
+      metadata: {
+        ...writerResult.metadata,
+        audioCacheKey,
+        audioCached: audio.cached,
+        audioDurationSeconds: audio.durationSeconds,
+        dialogueLineCount: dialogueLines.length,
+        remotionProps,
+      },
+    };
   };
 }
+
+export type GeneratePodcastScriptAsset = ReturnType<
+  typeof makeGeneratePodcastScriptAsset
+>;

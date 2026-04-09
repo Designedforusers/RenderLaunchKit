@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Zod schemas for the fal.ai API responses we consume in
- * `apps/worker/src/lib/fal-media-client.ts`.
+ * `./clients/fal.ts`.
  *
  * The fal SDK's `fal.subscribe` returns a `result` object whose
  * `data` field shape varies per model. Each model has its own

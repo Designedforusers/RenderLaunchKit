@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Zod schemas for the World Labs (Marble) API responses we consume in
- * `apps/worker/src/lib/world-labs-client.ts`.
+ * `./clients/world-labs.ts`.
  *
  * The World Labs API is a polling-based long-running operation API:
  *

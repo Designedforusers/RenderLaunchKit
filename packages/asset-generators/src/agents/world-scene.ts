@@ -1,13 +1,13 @@
-import { generateJSON } from '../lib/anthropic-claude-client.js';
-import { generateWorldScene } from '../lib/world-labs-client.js';
 import { WorldScenePromptResultSchema } from '@launchkit/shared';
 import type {
   RepoAnalysis,
   ResearchResult,
   StrategyBrief,
 } from '@launchkit/shared';
+import type { LLMClient } from '../types.js';
+import type { WorldLabsClient } from '../clients/world-labs.js';
 
-interface WorldSceneAgentInput {
+export interface WorldSceneAgentInput {
   repoName: string;
   repoAnalysis: RepoAnalysis;
   research: ResearchResult;
@@ -15,11 +15,16 @@ interface WorldSceneAgentInput {
   generationInstructions: string;
 }
 
-interface WorldSceneAgentResult {
+export interface WorldSceneAgentResult {
   marbleUrl: string;
   thumbnailUrl: string | null;
   prompt: string;
   metadata: Record<string, unknown>;
+}
+
+export interface WorldSceneAgentDeps {
+  llm: LLMClient;
+  worldLabs: WorldLabsClient;
 }
 
 const SYSTEM_PROMPT = `You are a 3D environment art director who specialises in product placement scenes. Your job is to write a prompt for the World Labs Marble API that produces a photoreal 3D world a user can walk through, showing the developer product or service being used in a real-world setting.
@@ -48,10 +53,11 @@ Choosing the displayName:
 - Title case, no quotes, no trailing punctuation.
 - Should describe the setting, not the product (e.g. "Late-Night Home Studio", not "LaunchKit Demo").`;
 
-export async function generateWorldSceneAsset(
-  input: WorldSceneAgentInput
-): Promise<WorldSceneAgentResult> {
-  const userPrompt = `Design a 3D world that shows the following product being used in a real-life setting:
+export function makeGenerateWorldSceneAsset(deps: WorldSceneAgentDeps) {
+  return async function generateWorldSceneAsset(
+    input: WorldSceneAgentInput
+  ): Promise<WorldSceneAgentResult> {
+    const userPrompt = `Design a 3D world that shows the following product being used in a real-life setting:
 
 **Product:** ${input.repoAnalysis.description || input.research.targetAudience}
 **Repo Name:** ${input.repoName}
@@ -65,47 +71,52 @@ export async function generateWorldSceneAsset(
 
 Pick a setting where someone in the target audience would actually use this product day-to-day. The world should sell the feeling of using the product, not explain it.`;
 
-  // Get Claude to draft the world prompt. Validated through
-  // WorldScenePromptResultSchema so a missing `worldPrompt`, an
-  // unknown `model`, or an empty `displayName` throws here instead of
-  // crashing the World Labs client downstream with a 4xx that hides
-  // the underlying mistake in the agent output.
-  const promptResult = await generateJSON(
-    WorldScenePromptResultSchema,
-    SYSTEM_PROMPT,
-    userPrompt
-  );
+    // Get Claude to draft the world prompt. Validated through
+    // WorldScenePromptResultSchema so a missing `worldPrompt`, an
+    // unknown `model`, or an empty `displayName` throws here instead of
+    // crashing the World Labs client downstream with a 4xx that hides
+    // the underlying mistake in the agent output.
+    const promptResult = await deps.llm.generateJSON(
+      WorldScenePromptResultSchema,
+      SYSTEM_PROMPT,
+      userPrompt
+    );
 
-  // Generate the world via the World Labs Marble API. The client
-  // blocks for ~5 minutes while the operation is polled and returns
-  // a normalised result with the public viewer URL plus every asset
-  // URL the dashboard might want to surface.
-  const world = await generateWorldScene({
-    displayName: promptResult.displayName,
-    worldPrompt: promptResult.worldPrompt,
-    model: promptResult.model,
-  });
-
-  return {
-    marbleUrl: world.marbleUrl,
-    thumbnailUrl: world.thumbnailUrl,
-    prompt: world.prompt,
-    metadata: {
-      worldLabs: {
-        worldId: world.worldId,
-        operationId: world.operationId,
-        marbleUrl: world.marbleUrl,
-        thumbnailUrl: world.thumbnailUrl,
-        panoUrl: world.panoUrl,
-        splatUrl: world.splatUrl,
-        colliderMeshUrl: world.colliderMeshUrl,
-        caption: world.caption,
-        model: world.model,
-      },
+    // Generate the world via the World Labs Marble API. The client
+    // blocks for ~5 minutes while the operation is polled and returns
+    // a normalised result with the public viewer URL plus every asset
+    // URL the dashboard might want to surface.
+    const world = await deps.worldLabs.generateWorldScene({
       displayName: promptResult.displayName,
-      prompt: world.prompt,
-      reasoning: promptResult.reasoning,
+      worldPrompt: promptResult.worldPrompt,
       model: promptResult.model,
-    },
+    });
+
+    return {
+      marbleUrl: world.marbleUrl,
+      thumbnailUrl: world.thumbnailUrl,
+      prompt: world.prompt,
+      metadata: {
+        worldLabs: {
+          worldId: world.worldId,
+          operationId: world.operationId,
+          marbleUrl: world.marbleUrl,
+          thumbnailUrl: world.thumbnailUrl,
+          panoUrl: world.panoUrl,
+          splatUrl: world.splatUrl,
+          colliderMeshUrl: world.colliderMeshUrl,
+          caption: world.caption,
+          model: world.model,
+        },
+        displayName: promptResult.displayName,
+        prompt: world.prompt,
+        reasoning: promptResult.reasoning,
+        model: promptResult.model,
+      },
+    };
   };
 }
+
+export type GenerateWorldSceneAsset = ReturnType<
+  typeof makeGenerateWorldSceneAsset
+>;

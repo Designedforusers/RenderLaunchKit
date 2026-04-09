@@ -8,6 +8,7 @@
   "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/shared" },
-    { "path": "../../packages/video" }
+    { "path": "../../packages/video" },
+    { "path": "../../packages/asset-generators" }
   ]
 }

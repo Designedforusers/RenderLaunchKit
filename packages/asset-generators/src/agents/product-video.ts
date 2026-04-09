@@ -1,0 +1,251 @@
+import type { LaunchKitVideoProps, LaunchKitVideoShot } from '@launchkit/video';
+import {
+  getLaunchKitVideoDurationInFrames,
+  VIDEO_FPS,
+} from '@launchkit/video';
+import { StoryboardResultSchema } from '@launchkit/shared';
+import type {
+  RepoAnalysis,
+  ResearchResult,
+  StoryboardResult,
+  StrategyBrief,
+} from '@launchkit/shared';
+import { accentColorForTone } from '../helpers/strategy-style.js';
+import type { LLMClient } from '../types.js';
+import type { FalMediaClient } from '../clients/fal.js';
+
+export interface VideoDirectorInput {
+  repoName: string;
+  repoAnalysis: RepoAnalysis;
+  research: ResearchResult;
+  strategy: StrategyBrief;
+  generationInstructions: string;
+}
+
+export interface VideoStoryboardResult {
+  storyboard: StoryboardResult;
+  thumbnailUrl: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface ProductVideoResult {
+  videoUrl: string;
+  thumbnailUrl: string;
+  storyboard: StoryboardResult;
+  metadata: Record<string, unknown>;
+}
+
+export interface ProductVideoAgentDeps {
+  llm: LLMClient;
+  fal: FalMediaClient;
+}
+
+const SYSTEM_PROMPT = `You are a video director specializing in developer product demo videos. Your job is to create a storyboard and generation prompts for Kling 3.0 video generation.
+
+Output JSON:
+{
+  "concept": "overall video concept in one sentence",
+  "shots": [
+    {
+      "headline": "short on-screen headline",
+      "caption": "one or two concise supporting sentences",
+      "visualPrompt": "detailed visual prompt for a hero still/image",
+      "duration": 2.5,
+      "accent": "optional short highlighted word or phrase"
+    }
+  ],
+  "voiceoverNotes": "notes for matching voiceover timing"
+}
+
+Guidelines:
+- Keep shots simple and clear
+- 2-4 shots total
+- Abstract/conceptual works better than literal UI screenshots
+- Think: code flowing, data visualizing, connections forming
+- Dark themes with bright accents match developer aesthetics
+- The headline must be under 8 words
+- The caption must be under 22 words
+- First shot: establish the problem/context
+- Last shot: show the satisfying result/solution`;
+
+function toFrames(durationSeconds: number): number {
+  return Math.max(Math.round(durationSeconds * VIDEO_FPS), 30);
+}
+
+function buildRemotionProps(input: {
+  repoName: string;
+  repoAnalysis: RepoAnalysis;
+  strategy: StrategyBrief;
+  storyboard: StoryboardResult;
+  shotImages: string[];
+}): LaunchKitVideoProps {
+  const shots: LaunchKitVideoShot[] = input.storyboard.shots.map(
+    (shot, index) => {
+      // `shotImages` and `storyboard.shots` are produced from the same
+      // model output in `planVideoPackage`, so the lengths must match.
+      // A mismatch means the upstream pipeline broke its invariant; we
+      // fail loudly here instead of silently rendering a Remotion shot
+      // with an empty image URL (which would otherwise produce a
+      // mostly-black video the user would only catch on playback).
+      const imageUrl = input.shotImages[index];
+      if (imageUrl === undefined) {
+        throw new Error(
+          `Storyboard shot ${index + 1} has no image — got ${input.shotImages.length} images for ${input.storyboard.shots.length} shots`
+        );
+      }
+      return {
+        id: `shot-${index + 1}`,
+        headline: shot.headline,
+        caption: shot.caption,
+        imageUrl,
+        durationInFrames: toFrames(shot.duration),
+        ...(shot.accent !== undefined ? { accent: shot.accent } : {}),
+      };
+    }
+  );
+
+  return {
+    title: input.repoName,
+    subtitle: input.strategy.positioning,
+    badge: 'Launch Video',
+    accentColor: accentColorForTone(input.strategy.tone),
+    backgroundColor: '#020617',
+    shots,
+    outroCta: `Ship ${input.repoName} with a sharper launch story.`,
+  };
+}
+
+function makePlanVideoPackage(deps: ProductVideoAgentDeps) {
+  return async function planVideoPackage(input: VideoDirectorInput): Promise<{
+    storyboard: StoryboardResult;
+    thumbnailUrl: string;
+    remotionProps: LaunchKitVideoProps;
+  }> {
+    const userPrompt = `Create a short developer-product launch video plan for:
+
+**Product:** ${input.repoAnalysis.description || input.research.targetAudience}
+**Repo Name:** ${input.repoName}
+**Category:** ${input.repoAnalysis.category}
+**Positioning:** ${input.strategy.positioning}
+**Tone:** ${input.strategy.tone}
+
+**Asset Generation Instructions:** ${input.generationInstructions}
+
+Return a concise storyboard for a polished launch video and write prompts for strong still visuals that can anchor each shot.`;
+
+    const storyboard = await deps.llm.generateJSON(
+      StoryboardResultSchema,
+      SYSTEM_PROMPT,
+      userPrompt
+    );
+    const shotImages = await Promise.all(
+      storyboard.shots.map((shot) =>
+        deps.fal
+          .generateImage(shot.visualPrompt, {
+            aspectRatio: '16:9',
+            style: 'cinematic dark tech',
+          })
+          .then((image) => image.url)
+      )
+    );
+
+    return {
+      storyboard,
+      thumbnailUrl: shotImages[0] ?? '',
+      remotionProps: buildRemotionProps({
+        repoName: input.repoName,
+        repoAnalysis: input.repoAnalysis,
+        strategy: input.strategy,
+        storyboard,
+        shotImages,
+      }),
+    };
+  };
+}
+
+export function makeGenerateVideoStoryboardAsset(deps: ProductVideoAgentDeps) {
+  const planVideoPackage = makePlanVideoPackage(deps);
+  return async function generateVideoStoryboardAsset(
+    input: VideoDirectorInput
+  ): Promise<VideoStoryboardResult> {
+    const plan = await planVideoPackage(input);
+
+    return {
+      storyboard: plan.storyboard,
+      thumbnailUrl: plan.thumbnailUrl,
+      metadata: {
+        renderer: 'remotion',
+        remotionProps: plan.remotionProps,
+        concept: plan.storyboard.concept,
+        shotCount: plan.storyboard.shots.length,
+        totalDurationInFrames: getLaunchKitVideoDurationInFrames(
+          plan.remotionProps
+        ),
+        totalDurationSeconds:
+          getLaunchKitVideoDurationInFrames(plan.remotionProps) / VIDEO_FPS,
+        voiceoverNotes: plan.storyboard.voiceoverNotes,
+      },
+    };
+  };
+}
+
+export function makeGenerateProductVideoAsset(deps: ProductVideoAgentDeps) {
+  const planVideoPackage = makePlanVideoPackage(deps);
+  return async function generateProductVideoAsset(
+    input: VideoDirectorInput
+  ): Promise<ProductVideoResult> {
+    const plan = await planVideoPackage(input);
+    let videoUrl = '';
+    let renderer: 'fal' | 'remotion' = 'remotion';
+
+    // Previously this branch checked `env.FAL_API_KEY` directly. The
+    // package does not touch env — instead the fal client reports its
+    // own configured state via `isConfigured`, which the worker-side
+    // factory sets from the same env var.
+    if (deps.fal.isConfigured) {
+      const video = await deps.fal.generateVideo(
+        plan.storyboard.shots.map((shot) => shot.visualPrompt).join('. '),
+        {
+          imageUrl: plan.thumbnailUrl,
+          duration: Math.min(
+            Math.max(
+              plan.storyboard.shots.reduce(
+                (sum, shot) => sum + shot.duration,
+                0
+              ),
+              4
+            ),
+            10
+          ),
+        }
+      );
+      videoUrl = video.url;
+      renderer = 'fal';
+    }
+
+    return {
+      videoUrl,
+      thumbnailUrl: plan.thumbnailUrl,
+      storyboard: plan.storyboard,
+      metadata: {
+        renderer,
+        remotionProps: plan.remotionProps,
+        concept: plan.storyboard.concept,
+        shotCount: plan.storyboard.shots.length,
+        totalDurationInFrames: getLaunchKitVideoDurationInFrames(
+          plan.remotionProps
+        ),
+        totalDurationSeconds:
+          getLaunchKitVideoDurationInFrames(plan.remotionProps) / VIDEO_FPS,
+        voiceoverNotes: plan.storyboard.voiceoverNotes,
+      },
+    };
+  };
+}
+
+export type GenerateVideoStoryboardAsset = ReturnType<
+  typeof makeGenerateVideoStoryboardAsset
+>;
+export type GenerateProductVideoAsset = ReturnType<
+  typeof makeGenerateProductVideoAsset
+>;

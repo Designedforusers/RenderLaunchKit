@@ -23,7 +23,7 @@ import assert from 'node:assert/strict';
 
 test('OperationSchema parses an in-flight world generation operation', async () => {
   const { OperationSchema } = await import(
-    '../apps/worker/dist/lib/schemas/world-labs.js'
+    '../packages/asset-generators/dist/clients/schemas/world-labs.js'
   );
 
   const inFlight = {
@@ -48,7 +48,7 @@ test('OperationSchema parses an in-flight world generation operation', async () 
 
 test('OperationSchema parses a completed world generation operation with full snapshot', async () => {
   const { OperationSchema } = await import(
-    '../apps/worker/dist/lib/schemas/world-labs.js'
+    '../packages/asset-generators/dist/clients/schemas/world-labs.js'
   );
 
   const completed = {
@@ -108,7 +108,7 @@ test('OperationSchema parses a completed world generation operation with full sn
 
 test('WorldEnvelopeSchema parses the canonical GET /worlds/{id} response', async () => {
   const { WorldEnvelopeSchema } = await import(
-    '../apps/worker/dist/lib/schemas/world-labs.js'
+    '../packages/asset-generators/dist/clients/schemas/world-labs.js'
   );
 
   const envelope = {
@@ -135,7 +135,7 @@ test('WorldEnvelopeSchema parses the canonical GET /worlds/{id} response', async
 
 test('OperationSchema rejects an envelope missing the operation_id field', async () => {
   const { OperationSchema } = await import(
-    '../apps/worker/dist/lib/schemas/world-labs.js'
+    '../packages/asset-generators/dist/clients/schemas/world-labs.js'
   );
 
   const malformed = {

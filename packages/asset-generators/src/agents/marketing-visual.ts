@@ -1,14 +1,30 @@
-import { generateJSON } from '../lib/anthropic-claude-client.js';
-import { generateImage } from '../lib/fal-media-client.js';
 import { ImagePromptResultSchema } from '@launchkit/shared';
-import type { RepoAnalysis, ResearchResult, StrategyBrief } from '@launchkit/shared';
+import type {
+  RepoAnalysis,
+  ResearchResult,
+  StrategyBrief,
+} from '@launchkit/shared';
+import type { LLMClient } from '../types.js';
+import type { FalMediaClient } from '../clients/fal.js';
 
-interface ArtDirectorInput {
+export interface ArtDirectorInput {
   repoAnalysis: RepoAnalysis;
   research: ResearchResult;
   strategy: StrategyBrief;
   assetType: 'og_image' | 'social_card';
   generationInstructions: string;
+}
+
+export interface MarketingImageResult {
+  url: string;
+  prompt: string;
+  style: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface MarketingVisualAgentDeps {
+  llm: LLMClient;
+  fal: FalMediaClient;
 }
 
 const SYSTEM_PROMPT = `You are an art director specializing in developer tool marketing visuals. Your job is to create image generation prompts for FLUX.2 Pro that will produce stunning, professional images.
@@ -36,10 +52,13 @@ Good prompts are specific about:
 - Mood (professional, playful, cutting-edge, etc.)
 - What NOT to include (text, faces, specific logos)`;
 
-export async function generateMarketingImageAsset(
-  input: ArtDirectorInput
-): Promise<{ url: string; prompt: string; style: string; metadata: Record<string, unknown> }> {
-  const userPrompt = `Create an image prompt for a ${input.assetType === 'og_image' ? 'Open Graph image (1200x630)' : 'social media card'} for:
+export function makeGenerateMarketingImageAsset(
+  deps: MarketingVisualAgentDeps
+) {
+  return async function generateMarketingImageAsset(
+    input: ArtDirectorInput
+  ): Promise<MarketingImageResult> {
+    const userPrompt = `Create an image prompt for a ${input.assetType === 'og_image' ? 'Open Graph image (1200x630)' : 'social media card'} for:
 
 **Product:** ${input.repoAnalysis.description || input.research.targetAudience}
 **Language:** ${input.repoAnalysis.language}
@@ -51,29 +70,34 @@ export async function generateMarketingImageAsset(
 
 Design an image that a developer would stop scrolling for.`;
 
-  // Get Claude to craft the optimal image prompt — validated against
-  // ImagePromptResultSchema so a missing `prompt` or `style` field
-  // throws here instead of crashing the fal.ai client downstream.
-  const promptResult = await generateJSON(
-    ImagePromptResultSchema,
-    SYSTEM_PROMPT,
-    userPrompt
-  );
+    // Get Claude to craft the optimal image prompt — validated against
+    // ImagePromptResultSchema so a missing `prompt` or `style` field
+    // throws here instead of crashing the fal.ai client downstream.
+    const promptResult = await deps.llm.generateJSON(
+      ImagePromptResultSchema,
+      SYSTEM_PROMPT,
+      userPrompt
+    );
 
-  // Generate the image via fal.ai
-  const image = await generateImage(promptResult.prompt, {
-    aspectRatio: input.assetType === 'og_image' ? '16:9' : '1:1',
-    style: promptResult.style,
-  });
+    // Generate the image via fal.ai
+    const image = await deps.fal.generateImage(promptResult.prompt, {
+      aspectRatio: input.assetType === 'og_image' ? '16:9' : '1:1',
+      style: promptResult.style,
+    });
 
-  return {
-    url: image.url,
-    prompt: promptResult.prompt,
-    style: promptResult.style,
-    metadata: {
-      reasoning: promptResult.reasoning,
-      dimensions: input.assetType === 'og_image' ? '1200x630' : '1080x1080',
-      assetType: input.assetType,
-    },
+    return {
+      url: image.url,
+      prompt: promptResult.prompt,
+      style: promptResult.style,
+      metadata: {
+        reasoning: promptResult.reasoning,
+        dimensions: input.assetType === 'og_image' ? '1200x630' : '1080x1080',
+        assetType: input.assetType,
+      },
+    };
   };
 }
+
+export type GenerateMarketingImageAsset = ReturnType<
+  typeof makeGenerateMarketingImageAsset
+>;
