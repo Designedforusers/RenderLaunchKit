@@ -48,10 +48,10 @@
     "typescript-eslint": "^8.18.0"
   },
   "dependencies": {
-    "@types/pg": "^8.11.0",
+    "@types/pg": "^8.20.0",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.38.0",
-    "pg": "^8.13.0"
+    "pg": "^8.20.0"
   },
   "engines": {
     "node": ">=22.0.0"
