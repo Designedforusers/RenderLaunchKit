@@ -67,6 +67,7 @@ services:
         - migrations/**
         - packages/shared/**
         - packages/video/**
+        - packages/asset-generators/**
         - apps/worker/**
     envVars:
       - key: DATABASE_URL

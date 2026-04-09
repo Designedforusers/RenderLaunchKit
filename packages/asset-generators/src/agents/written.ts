@@ -1,4 +1,3 @@
-import { generateContent } from '../lib/anthropic-claude-client.js';
 import {
   parseVoiceoverScript,
 } from '@launchkit/shared';
@@ -9,8 +8,9 @@ import type {
   StrategyBrief,
   StrategyInsight,
 } from '@launchkit/shared';
+import type { LLMClient } from '../types.js';
 
-interface WriterInput {
+export interface WriterInput {
   repoAnalysis: RepoAnalysis;
   research: ResearchResult;
   strategy: StrategyBrief;
@@ -18,6 +18,15 @@ interface WriterInput {
   assetType: AssetType;
   generationInstructions: string;
   revisionInstructions?: string;
+}
+
+export interface WriterResult {
+  content: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface WriterAgentDeps {
+  llm: LLMClient;
 }
 
 // `as const` plus an `AssetType` index lets us hand each lookup back
@@ -184,18 +193,19 @@ function isWriterAssetType(value: string): value is WriterAssetType {
   return value in ASSET_PROMPTS;
 }
 
-export async function generateWrittenAsset(
-  input: WriterInput
-): Promise<{ content: string; metadata: Record<string, unknown> }> {
-  // `ASSET_PROMPTS` is `as const`, so the keys are a literal union
-  // and every lookup is a definitely-defined string under
-  // `noUncheckedIndexedAccess`. Unknown asset types fall back to the
-  // blog-post prompt.
-  const systemPrompt = isWriterAssetType(input.assetType)
-    ? ASSET_PROMPTS[input.assetType]
-    : ASSET_PROMPTS.blog_post;
+export function makeGenerateWrittenAsset(deps: WriterAgentDeps) {
+  return async function generateWrittenAsset(
+    input: WriterInput
+  ): Promise<WriterResult> {
+    // `ASSET_PROMPTS` is `as const`, so the keys are a literal union
+    // and every lookup is a definitely-defined string under
+    // `noUncheckedIndexedAccess`. Unknown asset types fall back to the
+    // blog-post prompt.
+    const systemPrompt = isWriterAssetType(input.assetType)
+      ? ASSET_PROMPTS[input.assetType]
+      : ASSET_PROMPTS.blog_post;
 
-  const context = `## Product Context
+    const context = `## Product Context
 
 **Repository:** ${input.repoAnalysis.description || input.research.targetAudience}
 **Language:** ${input.repoAnalysis.language}
@@ -221,78 +231,81 @@ ${input.revisionInstructions ? `## Revision Instructions\n${input.revisionInstru
 
 ${input.pastInsights.length > 0 ? `## Insights from Similar Projects\n${input.pastInsights.map((i) => `- ${i.insight}`).join('\n')}` : ''}`;
 
-  const content = await generateContent(systemPrompt, context, {
-    maxTokens: 4096,
-    temperature: 0.7,
-  });
+    const content = await deps.llm.generateContent(systemPrompt, context, {
+      maxTokens: 4096,
+      temperature: 0.7,
+    });
 
-  // Extract metadata based on asset type. We assemble per-type
-  // metadata first, then merge it into the common envelope so the
-  // result keeps a single named shape.
-  const baseMetadata = {
-    assetType: input.assetType,
-    tone: input.strategy.tone,
-  };
+    // Extract metadata based on asset type. We assemble per-type
+    // metadata first, then merge it into the common envelope so the
+    // result keeps a single named shape.
+    const baseMetadata = {
+      assetType: input.assetType,
+      tone: input.strategy.tone,
+    };
 
-  let extraMetadata: Record<string, unknown> = {};
+    let extraMetadata: Record<string, unknown> = {};
 
-  if (input.assetType === 'blog_post') {
-    const titleMatch = /^#\s+(.+)/m.exec(content);
-    const subtitleMatch = /^##\s+(.+)/m.exec(content);
-    extraMetadata = {
-      title: titleMatch?.[1] ?? 'Untitled',
-      subtitle: subtitleMatch?.[1] ?? '',
-      wordCount: content.split(/\s+/).length,
-    };
-  } else if (input.assetType === 'twitter_thread') {
-    const tweets = content.split(/\n\n+/).filter((t) => t.trim().length > 0);
-    extraMetadata = { tweetCount: tweets.length };
-  } else if (input.assetType === 'product_hunt_description') {
-    const taglineMatch = /\*\*Tagline:\*\*\s*(.+)/.exec(content);
-    extraMetadata = { tagline: taglineMatch?.[1]?.trim() ?? '' };
-  } else if (input.assetType === 'voiceover_script') {
-    const parsed = parseVoiceoverScript(content);
-    extraMetadata = {
-      segments: parsed.segments,
-      plainText: parsed.plainText,
-      segmentCount: parsed.segmentCount,
-    };
-  } else if (input.assetType === 'tips') {
-    const tipCount = content
-      .split('\n')
-      .filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
-    extraMetadata = { tipCount };
-  } else if (input.assetType === 'voice_commercial') {
-    const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
-    extraMetadata = {
-      wordCount,
-      estimatedDurationSeconds: Math.round(wordCount / 2.5),
-    };
-  } else if (input.assetType === 'podcast_script') {
-    const lines = content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => /^(Alex|Sam):\s/.test(line));
-    let speakerTurns = 0;
-    let lastSpeaker: string | null = null;
-    let totalWords = 0;
-    for (const line of lines) {
-      const speaker = line.startsWith('Alex:') ? 'Alex' : 'Sam';
-      if (speaker !== lastSpeaker) {
-        speakerTurns += 1;
-        lastSpeaker = speaker;
+    if (input.assetType === 'blog_post') {
+      const titleMatch = /^#\s+(.+)/m.exec(content);
+      const subtitleMatch = /^##\s+(.+)/m.exec(content);
+      extraMetadata = {
+        title: titleMatch?.[1] ?? 'Untitled',
+        subtitle: subtitleMatch?.[1] ?? '',
+        wordCount: content.split(/\s+/).length,
+      };
+    } else if (input.assetType === 'twitter_thread') {
+      const tweets = content.split(/\n\n+/).filter((t) => t.trim().length > 0);
+      extraMetadata = { tweetCount: tweets.length };
+    } else if (input.assetType === 'product_hunt_description') {
+      const taglineMatch = /\*\*Tagline:\*\*\s*(.+)/.exec(content);
+      extraMetadata = { tagline: taglineMatch?.[1]?.trim() ?? '' };
+    } else if (input.assetType === 'voiceover_script') {
+      const parsed = parseVoiceoverScript(content);
+      extraMetadata = {
+        segments: parsed.segments,
+        plainText: parsed.plainText,
+        segmentCount: parsed.segmentCount,
+      };
+    } else if (input.assetType === 'tips') {
+      const tipCount = content
+        .split('\n')
+        .filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
+      extraMetadata = { tipCount };
+    } else if (input.assetType === 'voice_commercial') {
+      const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
+      extraMetadata = {
+        wordCount,
+        estimatedDurationSeconds: Math.round(wordCount / 2.5),
+      };
+    } else if (input.assetType === 'podcast_script') {
+      const lines = content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => /^(Alex|Sam):\s/.test(line));
+      let speakerTurns = 0;
+      let lastSpeaker: string | null = null;
+      let totalWords = 0;
+      for (const line of lines) {
+        const speaker = line.startsWith('Alex:') ? 'Alex' : 'Sam';
+        if (speaker !== lastSpeaker) {
+          speakerTurns += 1;
+          lastSpeaker = speaker;
+        }
+        const spoken = line.slice(speaker.length + 1).trim();
+        totalWords += spoken.split(/\s+/).filter((w) => w.length > 0).length;
       }
-      const spoken = line.slice(speaker.length + 1).trim();
-      totalWords += spoken.split(/\s+/).filter((w) => w.length > 0).length;
+      const speechSeconds = totalWords / 2.3;
+      const gapSeconds = speakerTurns * 0.4;
+      extraMetadata = {
+        lineCount: lines.length,
+        speakerTurns,
+        estimatedDurationSeconds: Math.round(speechSeconds + gapSeconds),
+      };
     }
-    const speechSeconds = totalWords / 2.3;
-    const gapSeconds = speakerTurns * 0.4;
-    extraMetadata = {
-      lineCount: lines.length,
-      speakerTurns,
-      estimatedDurationSeconds: Math.round(speechSeconds + gapSeconds),
-    };
-  }
 
-  return { content, metadata: { ...baseMetadata, ...extraMetadata } };
+    return { content, metadata: { ...baseMetadata, ...extraMetadata } };
+  };
 }
+
+export type GenerateWrittenAsset = ReturnType<typeof makeGenerateWrittenAsset>;

@@ -1,17 +1,19 @@
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import type { GenerateAssetJobData } from '@launchkit/shared';
-import { generateWrittenAsset } from '../agents/written-asset-agent.js';
-import { generateMarketingImageAsset } from '../agents/marketing-visual-agent.js';
-import {
-  generateProductVideoAsset,
-  generateVideoStoryboardAsset,
-} from '../agents/product-video-agent.js';
-import { generateVoiceCommercialAsset } from '../agents/voice-commercial-agent.js';
-import { generatePodcastScriptAsset } from '../agents/podcast-script-agent.js';
-import { generateWorldSceneAsset } from '../agents/world-scene-agent.js';
+import { assetGenerators } from '../lib/asset-generators-instance.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
+
+const {
+  generateWrittenAsset,
+  generateMarketingImageAsset,
+  generateProductVideoAsset,
+  generateVideoStoryboardAsset,
+  generateVoiceCommercialAsset,
+  generatePodcastScriptAsset,
+  generateWorldSceneAsset,
+} = assetGenerators;
 
 /**
  * Unified content generation processor.

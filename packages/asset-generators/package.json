@@ -1,0 +1,24 @@
+{
+  "name": "@launchkit/asset-generators",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@launchkit/shared": "*",
+    "@launchkit/video": "*",
+    "@fal-ai/client": "^1.2.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

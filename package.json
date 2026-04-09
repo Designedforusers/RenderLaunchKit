@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build:shared && npm run build:apps",
-    "build:shared": "npm run build -w packages/shared && npm run build -w packages/video",
+    "build:shared": "npm run build -w packages/shared && npm run build -w packages/video && npm run build -w packages/asset-generators",
     "build:apps": "npm run build -w apps/web && npm run build -w apps/worker && npm run build -w apps/cron && npm run build -w apps/dashboard",
     "video:studio": "npm run studio -w packages/video",
     "dev": "concurrently -n web,worker,cron,dash -c blue,green,yellow,magenta \"npm run dev -w apps/web\" \"npm run dev -w apps/worker\" \"npm run dev -w apps/cron\" \"npm run dev -w apps/dashboard\"",
