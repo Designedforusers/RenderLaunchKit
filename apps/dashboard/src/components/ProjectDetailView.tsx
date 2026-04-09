@@ -9,6 +9,7 @@ import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import { ProjectCostChip } from './ProjectCostChip.js';
+import { PikaMeetingCard } from './PikaMeetingCard.js';
 import { Tooltip } from './ui/index.js';
 import { AssetGallery } from './gallery/index.js';
 import {
@@ -418,6 +419,13 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                   />
                 )}
               />
+              {/* Pika video-meeting card — rendered after the asset
+                  gallery so it reads as the "next action" once the
+                  launch kit is generated. The card is self-gated:
+                  it hides itself until the initial list fetch lands
+                  (to avoid a flash of empty state), and its Invite
+                  button is disabled while a session is in flight. */}
+              <PikaMeetingCard projectId={project.id} />
             </div>
           )}
         </div>

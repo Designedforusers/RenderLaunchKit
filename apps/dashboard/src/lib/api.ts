@@ -2,10 +2,17 @@ import { z } from 'zod';
 import {
   AssetResponseSchema,
   CreateProjectResponseSchema,
+  PikaInviteResponseSchema,
+  PikaMeetingSessionDetailResponseSchema,
+  PikaMeetingSessionListResponseSchema,
   ProjectCostsResponseSchema,
   ProjectResponseSchema,
 } from '@launchkit/shared';
-import type { AssetResponse, ProjectCostsResponse } from '@launchkit/shared';
+import type {
+  AssetResponse,
+  PikaMeetingSessionRow,
+  ProjectCostsResponse,
+} from '@launchkit/shared';
 
 const API_BASE = '/api';
 
@@ -112,6 +119,7 @@ export type ProjectDetail = z.infer<typeof DashboardProjectDetailSchema>;
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 export type Job = z.infer<typeof JobSummarySchema>;
 export type ProjectCosts = ProjectCostsResponse;
+export type PikaMeetingSession = PikaMeetingSessionRow;
 
 // Small helpers for the few endpoints that return a custom envelope
 // shape rather than a documented domain object.
@@ -194,6 +202,46 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ instructions }),
     }),
+
+  // Pika video meeting sessions
+  //
+  // The four endpoints map 1:1 to the worker + web surface:
+  //
+  //   listProjectMeetings  → GET    /projects/:id/meetings
+  //   getProjectMeeting    → GET    /projects/:id/meetings/:sessionId
+  //   createProjectMeeting → POST   /projects/:id/meetings
+  //   endProjectMeeting    → POST   /projects/:id/meetings/:sessionId/leave
+  //
+  // All four go through the schema-validated `request()` helper so
+  // a server-side schema drift surfaces here rather than crashing
+  // downstream React components.
+  listProjectMeetings: (projectId: string) =>
+    request(
+      PikaMeetingSessionListResponseSchema,
+      `/projects/${projectId}/meetings`
+    ),
+
+  getProjectMeeting: (projectId: string, sessionRowId: string) =>
+    request(
+      PikaMeetingSessionDetailResponseSchema,
+      `/projects/${projectId}/meetings/${sessionRowId}`
+    ),
+
+  createProjectMeeting: (
+    projectId: string,
+    body: { meetUrl: string; botName?: string; voiceId?: string }
+  ) =>
+    request(PikaInviteResponseSchema, `/projects/${projectId}/meetings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  endProjectMeeting: (projectId: string, sessionRowId: string) =>
+    request(
+      PikaMeetingSessionDetailResponseSchema,
+      `/projects/${projectId}/meetings/${sessionRowId}/leave`,
+      { method: 'POST' }
+    ),
 
   // Health
   health: () => request(HealthSchema, '/health'),
