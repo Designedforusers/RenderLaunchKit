@@ -33,6 +33,14 @@ export const CostEventProviderSchema = z.enum([
   'elevenlabs',
   'world_labs',
   'voyage',
+  // Pika — charged per minute of meeting-bot runtime. See
+  // `computePikaMeetingCostCents` in `../pricing.ts` for the rate.
+  // Unlike the asset-generation providers above, a `pika` cost
+  // event is tied to a `pika_meeting_sessions.id` rather than an
+  // `assets.id` — the worker's leave processor writes the event
+  // against a synthetic asset-less row (assetId is nullable on the
+  // cost-events table; see Commit 3 migration).
+  'pika',
 ]);
 export type CostEventProvider = z.infer<typeof CostEventProviderSchema>;
 

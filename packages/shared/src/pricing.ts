@@ -119,6 +119,25 @@ export const VOYAGE_PRICING: Record<string, { centsPerMillionTokens: number }> =
   'voyage-3-large': { centsPerMillionTokens: 18 },
 };
 
+// ── Pika (PikaStream video meeting) ─────────────────────────────────
+//
+// https://www.pika.me/dev — rates as of 2026-04.
+//
+// PikaStream meeting sessions bill per minute of meeting-bot runtime
+// at a flat $0.275 / minute regardless of avatar, voice, or platform.
+// The session duration is computed at leave time as
+// `ended_at - started_at` in seconds and converted to cents here.
+//
+// A 5-minute meeting lands at $1.375 ≈ 138 cents. A 30-minute meeting
+// (the auto-timeout ceiling) maxes out at $8.25 ≈ 825 cents. The
+// operator sees the running total on the project cost chip on the
+// dashboard via the same aggregate endpoint every other provider
+// feeds (`GET /api/projects/:id/costs`).
+
+export const PIKA_PRICING: { centsPerMinute: number } = {
+  centsPerMinute: 27.5,
+};
+
 // ── Computation helpers ─────────────────────────────────────────────
 
 /**
@@ -223,4 +242,24 @@ export function computeVoyageCostCents(
     return 0;
   }
   return Math.ceil((tokenCount * rates.centsPerMillionTokens) / 1_000_000);
+}
+
+/**
+ * Compute the Pika meeting cost in integer cents for a given
+ * duration in seconds. Pika bills per minute of bot runtime at a
+ * flat rate; we convert seconds to minutes without rounding the
+ * minute count, then `Math.ceil` the fractional-cent result so the
+ * integer-cents invariant holds.
+ *
+ * A duration of 0 seconds returns 0 (not a minimum charge) because
+ * the join-failure path can leave a row with `started_at === null`
+ * and the leave processor must not bill for a never-started session.
+ * The caller is expected to guard that case, but returning 0 here is
+ * the safe default if they don't.
+ */
+export function computePikaMeetingCostCents(durationSeconds: number): number {
+  if (durationSeconds <= 0) {
+    return 0;
+  }
+  return Math.ceil((durationSeconds / 60) * PIKA_PRICING.centsPerMinute);
 }
