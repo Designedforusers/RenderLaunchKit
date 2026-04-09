@@ -91,6 +91,13 @@ export type {
   // asset feedback event
   AssetFeedbackEvent,
   AssetFeedbackEventRequest,
+  // asset cost event (Phase 9 cost tracking)
+  AssetCostBreakdown,
+  AssetCostEventRow,
+  CostEvent,
+  CostEventProvider,
+  ProjectCostsByProvider,
+  ProjectCostsResponse,
   // ── Phase 5: influencer discovery pipeline ──
   // influencer candidate (agent/matcher output, not a DB row)
   InfluencerCandidate,

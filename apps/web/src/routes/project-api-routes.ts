@@ -215,6 +215,8 @@ projectApiRoutes.get('/:id', async (c) => {
       userApproved: a.userApproved,
       userEdited: a.userEdited,
       version: a.version,
+      costCents: a.costCents,
+      costBreakdown: a.costBreakdown,
       createdAt: a.createdAt.toISOString(),
       updatedAt: a.updatedAt.toISOString(),
     })),

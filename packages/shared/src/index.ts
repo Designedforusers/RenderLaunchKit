@@ -3,5 +3,6 @@ export * from './enums.js';
 export * from './schemas/index.js';
 export * from './types.js';
 export * from './constants.js';
+export * from './pricing.js';
 export * from './utils.js';
 export * from './voiceover.js';

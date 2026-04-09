@@ -2,6 +2,16 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { computeElevenLabsCostCents } from '@launchkit/shared';
+import { recordCost } from '../cost-tracker.js';
+
+/**
+ * Fallback model id used for cost computation when the consumer
+ * passes `modelId: null`. Matches ElevenLabs's cheapest production
+ * tier (Turbo v2) so a missing config falls back to the "low"
+ * price rather than defaulting silently to the expensive rate.
+ */
+const DEFAULT_ELEVENLABS_MODEL_FOR_COST = 'eleven_turbo_v2';
 
 /**
  * Factory-constructed ElevenLabs client. Handles both:
@@ -171,6 +181,25 @@ export function createElevenLabsClient(
       text: input.text,
     });
 
+    // Record the upstream TTS cost. Only the upstream-hit path
+    // records — the cached branch above returns before reaching
+    // this line so cache hits are free. `inputUnits` is the
+    // character count fed to the synthesis engine.
+    recordCost({
+      provider: 'elevenlabs',
+      operation: 'tts',
+      inputUnits: input.text.length,
+      costCents: computeElevenLabsCostCents(
+        config.modelId ?? DEFAULT_ELEVENLABS_MODEL_FOR_COST,
+        input.text.length
+      ),
+      metadata: {
+        voiceId: config.primaryVoiceId,
+        modelId: config.modelId ?? DEFAULT_ELEVENLABS_MODEL_FOR_COST,
+        path: 'single-voice',
+      },
+    });
+
     await writeAtomic(audioPath, buffer);
 
     return {
@@ -216,6 +245,26 @@ export function createElevenLabsClient(
       const buffer = await fetchVoiceMp3({
         voiceId,
         text: line.text,
+      });
+      // Per-line cost record. Each dialogue line is its own upstream
+      // `fetchVoiceMp3` call so we charge per line rather than lumping
+      // the whole dialogue into a single event — the dashboard
+      // breakdown modal shows the per-line shape the operator
+      // actually sees on the ElevenLabs dashboard.
+      recordCost({
+        provider: 'elevenlabs',
+        operation: 'tts',
+        inputUnits: line.text.length,
+        costCents: computeElevenLabsCostCents(
+          config.modelId ?? DEFAULT_ELEVENLABS_MODEL_FOR_COST,
+          line.text.length
+        ),
+        metadata: {
+          voiceId,
+          speaker: line.speaker,
+          modelId: config.modelId ?? DEFAULT_ELEVENLABS_MODEL_FOR_COST,
+          path: 'multi-voice',
+        },
       });
       buffers.push(buffer);
     }

@@ -80,6 +80,20 @@ export const AssetResponseSchema = z.object({
   userApproved: z.boolean().nullable(),
   userEdited: z.boolean(),
   version: z.number().int().nonnegative(),
+  // ── Cost tracking (Phase 9) ──
+  //
+  // `costCents` is the denormalized per-asset total from
+  // `assets.cost_cents`. Defaults to 0 for pre-tracking or seed
+  // assets so the dashboard's per-card cost label always has a
+  // value to render — the placeholder reads as "$0.00" rather
+  // than a jarring "—".
+  costCents: z.number().int().nonnegative(),
+  // `costBreakdown` is the per-event snapshot written inside
+  // `persistCostEvents`. `unknown` at the API boundary because
+  // the dashboard renders it opaque via the breakdown modal;
+  // the strict shape lives in `AssetCostBreakdownSchema` which
+  // the modal can `safeParse` before rendering.
+  costBreakdown: z.unknown().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

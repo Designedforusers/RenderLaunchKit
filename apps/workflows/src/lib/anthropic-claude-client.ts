@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { z } from 'zod';
+import { computeAnthropicCostCents } from '@launchkit/shared';
+import { recordCost } from '@launchkit/asset-generators';
 import { env } from '../env.js';
 
 /**
@@ -46,6 +48,31 @@ export async function generateContent(
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
   });
+
+  // Record the cost of the successful upstream call. Mirrors the
+  // worker's copy of this file — every asset generation that runs
+  // on the workflows service lands inside a `runWithCostTracker`
+  // scope from `dispatchAsset`, so the tracker is always present
+  // and every Claude call records into it. The defensive try/catch
+  // is there so any hypothetical `recordCost` failure cannot
+  // collapse a successful generation (non-blocking invariant).
+  try {
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+    recordCost({
+      provider: 'anthropic',
+      operation: 'messages.create',
+      inputUnits: inputTokens,
+      outputUnits: outputTokens,
+      costCents: computeAnthropicCostCents(DEFAULT_MODEL, inputTokens, outputTokens),
+      metadata: { model: DEFAULT_MODEL, caller: 'generateContent' },
+    });
+  } catch (err) {
+    console.warn(
+      '[anthropic-claude-client] recordCost failed in generateContent:',
+      err instanceof Error ? err.message : String(err)
+    );
+  }
 
   const textBlock = response.content.find((c) => c.type === 'text');
   if (!textBlock || textBlock.type !== 'text') {

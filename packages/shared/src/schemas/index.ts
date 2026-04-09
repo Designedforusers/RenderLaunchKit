@@ -2,6 +2,7 @@ import type { z } from 'zod';
 
 export * from './agent-outputs.js';
 export * from './api.js';
+export * from './asset-cost-event.js';
 export * from './asset-feedback-event.js';
 export * from './commit-marketing-run.js';
 export * from './dev-influencer.js';

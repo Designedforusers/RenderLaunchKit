@@ -237,6 +237,14 @@ export {
 
 export { accentColorForTone } from './helpers/strategy-style.js';
 
+export {
+  CostTracker,
+  runWithCostTracker,
+  recordCost,
+  type CostEvent,
+  type CostEventProvider,
+} from './cost-tracker.js';
+
 export type {
   WriterInput,
   WriterResult,

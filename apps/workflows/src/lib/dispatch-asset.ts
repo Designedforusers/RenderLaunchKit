@@ -7,10 +7,12 @@ import {
   StrategyBriefSchema,
 } from '@launchkit/shared';
 import type { AssetType } from '@launchkit/shared';
+import { CostTracker, runWithCostTracker } from '@launchkit/asset-generators';
 import { database as db } from './database.js';
 import { projectProgressPublisher } from './project-progress-publisher.js';
 import { assetGenerators } from './asset-generators-instance.js';
 import { getInsightsForCategory } from './project-insight-memory.js';
+import { persistCostEvents } from './persist-cost-events.js';
 
 /**
  * Core dispatch function for a single asset generation.
@@ -177,108 +179,133 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
     `Generating ${asset.type}`
   );
 
+  // ── Cost tracking scope ──
+  //
+  // Every upstream API call inside the agent routing switch records
+  // its cost into the tracker via `recordCost(...)` which reads the
+  // tracker from `AsyncLocalStorage`. The tracker is created here
+  // (one per asset generation) and flushed to `asset_cost_events`
+  // below via `persistCostEvents` — on BOTH the success and error
+  // paths, because upstream calls that succeeded before a later
+  // failure still cost us money and the operator should see them.
+  //
+  // The persist helper is strictly non-blocking: a DB error inside
+  // `persistCostEvents` logs and returns without throwing, so a
+  // successful asset generation never fails because of a cost write
+  // hiccup. The error path's persist call is additionally wrapped in
+  // its own try/catch so even a hypothetical throw from the helper
+  // cannot mask the original agent error.
+  const costTracker = new CostTracker();
+  const assetType = asset.type;
+
   try {
     let content: string | null = null;
     let mediaUrl: string | null = null;
     let metadata: Record<string, unknown> = {};
 
-    const assetType = asset.type;
-
-    if (assetType === 'og_image' || assetType === 'social_card') {
-      const result = await assetGenerators.generateMarketingImageAsset({
-        repoAnalysis,
-        research,
-        strategy,
-        assetType,
-        generationInstructions,
-      });
-      mediaUrl = result.url;
-      metadata = {
-        ...result.metadata,
-        prompt: result.prompt,
-        style: result.style,
-      };
-    } else if (assetType === 'product_video') {
-      const result = await assetGenerators.generateProductVideoAsset({
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        generationInstructions,
-      });
-      mediaUrl = result.videoUrl;
-      metadata = {
-        ...result.metadata,
-        thumbnailUrl: result.thumbnailUrl,
-        storyboard: result.storyboard,
-      };
-    } else if (assetType === 'video_storyboard') {
-      const result = await assetGenerators.generateVideoStoryboardAsset({
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        generationInstructions,
-      });
-      content = JSON.stringify(result.storyboard, null, 2);
-      metadata = {
-        ...result.metadata,
-        thumbnailUrl: result.thumbnailUrl,
-        storyboard: result.storyboard,
-      };
-    } else if (assetType === 'voice_commercial') {
-      const result = await assetGenerators.generateVoiceCommercialAsset({
-        assetId,
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        pastInsights,
-        generationInstructions,
-        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
-      });
-      content = result.script;
-      mediaUrl = `/api/assets/${assetId}/audio.mp3`;
-      metadata = result.metadata;
-    } else if (assetType === 'podcast_script') {
-      const result = await assetGenerators.generatePodcastScriptAsset({
-        assetId,
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        pastInsights,
-        generationInstructions,
-        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
-      });
-      content = result.script;
-      mediaUrl = `/api/assets/${assetId}/audio.mp3`;
-      metadata = result.metadata;
-    } else if (assetType === 'world_scene') {
-      const result = await assetGenerators.generateWorldSceneAsset({
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        generationInstructions,
-      });
-      content = result.prompt;
-      mediaUrl = result.marbleUrl;
-      metadata = result.metadata;
-    } else {
-      // All nine text asset types route through the writer agent.
-      const result = await assetGenerators.generateWrittenAsset({
-        repoAnalysis,
-        research,
-        strategy,
-        pastInsights,
-        assetType,
-        generationInstructions,
-        ...(revisionInstructions !== undefined ? { revisionInstructions } : {}),
-      });
-      content = result.content;
-      metadata = result.metadata;
-    }
+    await runWithCostTracker(costTracker, async () => {
+      if (assetType === 'og_image' || assetType === 'social_card') {
+        const result = await assetGenerators.generateMarketingImageAsset({
+          repoAnalysis,
+          research,
+          strategy,
+          assetType,
+          generationInstructions,
+        });
+        mediaUrl = result.url;
+        metadata = {
+          ...result.metadata,
+          prompt: result.prompt,
+          style: result.style,
+        };
+      } else if (assetType === 'product_video') {
+        const result = await assetGenerators.generateProductVideoAsset({
+          repoName: project.repoName,
+          repoAnalysis,
+          research,
+          strategy,
+          generationInstructions,
+        });
+        mediaUrl = result.videoUrl;
+        metadata = {
+          ...result.metadata,
+          thumbnailUrl: result.thumbnailUrl,
+          storyboard: result.storyboard,
+        };
+      } else if (assetType === 'video_storyboard') {
+        const result = await assetGenerators.generateVideoStoryboardAsset({
+          repoName: project.repoName,
+          repoAnalysis,
+          research,
+          strategy,
+          generationInstructions,
+        });
+        content = JSON.stringify(result.storyboard, null, 2);
+        metadata = {
+          ...result.metadata,
+          thumbnailUrl: result.thumbnailUrl,
+          storyboard: result.storyboard,
+        };
+      } else if (assetType === 'voice_commercial') {
+        const result = await assetGenerators.generateVoiceCommercialAsset({
+          assetId,
+          repoName: project.repoName,
+          repoAnalysis,
+          research,
+          strategy,
+          pastInsights,
+          generationInstructions,
+          ...(revisionInstructions !== undefined
+            ? { revisionInstructions }
+            : {}),
+        });
+        content = result.script;
+        mediaUrl = `/api/assets/${assetId}/audio.mp3`;
+        metadata = result.metadata;
+      } else if (assetType === 'podcast_script') {
+        const result = await assetGenerators.generatePodcastScriptAsset({
+          assetId,
+          repoName: project.repoName,
+          repoAnalysis,
+          research,
+          strategy,
+          pastInsights,
+          generationInstructions,
+          ...(revisionInstructions !== undefined
+            ? { revisionInstructions }
+            : {}),
+        });
+        content = result.script;
+        mediaUrl = `/api/assets/${assetId}/audio.mp3`;
+        metadata = result.metadata;
+      } else if (assetType === 'world_scene') {
+        const result = await assetGenerators.generateWorldSceneAsset({
+          repoName: project.repoName,
+          repoAnalysis,
+          research,
+          strategy,
+          generationInstructions,
+        });
+        content = result.prompt;
+        mediaUrl = result.marbleUrl;
+        metadata = result.metadata;
+      } else {
+        // All nine text asset types route through the writer agent.
+        const result = await assetGenerators.generateWrittenAsset({
+          repoAnalysis,
+          research,
+          strategy,
+          pastInsights,
+          assetType,
+          generationInstructions,
+          ...(revisionInstructions !== undefined
+            ? { revisionInstructions }
+            : {}),
+        });
+        content = result.content;
+        metadata = result.metadata;
+      }
+    });
 
     // ── Persist the generated content and flip status to reviewing
     await db
@@ -295,6 +322,17 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       })
       .where(eq(schema.assets.id, assetId));
 
+    // Flush the recorded cost events to `asset_cost_events` and
+    // update the denormalized summary on the asset row. The helper
+    // is non-throwing by design — a failure here logs and continues
+    // without rolling back the generation success above.
+    await persistCostEvents({
+      assetId,
+      projectId,
+      events: costTracker.getEvents(),
+      totalCents: costTracker.totalCents(),
+    });
+
     await projectProgressPublisher.assetReady(projectId, assetId, assetType);
 
     console.log(
@@ -302,6 +340,31 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+
+    // Persist any partial cost events captured before the failure —
+    // upstream calls that succeeded before the agent threw still
+    // cost us money and the operator should see them on the
+    // dashboard. The extra try/catch is a belt-and-braces guard
+    // against a hypothetical throw from `persistCostEvents`; the
+    // helper already swallows DB errors internally.
+    const partialEvents = costTracker.getEvents();
+    if (partialEvents.length > 0) {
+      try {
+        await persistCostEvents({
+          assetId,
+          projectId,
+          events: partialEvents,
+          totalCents: costTracker.totalCents(),
+        });
+      } catch (persistErr) {
+        console.error(
+          '[Workflows:Dispatch] cost persist failed on error path:',
+          persistErr instanceof Error
+            ? persistErr.message
+            : String(persistErr)
+        );
+      }
+    }
 
     await db
       .update(schema.assets)

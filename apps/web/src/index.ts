@@ -9,6 +9,7 @@ import { errorHandler } from './middleware/errors.js';
 import { authMiddleware } from './middleware/auth.js';
 import { apiRateLimit } from './middleware/rate-limit.js';
 import projectApiRoutes from './routes/project-api-routes.js';
+import projectCostRoutes from './routes/project-cost-routes.js';
 import assetApiRoutes from './routes/asset-api-routes.js';
 import outreachApiRoutes from './routes/outreach-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
@@ -114,6 +115,12 @@ app.route('/api/projects', projectEventStreamRoutes);
 // Protected API routes
 app.use('/api/*', authMiddleware);
 app.route('/api/projects', projectApiRoutes);
+// Project cost aggregation — mounted at /api/projects so the
+// handler's `/:projectId/costs` relative path resolves to
+// `/api/projects/:projectId/costs`. Declared after
+// `projectApiRoutes` so the cost-specific matcher does not
+// shadow the generic project routes.
+app.route('/api/projects', projectCostRoutes);
 app.route('/api/assets', assetApiRoutes);
 app.route('/api/outreach', outreachApiRoutes);
 
