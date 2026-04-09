@@ -14,6 +14,7 @@ import assetApiRoutes from './routes/asset-api-routes.js';
 import outreachApiRoutes from './routes/outreach-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
+import pikaRoutes from './routes/pika-routes.js';
 import { env } from './env.js';
 
 const app = new Hono();
@@ -121,6 +122,12 @@ app.route('/api/projects', projectApiRoutes);
 // `projectApiRoutes` so the cost-specific matcher does not
 // shadow the generic project routes.
 app.route('/api/projects', projectCostRoutes);
+// Pika video meeting sessions — same mount point so the
+// handler's `/:projectId/meetings*` relative paths resolve to
+// `/api/projects/:projectId/meetings*`. Declared after the two
+// matchers above so a `:projectId` path param lookup still
+// resolves to the right handler.
+app.route('/api/projects', pikaRoutes);
 app.route('/api/assets', assetApiRoutes);
 app.route('/api/outreach', outreachApiRoutes);
 

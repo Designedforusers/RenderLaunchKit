@@ -4,6 +4,8 @@ import type {
   AnalyzeRepoJobData,
   EmbedFeedbackEventJobData,
   JobData,
+  PikaInviteJobData,
+  PikaLeaveJobData,
 } from '@launchkit/shared';
 import { env } from '../env.js';
 
@@ -48,6 +50,15 @@ export const trendingJobQueue = new Queue<unknown>(QUEUE_NAMES.TRENDING, {
   defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.TRENDING].defaultJobOptions,
 });
 
+// Pika video meeting lifecycle queue. Same pattern as trending:
+// two heterogeneous job names (`pika-invite` and `pika-leave`)
+// share the queue and each processor validates its own payload
+// at the boundary, so the queue type is intentionally `unknown`.
+export const pikaJobQueue = new Queue<unknown>(QUEUE_NAMES.PIKA, {
+  connection,
+  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA].defaultJobOptions,
+});
+
 // Helper to add analysis jobs
 export async function enqueueRepositoryAnalysis(data: AnalyzeRepoJobData) {
   return analysisJobQueue.add('analyze-repo', data, {
@@ -81,6 +92,34 @@ export async function enqueueEmbedFeedbackEvent(
     jobId: `embed-feedback-event__${feedbackEventId}`,
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
+  });
+}
+
+/**
+ * Enqueue a pika-invite job for a previously-inserted session row.
+ * Called from `POST /api/projects/:projectId/meetings` after the
+ * handler has created the `pika_meeting_sessions` row at
+ * `status='pending'`. The deterministic jobId dedupes a double-
+ * click on the dashboard.
+ */
+export async function enqueuePikaInvite(
+  data: PikaInviteJobData
+): Promise<void> {
+  await pikaJobQueue.add(JOB_NAMES.PIKA_INVITE, data, {
+    jobId: `pika-invite__${data.sessionRowId}`,
+  });
+}
+
+/**
+ * Enqueue an immediate user-initiated pika-leave job. Does NOT
+ * cancel the delayed auto-leave job scheduled by the invite
+ * processor — both will fire but the second sees a terminal
+ * status and no-ops (see `process-pika-leave.ts` idempotency
+ * guard).
+ */
+export async function enqueuePikaLeave(data: PikaLeaveJobData): Promise<void> {
+  await pikaJobQueue.add(JOB_NAMES.PIKA_LEAVE, data, {
+    jobId: `pika-leave-user__${data.sessionRowId}`,
   });
 }
 
