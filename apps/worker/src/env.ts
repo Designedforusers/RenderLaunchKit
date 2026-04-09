@@ -1,4 +1,40 @@
+import { config as loadDotenv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
+
+// ── .env loading ──────────────────────────────────────────────────
+//
+// Load `.env` from the repo root at module-init time so every
+// downstream `env.X` access in this process sees the populated
+// environment. This must run BEFORE the `parseEnv()` Proxy below
+// is touched by any caller — putting it at the top of this file
+// guarantees that order because env.ts is the choke point: every
+// piece of worker code that needs an env var imports `env` from
+// here, so this module's top-level code runs before any importer
+// can read process.env.
+//
+// The path is computed from `import.meta.url` rather than relying
+// on `dotenv`'s default `process.cwd()` lookup because `npm run
+// dev -w apps/worker` sets the cwd to `apps/worker/`, where there
+// is no `.env` file. Walking up three directories from this file
+// lands at the repo root in both `src/` (tsx watch) and `dist/`
+// (compiled `node apps/worker/dist/index.js`) — the depth is
+// identical, so the same relative path works for dev and production
+// builds. On Render itself there is no `.env` file and `dotenv`
+// silently no-ops because the file does not exist; production env
+// vars are injected by the Render dashboard at service start.
+//
+// `dotenv` is non-throwing: a missing or unreadable .env logs a
+// warning to stderr but does not crash the import. The Zod parse
+// further down then validates whatever did or didn't get loaded
+// against the required-vs-optional schema and throws a structured
+// error naming any missing required field, so a misconfigured
+// environment surfaces as a clear "Invalid worker environment:
+// DATABASE_URL: Invalid input" instead of an opaque crash.
+loadDotenv({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), '../../..', '.env'),
+});
 
 /**
  * Typed, validated environment variables for the worker process.
