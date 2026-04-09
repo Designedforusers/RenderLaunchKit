@@ -18,8 +18,9 @@ This repo is a working multi-service AI app and a teaching artifact for several 
 - **Self-learning via pgvector clustering.** User edits on generated assets get embedded with Voyage AI, clustered by category via pgvector cosine similarity, and rolled up into `strategy_insights` rows that the strategist agent reads as prompt context on the next project.
 - **Two layers of code review per PR.** A local Claude Code subagent runs against the staged diff before push (free, contextual, fast); a `@claude review` GitHub Action runs on demand for second opinions on tricky changes (independent, async, visible to the team).
 - **Six Render services, one Blueprint.** `render.yaml` provisions five of them in one click. The sixth (the workflow service) is a one-time dashboard step because Render Workflows is in public beta and the Blueprint syntax doesn't support it yet — see [Deploy Your Own](#deploy-your-own-on-render-in-4-steps) for the runbook.
+- **Vendoring a third-party CLI as a pinned subprocess.** The [Pika video meeting integration](docs/pika-integration.md) shells out to a vendored Python CLI from `vendor/pikastream-video-meeting/` (Apache 2.0, pinned to a specific upstream commit SHA, provenance header on every file) so LaunchKit's AI teammate can walk into a live Google Meet as a video participant. Reuses Pika's reference client instead of reimplementing the HTTP surface in Node, and wraps the subprocess with a `child_process.spawn` + Zod-validated stdout + exit-code-to-typed-error pattern that the existing Claude Agent SDK runner already uses for its own subprocess boundary.
 
-The full engineering invariants live in [`CLAUDE.md`](CLAUDE.md). The long-form cost-tracking explainer is at [`docs/cost-tracking.md`](docs/cost-tracking.md).
+The full engineering invariants live in [`CLAUDE.md`](CLAUDE.md). The long-form cost-tracking explainer is at [`docs/cost-tracking.md`](docs/cost-tracking.md). The Pika integration explainer is at [`docs/pika-integration.md`](docs/pika-integration.md).
 
 ---
 

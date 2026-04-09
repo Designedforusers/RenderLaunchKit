@@ -132,6 +132,44 @@ The `AsyncLocalStorage` choice is deliberate: threading a `tracker` parameter th
 
 The tracker sees the new events automatically — no changes to `dispatch-asset.ts`, `persist-cost-events.ts`, or the API route are needed. The `/api/projects/:projectId/costs` route's `GROUP BY provider` query picks up the new provider on its next call.
 
+### Pika video meeting integration
+
+LaunchKit's AI teammate grows a face: a user clicks **Invite AI teammate to a meet** on the project dashboard, drops a Google Meet URL, and the Pika-hosted avatar joins the call as a real video participant that already knows the project's repo, launch strategy, and generated assets.
+
+**What Pika is.** [Pika](https://www.pika.me) is a SaaS product for real-time AI video avatars in meetings. We use their `pikastream-video-meeting` skill — a ~600-line Python CLI that wraps Pika's HTTPS API. All the heavy lifting (headless browser, Google Meet auth, WebRTC, avatar rendering, voice synthesis) runs on Pika's backend. Our side is a short-lived Python subprocess with one dep (`requests>=2.32.5`).
+
+**Why a Python subprocess, given the rest of the repo is TypeScript.** The alternative is reimplementing Pika's CLI in Node — porting four subcommands (`join`, `leave`, `generate-avatar`, `clone-voice`) to TypeScript and keeping them in sync with every upstream change. Instead we vendor the upstream CLI at `vendor/pikastream-video-meeting/` (Apache 2.0, pinned to a specific upstream commit SHA) and wrap it with a ~60-line TypeScript subprocess wrapper at `apps/worker/src/lib/pika-stream.ts`. The `child_process.spawn` + Zod-validated stdout pattern is the same "TypeScript → subprocess" precedent the Claude Agent SDK runner already uses in the worker (`apps/worker/src/lib/agent-sdk-runner.ts`). See `vendor/README.md` for the refresh procedure.
+
+**Env var mapping.** LaunchKit's codebase uses `PIKA_API_KEY` for naming consistency with every other `*_API_KEY`. The upstream Python CLI reads from `PIKA_DEV_KEY`. The wrapper performs the rename at subprocess spawn time (`pika-stream.ts:runPikaSubprocess`) so the rest of our code never sees `PIKA_DEV_KEY` and a grep for `PIKA_API_KEY` lands every consumer. `PIKA_AVATAR` is passed through verbatim as the `--image` flag value — the Python CLI handles both local file paths and `https://` URLs transparently.
+
+**Exit code → error class mapping.** The Python CLI exits with a documented code for every failure mode, and the wrapper maps each to a typed error class that extends `PikaSubprocessError`:
+
+| Exit | Error class | Meaning |
+|---|---|---|
+| 0 | (success) | bot reported `status=ready` or `video && bot` |
+| 1 | `PikaMissingKeyError` | `PIKA_DEV_KEY` missing at subprocess boot |
+| 2 | `PikaValidationError` | bad URL, missing image file, unknown platform |
+| 3 | `PikaHttpError` | non-2xx response from Pika |
+| 4 | `PikaSessionError` | Pika reported `status=error` or `status=closed` |
+| 5 | `PikaTimeoutError` | subprocess reached `--timeout-sec` without ready |
+| 6 | `PikaInsufficientCreditsError` | funding check failed; carries a `checkoutUrl` the dashboard surfaces on the failed session row |
+
+**Session lifecycle and BullMQ queue.** The `pika` BullMQ queue carries two job types:
+- `pika-invite`, enqueued by the web service on every user click. The invite processor inserts a `pika_meeting_sessions` row at `status='pending'`, builds a per-project system prompt from `repoAnalysis + research + strategy + assets` (capped at 4 KB by `pika-system-prompt-builder.ts`), flips to `joining`, spawns the `join` subprocess, and on success flips to `active` and schedules a delayed `pika-leave` job 30 minutes out.
+- `pika-leave`, enqueued by the web service on a user End click AND by the invite processor itself for the 30-minute auto-timeout. Both entry points use deterministic `jobId`s so retries cannot stack duplicates, and the processor's terminal-status guard makes the two leave paths idempotent against each other.
+
+The six lifecycle states form a linear state machine with a `failed` escape hatch from any non-terminal state:
+```
+pending → joining → active → ending → ended
+                 ↘ failed
+```
+
+**Cost tracking.** Pika bills at a flat $0.275/minute of bot runtime. The leave processor computes `durationSeconds = ended_at - started_at` (in seconds), passes it through `computePikaMeetingCostCents()` in `packages/shared/src/pricing.ts`, and writes a `provider='pika'` row to `asset_cost_events` with `asset_id=NULL` — the column nullability was relaxed in migration `0010_pika_meeting_sessions.sql` specifically so session-scoped cost events can share the existing aggregation surface without forcing the dashboard's project cost chip to UNION a second table. The chip picks up Pika spend automatically via the existing `GROUP BY provider` query.
+
+**The "do not auto-invoke" invariant.** Pika is never auto-invoked. No strategist heuristic picks it. No review loop spawns it. No cron auto-joins a meet. Every Pika session is triggered by an explicit user click on the dashboard's **Invite AI teammate to a meet** button. This invariant exists because a Pika session burns real money and an unexpected avatar joining a live meeting is a UX disaster — the user must always be the one pressing the button.
+
+**Avatar privacy.** The `PIKA_AVATAR` value is user-private and must NEVER be committed to the repo, echoed in logs, or included in commit messages. The wrapper's error messages deliberately quote the redacted meet URL (`host + pathname`, no query string since Zoom encodes passwords there) and never the avatar ref. The web service's env surface does NOT include `PIKA_AVATAR` — only the worker reads it at spawn time, so the secret stays scoped to the one service that needs it.
+
 ### Self-learning Layer 3: forward-compat note (Phase 7)
 
 Phase 7 ships the **data infrastructure** for the self-learning loop's third layer: every approve/reject/edit/regenerate action on an asset writes a row to `asset_feedback_events`, edited rows get an async Voyage embedding via `apps/worker/src/processors/embed-feedback-event.ts`, and `apps/cron/src/aggregate-feedback-insights.ts` clusters the edits by `(asset_type, category)` via pgvector cosine similarity, writing one `strategy_insights` row per cluster with `insight_type='edit_pattern'`.
