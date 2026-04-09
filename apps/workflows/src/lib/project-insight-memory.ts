@@ -38,7 +38,7 @@ export async function getInsightsForCategory(
       insightType: i.insightType,
     }));
   } catch (err) {
-    console.error('[WorkflowsInsights] Error getting insights:', err);
+    console.error('[Workflows:Insights] Error getting insights:', err);
     return [];
   }
 }
