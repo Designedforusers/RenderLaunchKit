@@ -198,20 +198,36 @@ export async function processPikaPoll(job: Job): Promise<void> {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Re-enqueue the poll job with a 30-s delay. The jobId is a fixed
- * function of `sessionRowId` (no timestamp suffix) so at most one
- * poll job per session can be pending at any time — if a second
- * `add` arrives while the first is still in `delayed` state,
- * BullMQ drops it as a duplicate.
+ * Re-enqueue the poll job with a 30-s delay. The jobId includes
+ * a timestamp suffix so each tick gets a unique job id — a fixed
+ * jobId would not work here because the SELF re-enqueue fires
+ * while the current poll is still in BullMQ's `active` state,
+ * and BullMQ drops any `add` whose jobId collides with a job in
+ * `waiting`, `delayed`, OR `active` state. With a fixed jobId the
+ * very first self-reenqueue would be silently dropped, the poll
+ * would run exactly once per session, and auto-termination via
+ * pika_closed / pika_error / safety_cap would never fire. Caught
+ * on the first end-to-end auto-leave test — a session where
+ * Pika reported `status=closed` within 2 minutes of the join
+ * stayed `active` in our DB indefinitely because the poll only
+ * ever ran once.
  *
- * The load-bearing invariant: without this dedup, a transient
- * upstream error on the PIKA_CONTROL queue (which retries 3x
- * with exponential backoff) could interact with the poll's
- * self-reenqueue to produce O(N) concurrent poll chains per
- * session. A session that experiences three attempts would spawn
- * three independent 30-s poll loops, each reenqueueing the next,
- * multiplying indefinitely. The fixed jobId is what keeps this
- * bounded to exactly one poll per session at any moment.
+ * The reviewer's original concern with timestamped jobIds was
+ * chain multiplication under `attempts: 3` retries, but that
+ * concern is moot here: this poll processor catches every error
+ * in its outer try/catch and self-reenqueues on the transient
+ * branch — it NEVER throws to BullMQ. The `attempts: 3` retry
+ * path on the PIKA_CONTROL queue is effectively unused for
+ * `pika-poll` jobs, so chain multiplication via retries is not
+ * possible. The only edge case is a throw inside
+ * `reenqueuePoll` itself (e.g. Redis blip mid-enqueue) — in
+ * that rare case BullMQ WILL retry and we could briefly see two
+ * poll chains before one fails again, converging within ~30 s.
+ * The 60-min safety cap backstops this.
+ *
+ * `removeOnComplete: true` aggressively cleans up finished poll
+ * jobs so the completed set does not grow to thousands of
+ * rows over a long session.
  */
 async function reenqueuePoll(sessionRowId: string): Promise<void> {
   await pikaControlQueue.add(
@@ -219,7 +235,8 @@ async function reenqueuePoll(sessionRowId: string): Promise<void> {
     { sessionRowId },
     {
       delay: POLL_INTERVAL_MS,
-      jobId: `pika-poll__${sessionRowId}`,
+      jobId: `pika-poll__${sessionRowId}__${String(Date.now())}`,
+      removeOnComplete: true,
     }
   );
 }
