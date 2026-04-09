@@ -1,7 +1,22 @@
+import { config as loadDotenv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import pg from 'pg';
+
+// Load `.env` from the repo root so `npm run db:migrate` Just Works
+// without the operator having to source `.env` into their shell first.
+// The path is computed from `import.meta.url` rather than relying on
+// `dotenv`'s default `process.cwd()` lookup so the script can be run
+// from anywhere (e.g., a CI step that runs from a deeper subdirectory).
+// On Render the migration runs from the web service's `preDeployCommand`
+// where `DATABASE_URL` is injected from the dashboard and `.env` does
+// not exist; `dotenv` silently no-ops in that case.
+loadDotenv({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), '..', '.env'),
+});
 
 const { Client } = pg;
 

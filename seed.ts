@@ -5,6 +5,16 @@
  * Usage: npm run seed
  */
 
+// Load `.env` from the repo root before reading `process.env.DATABASE_URL`
+// below. The script is invoked via `npm run seed` from the repo root, so
+// `dotenv/config`'s default `process.cwd()` lookup finds `.env` correctly
+// without needing the explicit-path treatment used by the app env modules.
+// Without this, the `process.env.DATABASE_URL || <localhost-fallback>`
+// line below would silently use the localhost fallback even when the
+// operator has a different DATABASE_URL configured in `.env`, which is
+// confusing because the seed succeeds against the wrong database.
+import 'dotenv/config';
+
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';

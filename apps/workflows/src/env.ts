@@ -1,4 +1,27 @@
+import { config as loadDotenv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
+
+// ── .env loading ──────────────────────────────────────────────────
+//
+// Load `.env` from the repo root at module-init time so every
+// downstream `env.X` access in this process sees the populated
+// environment. See `apps/worker/src/env.ts` for the full rationale —
+// the short version is that ESM hoisting means the dotenv call has
+// to live in the env module itself (not the entry point) to fire
+// before any importer's top-level code reads `env.X`. The path is
+// computed from `import.meta.url` because the workflows service
+// runs under `render workflows dev -- npm run dev -w apps/workflows`
+// (cwd `apps/workflows/`) in dev and `node apps/workflows/dist/index.js`
+// in production. Walking up three directories from this file lands
+// at the repo root in both `src/` (tsx watch) and `dist/` (compiled).
+// On Render itself there is no `.env` file and `dotenv` silently
+// no-ops; production env vars are injected by the Render dashboard
+// at service start.
+loadDotenv({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), '../../..', '.env'),
+});
 
 /**
  * Typed, validated environment variables for the workflows process.

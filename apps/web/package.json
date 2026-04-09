@@ -17,6 +17,7 @@
     "@remotion/bundler": "^4.0.446",
     "@remotion/renderer": "^4.0.446",
     "bullmq": "^5.25.0",
+    "dotenv": "^16.6.1",
     "drizzle-orm": "^0.38.0",
     "hono-rate-limiter": "^0.5.0",
     "ioredis": "^5.4.0",
