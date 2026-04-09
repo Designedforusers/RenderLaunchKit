@@ -12,7 +12,9 @@ LaunchKit is an AI-powered go-to-market teammate. The pipeline:
 GitHub URL → Analyze → Research (Agent SDK) → Strategize → Generate (parallel) → Review → Done
 ```
 
-Five Render services (web, worker, cron, redis, postgres). One TypeScript monorepo. Public showcase for Render — every PR is graded on engineering discipline as much as product behavior. See `README.md` for the architectural rationale and `CONTRIBUTING.md` for the short-form contribution rules.
+Six Render services (web, worker, cron, workflows, redis, postgres). One TypeScript monorepo. Public showcase for Render — every PR is graded on engineering discipline as much as product behavior. See `README.md` for the architectural rationale and `CONTRIBUTING.md` for the short-form contribution rules.
+
+The `launchkit-workflows` service hosts the per-asset generation tasks on Render Workflows (public beta) and is gated behind a `GENERATION_RUNTIME=bullmq|workflows` env flag on the worker. The default is `bullmq` (existing path). When flipped to `workflows`, the strategize handler triggers a `generateAllAssetsForProject` task run via the Render SDK instead of fan-out-enqueuing to the BullMQ generation queue. Both paths coexist during the migration; the final PR deletes the BullMQ generation queue. The workflows service is created manually in the Render dashboard, not via `render.yaml` Blueprint — see README § "Enabling Render Workflows generation" for the one-time setup.
 
 ---
 
@@ -85,6 +87,19 @@ If you need a new domain type, write the Zod schema first.
 - `ProjectProgressPublisher` means internal Redis/SSE progress events. `SocialPublisher` (future) means external posting to a platform. Don't confuse the two.
 - `generationInstructions` always means the exact instructions used to create or regenerate an asset. It is not a synonym for `brief`, `prompt`, or `description`.
 - Role-based agent names (`launch-research-agent`, `launch-strategy-agent`, `creative-director-agent`) describe the AI persona. Processor names (`analyze-project-repository`, `build-project-launch-strategy`) describe the concrete system action.
+
+### Workflows service (Phase 10, feature-flagged)
+
+`apps/workflows/` is a monorepo workspace that hosts the asset-generation tasks as Render Workflows task definitions. Its library surface mirrors the worker's own (`database.ts` owns a drizzle pool, `project-progress-publisher.ts` owns a Redis pub client, `anthropic-claude-client.ts` is a literal copy of the worker's file keyed to the workflows env, `asset-generators-instance.ts` wires the `@launchkit/asset-generators` package) because each backend service owns its own process-lifecycle infra per the existing convention. The duplication of `anthropic-claude-client.ts` across the worker and workflows services is explicit and intentional: moving it into `packages/asset-generators/` would force the worker's four non-asset-gen agents (`launch-strategy-agent`, `outreach-draft-agent`, `commit-marketability-agent`, `launch-kit-review-agent`) to take a dependency on the asset-generators package, which is semantically wrong.
+
+Five child tasks (`generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`) are grouped by compute profile — `starter` for text, `standard` for images/audio, `pro` for video and 3D — so a 10-minute video render never blocks a 20-second blog post run. The parent task (`generateAllAssetsForProject`) reads queued assets from the DB, fans out to the child tasks via Promise.allSettled (run chaining), and enqueues the review BullMQ job once every child settles. Partial failures are first-class: failed children mark their asset rows `failed` inside `dispatchAsset`, and the review still runs on whatever succeeded.
+
+The worker side is gated by `env.GENERATION_RUNTIME`:
+
+- `bullmq` (default) — existing `fanOutGeneration` path, nothing changes.
+- `workflows` — the strategize handler calls `triggerWorkflowGeneration(projectId)`, which instantiates a lazy `Render` client from `@renderinc/sdk` and fires `render.workflows.startTask(...)` without awaiting `.get()` (the analysis worker's BullMQ slot releases in ~1 second; the parent task handles everything downstream).
+
+The runtime flip requires `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` on the worker env. Both are optional in the Zod schema — the trigger helper throws at call time if the flag is set but either is missing, rather than making every worker boot crash on the default path. Local dev routes through the Render CLI's local task server (`render workflows dev`, port 8120) when `RENDER_USE_LOCAL_DEV=true` is set — the SDK's `get-base-url` helper reads that env var directly in `node_modules/@renderinc/sdk/dist/utils/get-base-url.js`, so the code path is identical between local and prod.
 
 ### Self-learning Layer 3: forward-compat note (Phase 7)
 

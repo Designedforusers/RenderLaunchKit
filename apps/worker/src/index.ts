@@ -35,6 +35,7 @@ import {
   generationQueue,
   reviewQueue,
 } from './lib/job-queues.js';
+import { triggerWorkflowGeneration } from './lib/trigger-workflow-generation.js';
 import { env } from './env.js';
 
 // ── Analysis Worker ──
@@ -84,8 +85,17 @@ const analysisWorker = new Worker(
       } else if (job.name === JOB_NAMES.STRATEGIZE) {
         await buildProjectLaunchStrategy(data);
 
-        // Fan-out: enqueue all generation jobs
-        await fanOutGeneration(data.projectId);
+        // Fan-out generation: either the existing BullMQ path or the
+        // new Render Workflows path, gated by the GENERATION_RUNTIME
+        // env flag (default `bullmq`). Both paths publish the
+        // `phase_start: generating` event themselves, so the
+        // analysis handler does not emit anything generation-related
+        // from here.
+        if (env.GENERATION_RUNTIME === 'workflows') {
+          await triggerWorkflowGeneration(data.projectId);
+        } else {
+          await fanOutGeneration(data.projectId);
+        }
       } else if (job.name === JOB_NAMES.FILTER_WEBHOOK) {
         await processCommitMarketingRun(data as FilterWebhookJobData);
       }
