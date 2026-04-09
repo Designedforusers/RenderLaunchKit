@@ -233,12 +233,34 @@ export type PikaInviteJobData = z.infer<typeof PikaInviteJobDataSchema>;
 
 export const PikaLeaveJobDataSchema = z.object({
   sessionRowId: z.string().uuid(),
-  // Marks whether the leave was scheduled by the auto-timeout delayed
-  // job rather than an explicit user click. Used only for metrics in
-  // the cost event metadata — the leave flow itself is identical.
-  triggeredBy: z.enum(['user', 'auto_timeout']),
+  // Marks what caused the leave: an explicit user click, the
+  // auto-timeout safety cap, Pika reporting the session closed, or
+  // Pika reporting a session error. Recorded on the cost event
+  // metadata so the operator can see why each session ended.
+  triggeredBy: z.enum([
+    'user',
+    'safety_cap',
+    'pika_closed',
+    'pika_error',
+    // Kept as a valid value for legacy callers during the split —
+    // the old invite processor scheduled a 30-min `auto_timeout`
+    // leave, replaced by the poll loop's safety_cap in this
+    // architecture, but old rows and in-flight jobs may still
+    // carry this label.
+    'auto_timeout',
+  ]),
 });
 export type PikaLeaveJobData = z.infer<typeof PikaLeaveJobDataSchema>;
+
+// Pika poll job — fires every 30 s while a session is active.
+// Reads the session row, fetches Pika's session state via
+// `fetchPikaSessionState`, decides to leave / re-enqueue / no-op.
+// See `apps/worker/src/processors/process-pika-poll.ts` for the
+// full state machine.
+export const PikaPollJobDataSchema = z.object({
+  sessionRowId: z.string().uuid(),
+});
+export type PikaPollJobData = z.infer<typeof PikaPollJobDataSchema>;
 
 // ── Database row shape ───────────────────────────────────────────────
 //
