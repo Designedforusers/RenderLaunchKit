@@ -1,7 +1,12 @@
 import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import { JOB_NAMES, QUEUE_CONFIG, QUEUE_NAMES } from '@launchkit/shared';
+import {
+  JOB_NAMES,
+  PikaInviteJobDataSchema,
+  QUEUE_CONFIG,
+  QUEUE_NAMES,
+} from '@launchkit/shared';
 import { processPikaInvite } from './processors/process-pika-invite.js';
 import { database as db, databasePool } from './lib/database.js';
 import { redisConnection as connection } from './lib/job-queues.js';
@@ -62,19 +67,25 @@ const pikaInviteWorker = new Worker(
       `[PikaInviteWorker] Processing ${job.name} (job id: ${job.id ?? '<unknown>'})`
     );
 
+    // Parse the job payload through the Zod schema for the
+    // job-row insert. The processor itself does its own parse
+    // at entry (see `process-pika-invite.ts`), so this is
+    // technically a redundant second parse — but it's 0 ms
+    // overhead and keeps the audit-row insert from depending
+    // on type narrowing via raw property reads. The parsed
+    // value is discarded after the projectId extract.
+    const parsedPayload = PikaInviteJobDataSchema.safeParse(job.data);
+    const projectIdForAudit = parsedPayload.success
+      ? parsedPayload.data.projectId
+      : '';
+
     // Record the invite job start in the jobs table for audit.
     // Failures on this insert are non-blocking — the invite itself
     // runs regardless, and the `[PikaInvite]` log in the processor
     // carries the full forensic trail for anything that goes wrong.
     try {
       await db.insert(schema.jobs).values({
-        projectId:
-          typeof job.data === 'object' &&
-          job.data !== null &&
-          'projectId' in job.data &&
-          typeof (job.data as { projectId?: unknown }).projectId === 'string'
-            ? (job.data as { projectId: string }).projectId
-            : '',
+        projectId: projectIdForAudit,
         bullmqJobId: job.id,
         name: job.name,
         status: 'active',

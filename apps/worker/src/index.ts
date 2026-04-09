@@ -19,9 +19,11 @@ import { processEmbedFeedbackEvent } from './processors/embed-feedback-event.js'
 // Note: `processPikaInvite` is NOT imported here. The invite
 // path spawns a Python subprocess for ~90 s per invocation and
 // lives on the dedicated `launchkit-pika-worker` service (see
-// `apps/pika-worker/src/index.ts`) so the shared worker's event
-// loop never competes with it. The imports below cover only the
-// pure-TS poll + leave jobs that run on this shared worker.
+// `./index.pika.ts` — second entry point in this same workspace
+// that compiles to `dist/index.pika.js`) so the shared worker's
+// event loop never competes with it. The imports below cover
+// only the pure-TS poll + leave jobs that run on this shared
+// worker.
 import { processPikaLeave } from './processors/process-pika-leave.js';
 import { processPikaPoll } from './processors/process-pika-poll.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
