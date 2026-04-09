@@ -65,6 +65,16 @@ export const ANTHROPIC_PRICING: Record<
 //
 //   FLUX.2 Pro Ultra (image):     ~$0.055 per image
 //   Kling 3.0 Standard (video):   ~$0.15  per second
+//
+// Note on fractional `perImageCents`: the FLUX.2 Pro Ultra rate is
+// $0.055 / image, which is 5.5 cents. We store the exact provider
+// rate here — including the fractional value — and let the compute
+// helper `Math.ceil` it to the integer-cents invariant at call time.
+// Storing the pre-rounded integer (6) would work for current usage
+// but would silently drop the 0.5-cent distinction if the helper is
+// ever called on a multi-image batch (`Math.ceil(5.5 * N)` vs.
+// `Math.ceil(6 * N)` diverge for N >= 2). Keeping the source rate
+// fractional preserves the right semantics for any future batching.
 
 export const FAL_PRICING: Record<string, { perImageCents?: number; perSecondCents?: number }> = {
   'flux-pro-ultra-image': { perImageCents: 5.5 },
@@ -183,7 +193,11 @@ export function computeElevenLabsCostCents(
 /**
  * Compute the World Labs (Marble) per-world fixed cost. Marble
  * bills per completed world regardless of scene complexity, so
- * the helper takes only a model id.
+ * the helper takes only a model id. `Math.ceil` is applied for
+ * consistency with every other compute helper in this file — the
+ * current rate values are already integers, but the rounding keeps
+ * the integer-cents invariant safe when a future rate lands as
+ * fractional (e.g. `$0.475 → 47.5 cents → ceils to 48`).
  */
 export function computeWorldLabsCostCents(model: string): number {
   const rates = WORLD_LABS_PRICING[model];
@@ -191,7 +205,7 @@ export function computeWorldLabsCostCents(model: string): number {
     console.warn(`[pricing] Unknown World Labs model "${model}" — cost will be 0`);
     return 0;
   }
-  return rates.perWorldCents;
+  return Math.ceil(rates.perWorldCents);
 }
 
 /**

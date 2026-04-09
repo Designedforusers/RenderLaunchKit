@@ -3,8 +3,6 @@ import { eq, sql } from 'drizzle-orm';
 import {
   assetCostEvents,
   ProjectCostsResponseSchema,
-  type CostEventProvider,
-  type ProjectCostsResponse,
 } from '@launchkit/shared';
 import { database } from '../lib/database.js';
 
@@ -70,17 +68,20 @@ projectCostRoutes.get('/:projectId/costs', async (c) => {
   );
 
   // The drizzle row's `provider` column is typed as `string` because
-  // the DB column is a plain `varchar(32)` rather than a pgEnum. We
-  // pass the string through to the response shape unmodified and let
-  // the Zod parse below catch any row whose `provider` value is not
-  // in the closed set — a row with an unknown provider is a bug
-  // (schema drift between the writer and the enum) and should surface
-  // as a 500 at this boundary, not as garbage on the dashboard.
-  const responseCandidate: ProjectCostsResponse = {
+  // the DB column is a plain `varchar(32)` rather than a pgEnum. Build
+  // the response as an unknown-typed literal and hand it to Zod —
+  // the schema's closed provider enum is the boundary check, so a
+  // row whose `provider` value is not in the set surfaces as a
+  // structured 500 at the `safeParse` below rather than leaking
+  // garbage onto the dashboard. Typing the literal via the response
+  // type (and casting row.provider to narrow it) would shortcut the
+  // boundary we want Zod to enforce — so we leave the types open
+  // until the parse step.
+  const responseCandidate: unknown = {
     projectId,
     totalCents: grandTotalCents,
     byProvider: rows.map((row) => ({
-      provider: row.provider as CostEventProvider,
+      provider: row.provider,
       totalCents: row.totalCents,
     })),
   };

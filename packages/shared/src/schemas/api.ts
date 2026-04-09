@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AssetStatusSchema, AssetTypeSchema, ProjectStatusSchema } from '../enums.js';
+import { AssetCostBreakdownSchema } from './asset-cost-event.js';
 import { CreativeReviewSchema } from './review.js';
 import { RepoAnalysisSchema } from './repo-analysis.js';
 import { ResearchResultSchema } from './research.js';
@@ -89,11 +90,11 @@ export const AssetResponseSchema = z.object({
   // than a jarring "—".
   costCents: z.number().int().nonnegative(),
   // `costBreakdown` is the per-event snapshot written inside
-  // `persistCostEvents`. `unknown` at the API boundary because
-  // the dashboard renders it opaque via the breakdown modal;
-  // the strict shape lives in `AssetCostBreakdownSchema` which
-  // the modal can `safeParse` before rendering.
-  costBreakdown: z.unknown().nullable(),
+  // `persistCostEvents`. End-to-end typed via `AssetCostBreakdownSchema`
+  // so the dashboard's breakdown modal can read the events list
+  // directly off the response without a second `safeParse` step —
+  // the schema is the single source of truth for the shape.
+  costBreakdown: AssetCostBreakdownSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
