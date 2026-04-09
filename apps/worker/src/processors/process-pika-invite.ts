@@ -159,6 +159,28 @@ export async function processPikaInvite(job: Job): Promise<void> {
       `[PikaInvite] session ${sessionRowId} joined: pika_session=${result.pikaSessionId}, auto-leave in ${String(AUTO_LEAVE_MS / 1000)}s`
     );
   } catch (err) {
+    // Dump the full forensic state before mapping to a message.
+    // The error-to-message extraction (`extractErrorMessage`)
+    // reduces the failure to a single line so the `error` column
+    // on the session row stays compact, but we also want the full
+    // stdout + stderr + exit code in the worker log for triage
+    // when something goes wrong. The upstream Python CLI prints
+    // useful progress info to both streams and throwing that
+    // away on failure is the kind of thing that turns a 5-minute
+    // debug into a 50-minute one.
+    if (err instanceof PikaSubprocessError) {
+      console.error(
+        `[PikaInvite] session ${sessionRowId} failed (exit ${String(err.exitCode)}, ${err.name})`
+      );
+      if (err.stdout.length > 0) {
+        console.error(`[PikaInvite] stdout:\n${err.stdout.slice(0, 4000)}`);
+      }
+      if (err.stderr.length > 0) {
+        console.error(`[PikaInvite] stderr:\n${err.stderr.slice(0, 4000)}`);
+      }
+    } else {
+      console.error(`[PikaInvite] session ${sessionRowId} failed:`, err);
+    }
     const message = extractErrorMessage(err);
     await markSessionFailed(sessionRowId, message);
     // Re-throw so BullMQ records the job as failed and the
