@@ -197,6 +197,17 @@ export class PikaInsufficientCreditsError extends PikaSubprocessError {
 
 // Map a numeric exit code to the right error class. Exit 0 never
 // reaches this function — it's the success path.
+//
+// Special case: a captured `checkoutUrl` from the stdout stream
+// ALWAYS promotes the result to `PikaInsufficientCreditsError`,
+// regardless of exit code. This matters because the upstream
+// `ensure_funded()` call polls for payment for up to 300 seconds
+// before returning exit 6 — if our wrapper's wall-clock kills the
+// subprocess first (exit null), we would otherwise lose the
+// captured URL and surface a misleading "timeout" error instead of
+// the real "you are out of credits, click here to top up" message.
+// The presence of a captured checkout URL is a stronger signal
+// than the exit code, so it wins.
 export function mapExitCodeToError(
   exitCode: number | null,
   message: string,
@@ -207,6 +218,12 @@ export function mapExitCodeToError(
     stdout: context.stdout,
     stderr: context.stderr,
   };
+  if (context.checkoutUrl !== null) {
+    return new PikaInsufficientCreditsError(message, {
+      ...base,
+      checkoutUrl: context.checkoutUrl,
+    });
+  }
   switch (exitCode) {
     case 1:
       return new PikaMissingKeyError(message, base);
@@ -332,7 +349,7 @@ export async function startMeeting(
     if (run.exitCode !== 0) {
       throw mapExitCodeToError(
         run.exitCode,
-        `Pika join failed (exit ${String(run.exitCode)}): ${firstStderrLine(run.stderr)}`,
+        `Pika join failed (exit ${String(run.exitCode)}): ${lastStderrLine(run.stderr)}`,
         {
           stdout: run.stdout,
           stderr: run.stderr,
@@ -413,7 +430,7 @@ export async function endMeeting(
   if (run.exitCode !== 0) {
     throw mapExitCodeToError(
       run.exitCode,
-      `Pika leave failed (exit ${String(run.exitCode)}): ${firstStderrLine(run.stderr)}`,
+      `Pika leave failed (exit ${String(run.exitCode)}): ${lastStderrLine(run.stderr)}`,
       {
         stdout: run.stdout,
         stderr: run.stderr,
@@ -745,14 +762,21 @@ async function writeSystemPromptFile(prompt: string | null): Promise<{
 }
 
 /**
- * Pick the first non-empty line of stderr for inclusion in a
- * thrown error message. Bounds the included text to 240 chars so a
- * chatty Python traceback does not blow up the DB column or the
- * log aggregator.
+ * Pick the LAST non-empty line of stderr for inclusion in a thrown
+ * error message. The Python CLI prints debug banners on stderr at
+ * the TOP of its run (e.g., `DevKey: dk_...`), so returning the
+ * first line would show a useless provenance echo instead of the
+ * actual failure reason. The last non-empty stderr line is almost
+ * always the error message or the most recent status update — both
+ * much more useful for triage. Bounded at 240 chars so a chatty
+ * Python traceback cannot blow up the DB column or the log
+ * aggregator.
  */
-function firstStderrLine(stderr: string): string {
-  const firstLine = stderr.split('\n').find((l) => l.trim().length > 0) ?? '';
-  return firstLine.length > 240 ? `${firstLine.slice(0, 240)}…` : firstLine;
+function lastStderrLine(stderr: string): string {
+  const lines = stderr.split('\n').filter((l) => l.trim().length > 0);
+  const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+  if (lastLine === undefined || lastLine.length === 0) return '';
+  return lastLine.length > 240 ? `${lastLine.slice(0, 240)}…` : lastLine;
 }
 
 /**
