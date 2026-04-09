@@ -16,6 +16,8 @@ import { processCommitMarketingRun } from './processors/process-commit-marketing
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
 import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
 import { processEmbedFeedbackEvent } from './processors/embed-feedback-event.js';
+import { processPikaInvite } from './processors/process-pika-invite.js';
+import { processPikaLeave } from './processors/process-pika-leave.js';
 import { projectProgressPublisher } from './lib/project-progress-publisher.js';
 import { database as db, databasePool } from './lib/database.js';
 import {
@@ -158,6 +160,34 @@ const trendingWorker = new Worker(
   }
 );
 
+// ── Pika Worker ──
+// Handles: pika-invite (user click) + pika-leave (user click AND
+// the 30-minute auto-timeout delayed job enqueued by the invite
+// processor). Two job names share the queue because they form a
+// single session lifecycle and the invite processor itself needs
+// a queue client to enqueue the delayed leave.
+
+const pikaWorker = new Worker(
+  QUEUE_NAMES.PIKA,
+  async (job) => {
+    if (job.name === JOB_NAMES.PIKA_INVITE) {
+      await processPikaInvite(job);
+      return;
+    }
+    if (job.name === JOB_NAMES.PIKA_LEAVE) {
+      await processPikaLeave(job);
+      return;
+    }
+    console.warn(
+      `[Worker:Pika] unknown job name "${job.name}" — skipping`
+    );
+  },
+  {
+    connection,
+    concurrency: QUEUE_CONFIG[QUEUE_NAMES.PIKA].concurrency,
+  }
+);
+
 // ── Review Worker ──
 
 const reviewWorker = new Worker(
@@ -214,6 +244,7 @@ for (const [name, worker] of Object.entries({
   analysis: analysisWorker,
   review: reviewWorker,
   trending: trendingWorker,
+  pika: pikaWorker,
 })) {
   worker.on('completed', (job) => {
     console.log(`[${name}] Job ${job.name}:${job.id ?? '<unknown>'} completed`);
@@ -235,7 +266,7 @@ for (const [name, worker] of Object.entries({
 console.log(`
 ╔══════════════════════════════════════════════════╗
 ║  LaunchKit Worker Service                        ║
-║  Queues: analysis, review, trending              ║
+║  Queues: analysis, review, trending, pika        ║
 ║  Generation: Render Workflows (apps/workflows/)  ║
 ║  Env: ${env.NODE_ENV.padEnd(42)}║
 ╚══════════════════════════════════════════════════╝
@@ -249,6 +280,7 @@ async function shutdown() {
     analysisWorker.close(),
     reviewWorker.close(),
     trendingWorker.close(),
+    pikaWorker.close(),
   ]);
   await databasePool.end();
   process.exit(0);

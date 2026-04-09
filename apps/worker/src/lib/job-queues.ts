@@ -23,10 +23,15 @@ export const redisConnection = {
 // The generation queue was removed in Phase 10 — every asset
 // generation now runs on the Render Workflows service
 // (`apps/workflows/`). The worker retains only the analysis,
-// review, and trending queues because the strategize handler
-// still triggers the workflow via the `triggerWorkflowGeneration`
-// helper (which uses the Render SDK, not BullMQ) and the review
-// and trending queues have no workflow equivalent.
+// review, trending, and pika queues because:
+//
+//   - the strategize handler still triggers the workflow via the
+//     `triggerWorkflowGeneration` helper (which uses the Render SDK,
+//     not BullMQ);
+//   - the review and trending queues have no workflow equivalent;
+//   - the pika queue hosts a short-lived Python subprocess per
+//     job that is too lightweight to justify its own service.
 export const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, { connection: redisConnection });
 export const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection: redisConnection });
 export const trendingQueue = new Queue(QUEUE_NAMES.TRENDING, { connection: redisConnection });
+export const pikaQueue = new Queue(QUEUE_NAMES.PIKA, { connection: redisConnection });
