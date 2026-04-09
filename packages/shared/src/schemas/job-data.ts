@@ -1,12 +1,9 @@
 import { z } from 'zod';
-import { AssetTypeSchema } from '../enums.js';
 import {
   ProjectCategorySchema,
   RepoAnalysisSchema,
 } from './repo-analysis.js';
 import { ResearchResultSchema } from './research.js';
-import { StrategyBriefSchema } from './strategy.js';
-import { StrategyInsightSchema } from './strategy-insight.js';
 
 /**
  * Schemas for BullMQ job payloads. Mirrors the original hand-written
@@ -62,19 +59,12 @@ export const StrategizeJobDataSchema = z.object({
 });
 export type StrategizeJobData = z.infer<typeof StrategizeJobDataSchema>;
 
-export const GenerateAssetJobDataSchema = z.object({
-  projectId: z.string().uuid(),
-  assetId: z.string().uuid(),
-  assetType: AssetTypeSchema,
-  generationInstructions: z.string(),
-  repoName: z.string(),
-  repoAnalysis: RepoAnalysisSchema,
-  research: ResearchResultSchema,
-  strategy: StrategyBriefSchema,
-  pastInsights: z.array(StrategyInsightSchema),
-  revisionInstructions: z.string().optional(),
-});
-export type GenerateAssetJobData = z.infer<typeof GenerateAssetJobDataSchema>;
+// Phase 10 note: `GenerateAssetJobDataSchema` was removed with the
+// BullMQ generation queue. Asset generation now runs as Render
+// Workflows tasks whose inputs are `{ projectId, assetId }` — tasks
+// re-read context from the DB at run time rather than shipping it
+// inline. See `apps/workflows/src/tasks/input-schemas.ts` for the
+// replacement Zod schemas.
 
 export const ReviewJobDataSchema = z.object({
   projectId: z.string().uuid(),

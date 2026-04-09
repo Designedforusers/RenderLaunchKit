@@ -61,7 +61,6 @@ export type {
   // job data
   AnalyzeRepoJobData,
   FilterWebhookJobData,
-  GenerateAssetJobData,
   JobData,
   ResearchJobData,
   ReviewJobData,

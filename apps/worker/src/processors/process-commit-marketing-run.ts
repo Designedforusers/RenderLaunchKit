@@ -4,7 +4,6 @@ import {
   GitHubWebhookPayloadSchema,
   parseJsonbColumn,
   RepoAnalysisSchema,
-  ResearchResultSchema,
   StrategyBriefSchema,
   type AssetType,
   type FilterWebhookJobData,
@@ -22,9 +21,8 @@ import {
 import { database as db } from '../lib/database.js';
 import { checkCommitDuplication } from '../lib/duplication-guard.js';
 import { findRelevantTrendsForCommit } from '../lib/trend-matcher.js';
-import { generationQueue } from '../lib/job-queues.js';
+import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
-import { getInsightsForCategory } from '../tools/project-insight-memory.js';
 import {
   generateVoyageEmbedding,
   VoyageEmbeddingError,
@@ -311,15 +309,16 @@ export async function processCommitMarketingRun(
   // schemas. Same boundary-validation discipline as the legacy
   // processor — a stale row with a wrong shape fails fast with a
   // structured Zod error naming the field.
+  //
+  // `research` used to be parsed here as well so the processor could
+  // bundle it into the BullMQ generation payload. Phase 10 moved
+  // generation to Render Workflows; the workflow tasks re-read the
+  // jsonb columns from the DB at run time via `parseJsonbColumn`, so
+  // the processor no longer needs to parse or ship `research` itself.
   const repoAnalysis = parseJsonbColumn(
     RepoAnalysisSchema,
     project.repoAnalysis,
     'project.repo_analysis'
-  );
-  const research = parseJsonbColumn(
-    ResearchResultSchema,
-    project.research,
-    'project.research'
   );
   const strategy = parseJsonbColumn(
     StrategyBriefSchema,
@@ -552,10 +551,15 @@ export async function processCommitMarketingRun(
     await db.insert(schema.outreachDrafts).values(outreachDraftRows);
   }
 
-  // Step 13: Asset regeneration fan-out. Preserves the legacy behaviour
-  // exactly: re-version the existing assets, queue per-asset generation
-  // jobs with the same idempotency key shape.
-  const pastInsights = await getInsightsForCategory(repoAnalysis.category);
+  // Step 13: Asset regeneration fan-out. Flip every asset the
+  // commit-marketability decision picked back to `status='queued'`,
+  // then trigger a workflow run; the parent task picks them up on
+  // its next iteration and dispatches via the five child tasks.
+  //
+  // Previously this processor pulled `getInsightsForCategory(...)`
+  // here to bundle `pastInsights` into the BullMQ payload. The
+  // workflow tasks re-read insights from the DB inside
+  // `dispatchAsset`, so the lookup is no longer needed on this path.
   const assetsToRegenerate = project.assets.filter((asset) =>
     decision.assetTypes.includes(asset.type)
   );
@@ -579,6 +583,16 @@ export async function processCommitMarketingRun(
     return;
   }
 
+  // Rewrite each asset's metadata with the fresh commit-aware
+  // generation instructions and flip the row back to `queued`. The
+  // workflow parent task picks up every queued asset on the project
+  // on its next run and dispatches each one through the right child
+  // task. The per-asset revision context (commit sha + message) is
+  // persisted to `asset.reviewNotes` — `dispatchAsset` in the
+  // workflows service reads that field as the revision prompt and
+  // passes it through to the writer / marketing-visual / product-video
+  // agents at call time.
+  let requeuedCount = 0;
   for (const asset of assetsToRegenerate) {
     const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
     const existingGenerationInstructions =
@@ -588,42 +602,42 @@ export async function processCommitMarketingRun(
           ? assetMetadata['brief']
           : undefined;
 
+    const freshGenerationInstructions = buildRegenerationInstructions(
+      asset.type,
+      existingGenerationInstructions,
+      webhookEvent.eventType,
+      commitMessage,
+      decision.reasoning
+    );
+
+    const nextMetadata: Record<string, unknown> = {
+      ...assetMetadata,
+      generationInstructions: freshGenerationInstructions,
+    };
+
+    const commitRevisionContext = `Refresh this asset for commit ${webhookEvent.commitSha ?? 'unknown'}: ${commitMessage}`;
+
     await db
       .update(schema.assets)
       .set({
         status: 'queued',
         userApproved: null,
-        reviewNotes: null,
+        reviewNotes: commitRevisionContext,
         qualityScore: null,
+        metadata: nextMetadata,
         version: asset.version + 1,
         updatedAt: new Date(),
       })
       .where(eq(schema.assets.id, asset.id));
+    requeuedCount += 1;
+  }
 
-    await generationQueue.add(
-      `generate-${asset.type.replace(/_/g, '-')}`,
-      {
-        projectId,
-        assetId: asset.id,
-        assetType: asset.type,
-        generationInstructions: buildRegenerationInstructions(
-          asset.type,
-          existingGenerationInstructions,
-          webhookEvent.eventType,
-          commitMessage,
-          decision.reasoning
-        ),
-        repoName: project.repoName,
-        repoAnalysis,
-        research,
-        strategy,
-        pastInsights,
-        revisionInstructions: `Refresh this asset for commit ${webhookEvent.commitSha ?? 'unknown'}: ${commitMessage}`,
-      },
-      {
-        jobId: `webhook__${webhookEvent.id}__${asset.id}__${asset.version + 1}`,
-      }
-    );
+  // Single workflow run covers every just-re-queued asset — the
+  // parent task reads `status='queued'` and fans out to the five
+  // compute-profile child tasks via run chaining. No per-asset
+  // enqueue loop needed anymore.
+  if (requeuedCount > 0) {
+    await triggerWorkflowGeneration(projectId);
   }
 
   // Step 14: Finalize the commit_marketing_runs row with the snapshots

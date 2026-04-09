@@ -146,25 +146,17 @@ const envSchema = z.object({
   ELEVENLABS_VOICE_ID_ALT: z.string().optional(),
   ELEVENLABS_MODEL_ID: z.string().optional(),
 
-  // ── Generation runtime (BullMQ vs Render Workflows) ──────────
-  // Phase 10 migration flag. When set to `workflows`, the strategize
-  // handler triggers a `generateAllAssetsForProject` run on the
-  // Render Workflows service instead of enqueuing BullMQ jobs for
-  // every asset on the generation queue. Default is `bullmq` so a
-  // fresh deploy without the new env vars keeps the existing code
-  // path. The cutover PR deletes this flag and the BullMQ generation
-  // queue entirely.
-  GENERATION_RUNTIME: z.enum(['bullmq', 'workflows']).default('bullmq'),
-  // Render API key used to trigger task runs from the worker. Only
-  // required when `GENERATION_RUNTIME=workflows`. The trigger helper
-  // throws at call time if the flag is set but the key is missing
-  // rather than making this `.min(1)` and failing every worker boot
-  // that doesn't use Workflows.
+  // ── Render Workflows (generation runtime) ────────────────────
+  // The strategize handler triggers a `generateAllAssetsForProject`
+  // run on the Render Workflows service at
+  // `${RENDER_WORKFLOW_SLUG}/generateAllAssetsForProject` via the
+  // helper at `./lib/trigger-workflow-generation.ts`. The lazy
+  // SDK client checks these at call time and throws a structured
+  // error if either is missing — the worker still boots on the
+  // BullMQ-only (analyze, review, trending) code path when the
+  // analysis handler never reaches strategize, which is why both
+  // fields are optional at the schema level rather than `.min(1)`.
   RENDER_API_KEY: z.string().optional(),
-  // Slug of the workflow service that hosts `generateAllAssetsForProject`.
-  // Format is `<workflow-service-slug>` — the helper prepends it to
-  // the task name when calling `render.workflows.startTask`. Only
-  // required when `GENERATION_RUNTIME=workflows`.
   RENDER_WORKFLOW_SLUG: z.string().optional(),
   // Opt-in flag for routing SDK calls to the local Render CLI task
   // server (`render workflows dev`, port 8120) instead of the cloud

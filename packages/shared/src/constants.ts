@@ -2,13 +2,16 @@
 
 export const QUEUE_NAMES = {
   ANALYSIS: 'analysis',
-  GENERATION: 'generation',
   REVIEW: 'review',
   // Background ingest of trending signals. The cron enqueues one job
   // per distinct project category on its 6-hour cadence; the worker
   // runs the agentic fan-out (Grok + Exa + 5 free APIs) and writes
   // clustered rows to the `trend_signals` table.
   TRENDING: 'trending',
+  // Phase 10 note: the `generation` queue was removed when asset
+  // generation moved to Render Workflows (`apps/workflows/`). Every
+  // generation run now lives on per-task VMs sized per compute
+  // profile rather than sharing the worker dyno's event loop.
 } as const;
 
 // ── Job Names ──
@@ -17,11 +20,9 @@ export const JOB_NAMES = {
   ANALYZE_REPO: 'analyze-repo',
   RESEARCH: 'research',
   STRATEGIZE: 'strategize',
-  GENERATE_BLOG: 'generate-blog',
-  GENERATE_SOCIAL: 'generate-social',
-  GENERATE_FAQ: 'generate-faq',
-  GENERATE_IMAGES: 'generate-images',
-  GENERATE_VIDEO: 'generate-video',
+  // Phase 10 note: per-asset-type generation job names were removed
+  // alongside the BullMQ generation queue. Asset generation now runs
+  // as Render Workflows tasks (see `apps/workflows/src/tasks/`).
   CREATIVE_REVIEW: 'creative-review',
   FILTER_WEBHOOK: 'filter-webhook',
   INGEST_TRENDING_SIGNALS: 'ingest-trending-signals',
@@ -51,15 +52,6 @@ export const QUEUE_CONFIG = {
       backoff: { type: 'exponential' as const, delay: 5000 },
       removeOnComplete: { count: 100 },
       removeOnFail: { count: 50 },
-    },
-  },
-  [QUEUE_NAMES.GENERATION]: {
-    concurrency: 5,
-    defaultJobOptions: {
-      attempts: 2,
-      backoff: { type: 'exponential' as const, delay: 3000 },
-      removeOnComplete: { count: 200 },
-      removeOnFail: { count: 100 },
     },
   },
   [QUEUE_NAMES.REVIEW]: {
@@ -93,11 +85,9 @@ export const JOB_TIMEOUTS = {
   [JOB_NAMES.ANALYZE_REPO]: 120_000,
   [JOB_NAMES.RESEARCH]: 180_000,
   [JOB_NAMES.STRATEGIZE]: 60_000,
-  [JOB_NAMES.GENERATE_BLOG]: 120_000,
-  [JOB_NAMES.GENERATE_SOCIAL]: 90_000,
-  [JOB_NAMES.GENERATE_FAQ]: 90_000,
-  [JOB_NAMES.GENERATE_IMAGES]: 300_000,
-  [JOB_NAMES.GENERATE_VIDEO]: 600_000,
+  // Phase 10 note: per-asset-type generation timeouts live on the
+  // Render Workflows task definitions (`apps/workflows/src/tasks/`)
+  // as `timeoutSeconds` options, one per compute-profile bucket.
   [JOB_NAMES.CREATIVE_REVIEW]: 60_000,
   // Phase 6 commit-marketing-run pipeline. The legacy webhook
   // processor finished in 5-10s; the new processor adds: Voyage diff

@@ -40,13 +40,13 @@ Six Render services, each with one job:
 | Service | Type | Role |
 |---|---|---|
 | `launchkit-web` | Web | Hono API + React SPA + webhook receiver + SSE |
-| `launchkit-worker` | Worker | BullMQ processor + Anthropic agentic loops + fal.ai |
+| `launchkit-worker` | Worker | BullMQ processor (analyze/research/strategize/review) + workflow trigger |
 | `launchkit-cron` | Cron | Repo monitor + nightly learning aggregation + cleanup |
-| `launchkit-workflows` | Workflows | Per-asset compute-isolated generation tasks (beta; opt-in) |
+| `launchkit-workflows` | Workflows | Per-asset compute-isolated generation tasks (6 tasks, 5 compute profiles) |
 | `launchkit-redis` | Key-Value | BullMQ queue + pub/sub for SSE + GitHub API cache |
 | `launchkit-db` | Postgres | Durable state + pgvector embeddings for similarity |
 
-The `launchkit-workflows` service is behind an opt-in feature flag (`GENERATION_RUNTIME=workflows` on the worker, default `bullmq`). When enabled, the fan-out generation stage runs on Render Workflows instead of the worker's BullMQ generation queue — each asset gets its own VM sized for its workload (cheap text, medium images, pro video/audio/3D), so a 10-minute video render never blocks a 20-second blog post behind it. See § "Enabling Render Workflows generation" below for the one-time setup.
+`launchkit-workflows` hosts the asset-generation fan-out on Render Workflows. Every generation path in the app — the strategize → generate handoff, the creative-review re-queue, the commit-marketing refresh, and the user-facing "Regenerate" button — flows through it. Each asset lands on its own VM sized for its workload: `starter` for text, `standard` for images and audio, `pro` for video and 3D. A 10-minute video render never blocks a 20-second blog post because they're on different hardware. See § "Create the workflow service" below for the one-time dashboard setup (Render Workflows is in public beta and not yet supported by Blueprint syntax).
 
 ### Why six services?
 
@@ -146,15 +146,15 @@ The seeded database includes example insights so you can see the system in actio
 4. Enter your API keys when prompted
 5. Wait ~3 minutes for everything to start
 
-That's it. Your LaunchKit is live in its default `GENERATION_RUNTIME=bullmq` configuration.
+That's it. Your LaunchKit is live — minus the workflow service, which still needs a one-time dashboard step. See § "Create the workflow service" below.
 
 The Blueprint also runs database migrations before each web deploy, so a fresh Render setup comes up with the schema in place.
 
-### Enabling Render Workflows generation (optional, beta)
+### Create the workflow service
 
-Render Workflows is Render's newest primitive — per-task isolated compute, configurable retry/timeout per task, first-class observability. LaunchKit can route asset generation through Workflows instead of the worker's BullMQ generation queue. This is strictly optional: the Blueprint deploy above works without it. Enable it after the initial deploy if you want the per-asset compute-sizing upgrade (cheap text, medium images, `pro` video/audio/3D).
+The `launchkit-workflows` service hosts every asset-generation run in the app. It is **required** for a working deploy — without it, the strategize handler and the user-facing "Regenerate" button will throw at call time when they try to trigger a workflow run.
 
-**Why it's not in the Blueprint:** as of the Workflows public beta, `render.yaml` does not support workflow services. The workflow has to be created via the Render dashboard. Every subsequent push to `main` auto-registers task changes via the build — the manual step is one-time.
+As of the Workflows public beta, `render.yaml` does not support workflow services, so this is a one-time manual step. Every subsequent push to `main` auto-registers task changes via the build.
 
 1. **Create the workflow service.** In the Render dashboard, click *New > Workflow*. Link your fork. Set:
    - **Language:** Node
@@ -169,15 +169,12 @@ Render Workflows is Render's newest primitive — per-task isolated compute, con
 3. **Deploy the workflow.** The build registers six tasks (`generateAllAssetsForProject`, `generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`) with the Render control plane.
 4. **Copy the workflow slug** from the dashboard's Tasks page. Format: `launchkit-workflows-<hash>` or whatever name the dashboard gave the workflow.
 5. **Generate a Render API key** from your account settings and copy it.
-6. **On the worker service's env page**, set:
-   - `GENERATION_RUNTIME=workflows` (this flips the feature flag; default is `bullmq`)
+6. **Set the trigger env vars on both the worker AND the web services** (both call `render.workflows.startTask`):
    - `RENDER_API_KEY=<the API key>`
    - `RENDER_WORKFLOW_SLUG=<the workflow slug>`
-7. **Restart the worker.** The strategize handler now triggers `render.workflows.startTask(...)` after each project's strategy phase instead of fan-out-enqueuing to BullMQ.
+7. **Restart the worker and web services.** Every generation run now routes through the workflow service.
 
-To roll back, flip `GENERATION_RUNTIME=bullmq` on the worker and restart. The BullMQ generation path is still in place — nothing is deleted until the cutover PR.
-
-**Local development against Workflows:** run `render workflows dev -- npm run dev -w apps/workflows` in a separate terminal (or use `npm run dev` at the repo root, which includes this in the concurrently-run service stack). Set `RENDER_USE_LOCAL_DEV=true` in your worker's `.env` to route the SDK calls to the local task server on `http://localhost:8120` instead of the Render control plane.
+**Local development against Workflows:** run `render workflows dev -- npm run dev -w apps/workflows` in a separate terminal (or use `npm run dev` at the repo root, which includes this in the concurrently-run service stack). Set `RENDER_USE_LOCAL_DEV=true` in your worker's `.env` (and web's) to route SDK calls to the local task server on `http://localhost:8120` instead of the Render control plane.
 
 ### Environment Variables
 
@@ -191,10 +188,9 @@ To roll back, flip `GENERATION_RUNTIME=bullmq` on the worker and restart. The Bu
 | `API_KEY` | No | Optional bearer token required by the API when set |
 | `DATABASE_URL` | Auto | Provided by Render Postgres |
 | `REDIS_URL` | Auto | Provided by Render Key-Value |
-| `GENERATION_RUNTIME` | No | Worker-only. `bullmq` (default) or `workflows`. See § "Enabling Render Workflows generation" |
-| `RENDER_API_KEY` | No | Worker-only. Required when `GENERATION_RUNTIME=workflows` |
-| `RENDER_WORKFLOW_SLUG` | No | Worker-only. Required when `GENERATION_RUNTIME=workflows` |
-| `RENDER_USE_LOCAL_DEV` | No | Worker and workflows. Set to `true` locally to route SDK calls to `render workflows dev` on port 8120 |
+| `RENDER_API_KEY` | Yes | Worker + web. Triggers Render Workflows task runs via the SDK. See § "Create the workflow service" |
+| `RENDER_WORKFLOW_SLUG` | Yes | Worker + web. Slug copied from the dashboard's workflow page after one-time setup |
+| `RENDER_USE_LOCAL_DEV` | No | Worker + web + workflows. Set to `true` locally to route SDK calls to `render workflows dev` on port 8120 |
 
 *Without a fal.ai key, image/video assets are skipped and the kit ships text-only. Everything else works.
 

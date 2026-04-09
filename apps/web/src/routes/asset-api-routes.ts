@@ -18,10 +18,8 @@ import {
   buildNarratedCacheSeed,
   buildNarratedVideoProps,
 } from '../lib/narration.js';
-import {
-  assetGenerationJobQueue,
-  enqueueEmbedFeedbackEvent,
-} from '../lib/job-queue-clients.js';
+import { enqueueEmbedFeedbackEvent } from '../lib/job-queue-clients.js';
+import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
 import {
   getRenderedVideoFilename,
   renderLaunchVideoAsset,
@@ -517,33 +515,42 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
     return c.json({ error: 'Project is not ready for regeneration yet' }, 409);
   }
 
-  // Update asset status
+  // Flip the asset status to `queued` so the workflow parent task's
+  // `queued`-asset filter picks it up, and bump the version so the
+  // downstream child task's idempotent-retry guard sees this as a
+  // fresh attempt. The `regenerating` status the legacy BullMQ path
+  // used is no longer observable — the workflow child task flips
+  // every queued asset to `generating` as its first DB write, then
+  // to `reviewing` on success (or `failed` on error).
+  //
+  // Any generation instructions the caller passed are persisted to
+  // the asset metadata alongside the brief so `dispatchAsset` picks
+  // them up on the re-read (the workflow path does not receive
+  // payload-level generation instructions — it re-reads every
+  // context field from the DB).
+  const existingMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
+  const nextMetadata: Record<string, unknown> = {
+    ...existingMetadata,
+    ...(body.instructions !== undefined
+      ? { generationInstructions: body.instructions }
+      : {}),
+  };
+
   await database
     .update(assets)
     .set({
-      status: 'regenerating',
+      status: 'queued',
       version: asset.version + 1,
+      metadata: nextMetadata,
       updatedAt: new Date(),
     })
     .where(eq(assets.id, id));
 
-  // Enqueue regeneration job
-  const jobName = `generate-${asset.type.replace(/_/g, '-')}`;
-  await assetGenerationJobQueue.add(jobName, {
-    projectId: asset.projectId,
-    assetId: asset.id,
-    assetType: asset.type,
-    generationInstructions:
-      body.instructions ?? 'Regenerate with improvements based on previous feedback',
-    repoName: project.repoName,
-    repoAnalysis: project.repoAnalysis,
-    research: project.research,
-    strategy: project.strategy,
-    pastInsights: [],
-    revisionInstructions: body.instructions,
-  }, {
-    jobId: `manual__${asset.projectId}__${asset.id}__${asset.version + 1}`,
-  });
+  // Trigger the parent workflow task. It reads every queued asset
+  // on the project (which is now just this one, because the other
+  // project assets are all in terminal states) and dispatches it to
+  // the correct child task.
+  await triggerWorkflowGeneration(asset.projectId);
 
   // Phase 7: feedback event log. A regeneration is a signal — even
   // without an edit text — that the user wasn't happy with the prior
@@ -556,7 +563,7 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
     editText: null,
   });
 
-  return c.json({ id: asset.id, status: 'regenerating', version: asset.version + 1 });
+  return c.json({ id: asset.id, status: 'queued', version: asset.version + 1 });
 });
 
 // ── POST /api/assets/:id/feedback — Unified feedback event log ──

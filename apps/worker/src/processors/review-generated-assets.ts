@@ -4,16 +4,13 @@ import {
   MAX_REVISION_ROUNDS,
   MIN_APPROVAL_SCORE,
   parseJsonbColumn,
-  RepoAnalysisSchema,
-  ResearchResultSchema,
   StrategyBriefSchema,
 } from '@launchkit/shared';
-import type { GenerateAssetJobData, ReviewJobData } from '@launchkit/shared';
+import type { ReviewJobData } from '@launchkit/shared';
 import { reviewLaunchKitAssets } from '../agents/launch-kit-review-agent.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
-import { getInsightsForCategory } from '../tools/project-insight-memory.js';
 import { database as db } from '../lib/database.js';
-import { generationQueue } from '../lib/job-queues.js';
+import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
 
 export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise<void> {
   const { projectId, assetIds } = data;
@@ -120,31 +117,23 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     const rejectedReviews = review.assetReviews.filter(
       (assetReview) => assetReview.score < MIN_APPROVAL_SCORE
     );
-    const repoAnalysis = parseJsonbColumn(
-      RepoAnalysisSchema,
-      project.repoAnalysis,
-      'project.repo_analysis'
-    );
-    const research = parseJsonbColumn(
-      ResearchResultSchema,
-      project.research,
-      'project.research'
-    );
-    const pastInsights = await getInsightsForCategory(repoAnalysis.category);
 
+    // Flip each rejected asset back to `queued` and bump its version.
+    // The workflow parent task picks up queued assets on its next
+    // run and dispatches them through the appropriate child task.
+    // `dispatchAsset` in the workflows service reads the asset's
+    // `reviewNotes` directly off the row (which the creative-director
+    // loop above already wrote as a concatenation of strengths,
+    // issues, and the explicit revision instructions) and passes it
+    // through to the agents as the revision prompt — so no per-asset
+    // payload needs to carry a revisionInstructions string the way
+    // the legacy BullMQ path did.
+    let rejectedCount = 0;
     for (const assetReview of rejectedReviews) {
       const asset = projectAssets.find((candidate) => candidate.id === assetReview.assetId);
       if (!asset) {
         continue;
       }
-
-      const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
-      const generationInstructions =
-        typeof assetMetadata['generationInstructions'] === 'string'
-          ? assetMetadata['generationInstructions']
-          : typeof assetMetadata['brief'] === 'string'
-            ? assetMetadata['brief']
-          : `Regenerate the ${asset.type} asset for this project.`;
 
       await db
         .update(schema.assets)
@@ -154,30 +143,13 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
           updatedAt: new Date(),
         })
         .where(eq(schema.assets.id, asset.id));
-
-      await generationQueue.add(
-        `generate-${asset.type.replace(/_/g, '-')}`,
-        {
-          projectId,
-          assetId: asset.id,
-          assetType: asset.type,
-          generationInstructions,
-          repoName: project.repoName,
-          repoAnalysis,
-          research,
-          strategy,
-          pastInsights,
-          revisionInstructions:
-            assetReview.revisionInstructions ??
-            `Improve this asset based on review feedback: ${assetReview.issues.join(', ')}`,
-        } satisfies GenerateAssetJobData,
-        {
-          jobId: `revision__${projectId}__${asset.id}__${asset.version + 1}`,
-        }
-      );
+      rejectedCount += 1;
     }
 
-    // Mark for revision
+    // Mark for revision BEFORE triggering the workflow so the
+    // dashboard's SSE consumer sees the revising state transition
+    // ahead of the new `phase_start: generating` event the workflow
+    // parent will emit once it reads the freshly-queued rows.
     await db
       .update(schema.projects)
       .set({
@@ -193,8 +165,15 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
       `Score ${review.overallScore.toFixed(1)}/10 — revising ${review.revisionPriority.length} assets`
     );
 
+    // Fire the workflow — only if we actually flipped at least one
+    // asset to `queued`, otherwise the parent task would run,
+    // find an empty queued-asset set, and return early for nothing.
+    if (rejectedCount > 0) {
+      await triggerWorkflowGeneration(projectId);
+    }
+
     console.log(
-      `[Review] Project ${projectId} needs revision (score: ${review.overallScore}, round ${project.revisionCount + 1})`
+      `[Review] Project ${projectId} needs revision (score: ${review.overallScore}, round ${project.revisionCount + 1}, ${rejectedCount} assets re-queued)`
     );
   }
 }
