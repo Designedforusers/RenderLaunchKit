@@ -73,7 +73,12 @@ export type CostEvent = z.infer<typeof CostEventSchema>;
  */
 export const AssetCostEventRowSchema = z.object({
   id: z.string().uuid(),
-  assetId: z.string().uuid(),
+  // Nullable since the Pika video-meeting integration: session-
+  // scoped cost events (`provider='pika'`) set this to NULL and
+  // rely on `projectId` for aggregation. Per-asset cost events
+  // (Anthropic, fal, ElevenLabs, World Labs, Voyage) continue to
+  // carry a concrete UUID.
+  assetId: z.string().uuid().nullable(),
   projectId: z.string().uuid(),
   provider: CostEventProviderSchema,
   operation: z.string(),

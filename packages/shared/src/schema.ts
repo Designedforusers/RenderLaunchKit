@@ -576,16 +576,23 @@ export const assetCostEvents = pgTable(
   'asset_cost_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    assetId: uuid('asset_id')
-      .references(() => assets.id, { onDelete: 'cascade' })
-      .notNull(),
+    // Nullable since migration 0010: session-scoped cost events
+    // (Pika video meeting) set this to NULL and rely on project_id
+    // for aggregation. Per-asset events (Anthropic, fal, ElevenLabs,
+    // World Labs, Voyage) continue to populate asset_id exactly as
+    // before. The FK + ON DELETE CASCADE still apply to rows that
+    // carry a concrete asset_id; NULL rows are unaffected by the
+    // cascade.
+    assetId: uuid('asset_id').references(() => assets.id, {
+      onDelete: 'cascade',
+    }),
     projectId: uuid('project_id')
       .references(() => projects.id, { onDelete: 'cascade' })
       .notNull(),
-    // `anthropic | fal | elevenlabs | world_labs | voyage`. Not a
-    // pgEnum so adding a provider doesn't require a migration — the
-    // Zod enum in `schemas/asset-cost-event.ts` is the source of
-    // truth for which values the dashboard knows how to render.
+    // `anthropic | fal | elevenlabs | world_labs | voyage | pika`.
+    // Not a pgEnum so adding a provider doesn't require a migration
+    // — the Zod enum in `schemas/asset-cost-event.ts` is the source
+    // of truth for which values the dashboard knows how to render.
     provider: varchar('provider', { length: 32 }).notNull(),
     // `messages.create | flux-pro-ultra-image | kling-video-standard
     // | tts | marble-generate | embed`. Free-form so a future
@@ -612,6 +619,80 @@ export const assetCostEvents = pgTable(
   ]
 );
 
+// ── Pika video-meeting sessions ──
+//
+// One row per "Invite AI teammate to a meet" click on the project
+// dashboard. The BullMQ `pika` queue's invite processor inserts the
+// row with `status='pending'`, spawns the vendored
+// `pikastreaming_videomeeting.py` CLI via `child_process.spawn`,
+// captures the Pika-side session identifier from the streaming JSON
+// stdout, and updates the row through the linear lifecycle
+//
+//     pending → joining → active → ending → ended
+//                     ↘ failed
+//
+// See the migration 0010_pika_meeting_sessions.sql file for the full
+// column rationale and the valid status values. Application-level
+// validation lives in `packages/shared/src/schemas/pika.ts`
+// (`PikaSessionStatusSchema`, `PikaMeetingSessionRowSchema`).
+export const pikaMeetingSessions = pgTable(
+  'pika_meeting_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    // Raw Google Meet / Zoom URL passed to `--meet-url`. TEXT
+    // because upstream URLs have no reasonable length cap.
+    meetUrl: text('meet_url').notNull(),
+    // Display name used by the Pika avatar in the meeting. Falls
+    // back to `{project.displayName} teammate` at invite time when
+    // the dashboard does not supply one.
+    botName: text('bot_name').notNull(),
+    // The raw PIKA_AVATAR value passed to the `--image` flag of the
+    // Python CLI. Either an absolute local file path OR an https://
+    // URL — the CLI handles both transparently. Stored so a future
+    // regenerate path can round-trip the same avatar.
+    avatarRef: text('avatar_ref').notNull(),
+    // Null means the default voice (English_radiant_girl) is used
+    // at spawn time.
+    voiceId: text('voice_id'),
+    // Per-project system prompt built at invite time from
+    // repoAnalysis + research + strategy + asset metadata, capped
+    // at 4 KB by the builder. Stored verbatim for diff + replay.
+    systemPrompt: text('system_prompt'),
+    // Returned by the join subprocess on its first stdout line.
+    // Null during `pending` and the initial moments of `joining`;
+    // becomes non-null before status flips to `active`. Indexed
+    // for the leave flow's row lookup.
+    pikaSessionId: text('pika_session_id'),
+    // Application-level enum (varchar(32)) — see
+    // `PikaSessionStatusSchema` in `schemas/pika.ts` for the six
+    // valid values and the state machine they form.
+    status: varchar('status', { length: 32 }).notNull().default('pending'),
+    // Structured failure message from the TypeScript wrapper's
+    // error class on non-zero exit. Null on the happy path.
+    error: text('error'),
+    // Set when status first flips to `active`. Used by
+    // `computePikaMeetingCostCents` at leave time.
+    startedAt: timestamp('started_at'),
+    // Set when status flips to `ended` or `failed`. The difference
+    // (ended_at - started_at) drives the billable duration.
+    endedAt: timestamp('ended_at'),
+    // Computed at leave time and cached on the row so the
+    // dashboard per-session chip does not need to query the cost
+    // event log on every render.
+    costCents: integer('cost_cents').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('pika_meeting_sessions_project_id_idx').on(table.projectId),
+    index('pika_meeting_sessions_pika_session_id_idx').on(table.pikaSessionId),
+    index('pika_meeting_sessions_status_idx').on(table.status),
+  ]
+);
+
 // ── Relations ──
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -620,6 +701,7 @@ export const projectsRelations = relations(projects, ({ many }) => ({
   webhookEvents: many(webhookEvents),
   commitMarketingRuns: many(commitMarketingRuns),
   costEvents: many(assetCostEvents),
+  pikaMeetingSessions: many(pikaMeetingSessions),
 }));
 
 export const assetsRelations = relations(assets, ({ one, many }) => ({
@@ -640,6 +722,16 @@ export const assetCostEventsRelations = relations(
     }),
     project: one(projects, {
       fields: [assetCostEvents.projectId],
+      references: [projects.id],
+    }),
+  })
+);
+
+export const pikaMeetingSessionsRelations = relations(
+  pikaMeetingSessions,
+  ({ one }) => ({
+    project: one(projects, {
+      fields: [pikaMeetingSessions.projectId],
       references: [projects.id],
     }),
   })
