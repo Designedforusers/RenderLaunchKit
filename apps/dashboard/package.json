@@ -13,7 +13,7 @@
     "@launchkit/video": "*",
     "@remotion/player": "^4.0.446",
     "framer-motion": "^11.15.0",
-    "gsap": "^3.12.5",
+    "gsap": "^3.14.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
