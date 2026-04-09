@@ -473,15 +473,43 @@ async function runPikaSubprocess(
     // streams are open.
     let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
+      // Build a MINIMAL subprocess env. We deliberately do NOT
+      // spread `...process.env` here: that would forward every
+      // worker secret (DATABASE_URL, ANTHROPIC_API_KEY, REDIS_URL,
+      // and friends) into the Python subprocess's environment
+      // where it has no legitimate use, and a compromised or
+      // crashed subprocess could expose them via core dumps, child
+      // process inheritance, or a write-to-/proc leak. The
+      // subprocess only needs `PATH` (to find `python3` and any
+      // dependency binaries like `ffmpeg`) and `PIKA_DEV_KEY`.
+      // `process.env` uses bracket notation here because
+      // `noPropertyAccessFromIndexSignature` forbids the dot form
+      // on `Record<string, string | undefined>`.
+      // `NodeJS.ProcessEnv` is `Record<string, string | undefined>`
+      // so `noPropertyAccessFromIndexSignature` forces bracket
+      // notation on reads AND writes. Building a plain record and
+      // typing it for the `spawn` option satisfies the constraint.
+      const subprocessEnv: Record<string, string> = {
+        PIKA_DEV_KEY: input.apiKey,
+      };
+      const parentPath = process.env['PATH'];
+      if (parentPath !== undefined) {
+        subprocessEnv['PATH'] = parentPath;
+      }
+      // Preserve HOME too — `pikastreaming_videomeeting.py` reads
+      // `~/.pika/devkey` as a fallback lookup for the dev key (see
+      // upstream `get_devkey()` at line 84). We always pass
+      // `PIKA_DEV_KEY` directly so the fallback never fires, but
+      // the HOME preservation keeps `Path.home()` working in case
+      // the upstream adds new HOME-relative file reads in a
+      // future refresh.
+      const parentHome = process.env['HOME'];
+      if (parentHome !== undefined) {
+        subprocessEnv['HOME'] = parentHome;
+      }
+
       child = spawn('python3', input.args, {
-        env: {
-          ...process.env,
-          // The rename discussed in the module docblock: our
-          // `PIKA_API_KEY` becomes the subprocess's expected
-          // `PIKA_DEV_KEY`. We pass the raw value here because the
-          // subprocess treats it as opaque — no escaping concerns.
-          PIKA_DEV_KEY: input.apiKey,
-        },
+        env: subprocessEnv,
         // Inherit the repo root as cwd. The Python CLI resolves
         // `SKILL_DIR` from its own `__file__` path, so cwd is
         // irrelevant to its own file lookups — but a predictable
@@ -533,12 +561,24 @@ async function runPikaSubprocess(
       // We do NOT await the kill — 'exit' fires synchronously on
       // SIGTERM delivery in practice, and the `settled` guard
       // prevents a double-resolve if it doesn't.
+      //
+      // Destroy the stdio streams AFTER scheduling the SIGKILL so
+      // the data handlers stop accumulating into the (now-capped)
+      // buffers for the 3-second grace window. A subprocess that
+      // intentionally delays exit and keeps writing cannot extend
+      // the resident buffer state past the timeout moment.
       child.kill('SIGTERM');
-      setTimeout(() => {
+      const killHandle = setTimeout(() => {
         if (!settled) {
           child.kill('SIGKILL');
         }
       }, 3000);
+      // `unref()` so this follow-up timer does not keep the Node
+      // event loop alive if the subprocess exits cleanly before
+      // the 3-second SIGKILL fires.
+      killHandle.unref();
+      child.stdout.destroy();
+      child.stderr.destroy();
       settle({
         exitCode: null,
         stdout: stdoutBuffer,
@@ -636,6 +676,31 @@ async function runPikaSubprocess(
     });
 
     child.on('exit', (code) => {
+      // Flush any trailing partial line from the subprocess. The
+      // Python CLI's `print(json.dumps(...))` always emits a
+      // newline, so in the happy path `lineBuffer` is empty here —
+      // but a subprocess that exits mid-write or a degenerate
+      // stdout flush could leave a partial final line behind.
+      // Parse whatever is left so the last update is not silently
+      // dropped.
+      const trailing = lineBuffer.trim();
+      if (trailing.length > 0) {
+        try {
+          const parsed: unknown = JSON.parse(trailing);
+          const asUpdate = PikaSessionUpdateSchema.safeParse(parsed);
+          if (asUpdate.success) {
+            updates.push(asUpdate.data);
+          } else {
+            const asLeave = PikaLeaveResponseSchema.safeParse(parsed);
+            if (asLeave.success) {
+              leaveResponses.push(asLeave.data);
+            }
+          }
+        } catch {
+          // Non-JSON trailing text — ignore, same policy as the
+          // mid-stream parse loop.
+        }
+      }
       settle({
         exitCode: code,
         stdout: stdoutBuffer,
