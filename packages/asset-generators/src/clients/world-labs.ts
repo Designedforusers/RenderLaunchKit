@@ -154,6 +154,32 @@ export function createWorldLabsClient(
           type: 'text',
           text_prompt: input.worldPrompt,
         },
+        // Permission defaults on the Marble API are `public: false`
+        // and `allow_id_access: false`, which means only the API key
+        // owner's account can view the generated world via its URL.
+        // That is the wrong default for LaunchKit's use case: the
+        // whole point of generating a `world_scene` asset is so a
+        // user's marketing kit has a public 3D scene they can link
+        // from a blog post or tweet. We explicitly set both flags
+        // true so:
+        //
+        //   `public: true`          — world is listed on Marble
+        //                             and anyone can discover it.
+        //   `allow_id_access: true` — anyone with the world URL can
+        //                             view it, even if Marble's
+        //                             explore-page listing is off.
+        //
+        // Caught by a real end-to-end run: the earlier code shipped
+        // without a `permission` field, a world was generated for
+        // cal.com's `world_scene` asset, and the operator browsing
+        // to the Marble viewer URL hit "You don't have permission
+        // to view this world" because the default permission keeps
+        // worlds private to the API key owner. Reference:
+        // https://docs.worldlabs.ai/api/reference/worlds/generate.md.
+        permission: {
+          public: true,
+          allow_id_access: true,
+        },
       },
       schema: OperationSchema,
       context: 'world generation start',
