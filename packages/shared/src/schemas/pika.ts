@@ -162,6 +162,16 @@ export type PikaLeaveResponse = z.infer<typeof PikaLeaveResponseSchema>;
 //   meeting_bot_connected   — the Meet participant seat is occupied
 //                              by Pika's bot
 //
+// Every field uses `.nullish()` (optional + nullable), not just
+// `.optional()`, because Pika's live API returns `null` for fields
+// that would otherwise be absent — most notably `error_message` on
+// a healthy session. The first local invite against a live Pika
+// account exposed this: `z.string().optional()` rejected a response
+// like `{status: "ready", error_message: null, ...}` because
+// `optional()` accepts "field absent" but NOT "field present with
+// null value." Using `.nullish()` accepts both forms, which is the
+// defensive default for every field on a schema we do not control.
+//
 // The poller treats `status === 'closed' | 'error'` as the signal
 // to leave. A future participant-count field would enable the "bot
 // is alone in the room for N polls" idle-detect heuristic; for the
@@ -169,11 +179,11 @@ export type PikaLeaveResponse = z.infer<typeof PikaLeaveResponseSchema>;
 // and Pika's session flipping to `closed` in response.
 export const PikaSessionStateSchema = z
   .object({
-    status: z.string().optional(),
-    video_worker_connected: z.boolean().optional(),
-    video_connected: z.boolean().optional(),
-    meeting_bot_connected: z.boolean().optional(),
-    error_message: z.string().optional(),
+    status: z.string().nullish(),
+    video_worker_connected: z.boolean().nullish(),
+    video_connected: z.boolean().nullish(),
+    meeting_bot_connected: z.boolean().nullish(),
+    error_message: z.string().nullish(),
   })
   .passthrough();
 export type PikaSessionState = z.infer<typeof PikaSessionStateSchema>;
