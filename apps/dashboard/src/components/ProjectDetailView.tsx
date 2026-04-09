@@ -9,10 +9,10 @@ import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import { Tooltip } from './ui/index.js';
+import { AssetGallery } from './gallery/index.js';
 import {
   PipelineStageStrip,
   AgentToolCallStream,
-  AnimatedAssetGrid,
   StageLoader,
   toolCallsFromEvents,
   latestDetailByPhase,
@@ -45,12 +45,6 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   }
 
   const isInProgress = !['complete', 'failed'].includes(project.status);
-  const textAssets = project.assets.filter(
-    (a) => !['og_image', 'social_card', 'product_video'].includes(a.type)
-  );
-  const mediaAssets = project.assets.filter((a) =>
-    ['og_image', 'social_card', 'product_video'].includes(a.type)
-  );
 
   const currentPhase = phaseFromStatus(project.status);
   const activeDetail = currentPhase ? detailsByPhase[currentPhase] : null;
@@ -397,63 +391,25 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             </motion.div>
           )}
 
-          {/* Media Assets */}
-          {(mediaAssets.length > 0 || isGenerating) && (
-            <div>
-              <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
-                Media
-              </h3>
-              <AnimatedAssetGrid
-                assets={mediaAssets}
-                expectedCount={Math.min(2, expectedAssetCount)}
-                isGenerating={isGenerating && mediaAssets.length === 0}
-                className="grid gap-4 sm:grid-cols-2"
-                renderAsset={(asset) => (
-                  <GeneratedAssetCard
-                    asset={asset}
-                    onRefresh={refresh}
-                    projectAssets={project.assets}
-                  />
-                )}
-              />
-            </div>
-          )}
-
-          {/* Text Assets */}
-          {(textAssets.length > 0 || isGenerating) && (
-            <div>
-              <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
-                Content
-              </h3>
-              <AnimatedAssetGrid
-                assets={textAssets}
-                expectedCount={Math.max(
-                  0,
-                  expectedAssetCount - mediaAssets.length
-                )}
-                isGenerating={isGenerating}
-                className="grid gap-4"
-                renderAsset={(asset) => (
-                  <GeneratedAssetCard
-                    asset={asset}
-                    onRefresh={refresh}
-                    projectAssets={project.assets}
-                  />
-                )}
-              />
-            </div>
-          )}
-
-          {project.assets.length === 0 && !isInProgress && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="text-center py-12 text-surface-500 border border-dashed border-surface-800 rounded-2xl"
-            >
-              <span className="block mb-2 text-2xl text-surface-700">~</span>
-              No assets generated yet
-            </motion.div>
+          {/* Asset Gallery — tabbed by category (All / Visuals /
+              Videos / Audio / Written). Replaces the previous
+              Media + Content split so `world_scene`, `voice_commercial`,
+              and future asset types get a clear home instead of
+              falling into a catch-all bucket. Owns its own empty
+              state; renders the full kit on the default "All" tab. */}
+          {(project.assets.length > 0 || isGenerating || !isInProgress) && (
+            <AssetGallery
+              assets={project.assets}
+              expectedCount={expectedAssetCount}
+              isGenerating={isGenerating}
+              renderAsset={(asset) => (
+                <GeneratedAssetCard
+                  asset={asset}
+                  onRefresh={refresh}
+                  projectAssets={project.assets}
+                />
+              )}
+            />
           )}
         </div>
 
