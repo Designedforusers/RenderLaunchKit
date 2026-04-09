@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import gsap from 'gsap';
 import {
   PIPELINE_PHASES,
@@ -97,15 +97,23 @@ export function PipelineStageStrip({
   const stages = computeStages(status, detailsByPhase);
   const fillRef = useRef<HTMLDivElement | null>(null);
   const targetPct = stageProgressPct(stages);
+  const shouldReduceMotion = useReducedMotion();
 
   // GSAP drives the fill bar explicitly so we can use an ease that
   // framer-motion's spring system does not expose cleanly — and so
   // the fill animation is decoupled from React reconciliation. The
   // bar tweens to its new target whenever the percentage changes,
   // which happens on every phase transition.
+  //
+  // Under reduced-motion we set the width directly so the bar
+  // lands on its final state without the 1.1s expo.out tween.
   useEffect(() => {
     const el = fillRef.current;
     if (!el) return;
+    if (shouldReduceMotion) {
+      el.style.width = `${targetPct.toString()}%`;
+      return;
+    }
     const ctx = gsap.context(() => {
       gsap.to(el, {
         width: `${targetPct.toString()}%`,
@@ -116,7 +124,7 @@ export function PipelineStageStrip({
     return () => {
       ctx.revert();
     };
-  }, [targetPct]);
+  }, [targetPct, shouldReduceMotion]);
 
   return (
     <div className="card relative overflow-hidden">

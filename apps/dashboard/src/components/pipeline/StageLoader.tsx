@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import gsap from 'gsap';
 import {
   PIPELINE_PHASE_META,
@@ -106,38 +106,49 @@ const ANALYZE_ROWS = [
 ];
 
 function AnalyzeBody() {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <div className="relative h-48 overflow-hidden rounded-lg border border-surface-800 bg-surface-950/60 p-4 font-mono text-xs">
-      {/* Scan line sweeping top to bottom */}
-      <motion.div
-        className="pointer-events-none absolute inset-x-0 h-8 bg-gradient-to-b from-transparent via-accent-500/15 to-transparent"
-        animate={{ y: ['-20%', '120%'] }}
-        transition={{
-          duration: 2.4,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      />
+      {/* Scan line sweeping top to bottom — suppressed under reduced-motion */}
+      {!shouldReduceMotion && (
+        <motion.div
+          className="pointer-events-none absolute inset-x-0 h-8 bg-gradient-to-b from-transparent via-accent-500/15 to-transparent"
+          animate={{ y: ['-20%', '120%'] }}
+          transition={{
+            duration: 2.4,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+      )}
       <div className="relative space-y-1.5">
         {ANALYZE_ROWS.map((row, idx) => (
           <motion.div
             key={`${row.name}-${idx.toString()}`}
             className="flex items-center gap-2 text-surface-400"
             initial={{ opacity: 0.3 }}
-            animate={{
-              opacity: [0.3, 1, 0.3],
-              color: [
-                'rgb(148 163 184)',
-                'rgb(52 211 153)',
-                'rgb(148 163 184)',
-              ],
-            }}
-            transition={{
-              duration: 2.4,
-              delay: (idx / ANALYZE_ROWS.length) * 2.4,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
+            animate={
+              shouldReduceMotion
+                ? { opacity: 1 }
+                : {
+                    opacity: [0.3, 1, 0.3],
+                    color: [
+                      'rgb(148 163 184)',
+                      'rgb(52 211 153)',
+                      'rgb(148 163 184)',
+                    ],
+                  }
+            }
+            transition={
+              shouldReduceMotion
+                ? { duration: 0.2, ease: 'easeOut' }
+                : {
+                    duration: 2.4,
+                    delay: (idx / ANALYZE_ROWS.length) * 2.4,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }
+            }
             style={{ paddingLeft: `${(row.indent * 12).toString()}px` }}
           >
             <span className="text-surface-700">&#9500;&#9472;</span>
@@ -164,12 +175,20 @@ const RESEARCH_CHIPS = [
 
 function ResearchBody() {
   const ringsRef = useRef<HTMLDivElement | null>(null);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     const el = ringsRef.current;
     if (!el) return;
     const rings = el.querySelectorAll<HTMLDivElement>('[data-ring]');
     if (rings.length === 0) return;
+    // Under reduced-motion, land the rings on a static final frame
+    // (faintly visible, no scale tween) instead of running the
+    // infinite GSAP repeat.
+    if (shouldReduceMotion) {
+      gsap.set(rings, { scale: 1, opacity: 0.25 });
+      return;
+    }
     const ctx = gsap.context(() => {
       gsap.set(rings, { scale: 0, opacity: 0.6 });
       gsap.to(rings, {
@@ -184,7 +203,7 @@ function ResearchBody() {
     return () => {
       ctx.revert();
     };
-  }, []);
+  }, [shouldReduceMotion]);
 
   return (
     <div className="relative flex h-48 items-center justify-center overflow-hidden rounded-lg border border-surface-800 bg-surface-950/60">
@@ -208,33 +227,47 @@ function ResearchBody() {
         <div className="h-3 w-3 animate-breathe rounded-full bg-accent-400" />
       </div>
 
-      {/* Orbiting source chips */}
-      {RESEARCH_CHIPS.map((chip, idx) => (
-        <motion.div
-          key={chip.label}
-          className="absolute left-1/2 top-1/2 font-mono text-[10px] uppercase tracking-wider text-accent-300"
-          initial={{
-            x: 0,
-            y: 0,
-            opacity: 0,
-          }}
-          animate={{
-            x: Math.cos((chip.angle * Math.PI) / 180) * 70,
-            y: Math.sin((chip.angle * Math.PI) / 180) * 56,
-            opacity: [0, 1, 1, 0],
-          }}
-          transition={{
-            duration: 2.6,
-            repeat: Infinity,
-            delay: idx * 0.4,
-            ease: 'easeOut',
-          }}
-        >
-          <span className="rounded-full bg-accent-500/10 px-2 py-1 ring-1 ring-accent-500/30">
-            {chip.label}
-          </span>
-        </motion.div>
-      ))}
+      {/* Orbiting source chips — under reduced-motion the chips land
+          at their final positions with a static opacity instead of
+          the repeat: Infinity fade loop. */}
+      {RESEARCH_CHIPS.map((chip, idx) => {
+        const finalX = Math.cos((chip.angle * Math.PI) / 180) * 70;
+        const finalY = Math.sin((chip.angle * Math.PI) / 180) * 56;
+        return (
+          <motion.div
+            key={chip.label}
+            className="absolute left-1/2 top-1/2 font-mono text-[10px] uppercase tracking-wider text-accent-300"
+            initial={{
+              x: 0,
+              y: 0,
+              opacity: 0,
+            }}
+            animate={
+              shouldReduceMotion
+                ? { x: finalX, y: finalY, opacity: 0.8 }
+                : {
+                    x: finalX,
+                    y: finalY,
+                    opacity: [0, 1, 1, 0],
+                  }
+            }
+            transition={
+              shouldReduceMotion
+                ? { duration: 0.2, ease: 'easeOut' }
+                : {
+                    duration: 2.6,
+                    repeat: Infinity,
+                    delay: idx * 0.4,
+                    ease: 'easeOut',
+                  }
+            }
+          >
+            <span className="rounded-full bg-accent-500/10 px-2 py-1 ring-1 ring-accent-500/30">
+              {chip.label}
+            </span>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
@@ -245,6 +278,7 @@ function ResearchBody() {
 // strategy visibly "takes shape" as the agent reasons through it.
 
 function StrategizeBody() {
+  const shouldReduceMotion = useReducedMotion();
   const nodes = [
     { id: 'audience', x: 20, y: 30, label: 'Audience' },
     { id: 'tone', x: 80, y: 24, label: 'Tone' },
@@ -286,13 +320,21 @@ function StrategizeBody() {
               strokeWidth={1}
               strokeDasharray="0 1"
               initial={{ pathLength: 0 }}
-              animate={{ pathLength: [0, 1, 1, 0] }}
-              transition={{
-                duration: 3.2,
-                delay: idx * 0.35,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
+              animate={
+                shouldReduceMotion
+                  ? { pathLength: 1 }
+                  : { pathLength: [0, 1, 1, 0] }
+              }
+              transition={
+                shouldReduceMotion
+                  ? { duration: 0.2, ease: 'easeOut' }
+                  : {
+                      duration: 3.2,
+                      delay: idx * 0.35,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }
+              }
             />
           );
         })}
@@ -365,6 +407,7 @@ const GENERATE_TILES = [
 ];
 
 function GenerateBody() {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <div className="relative h-48 overflow-hidden rounded-lg border border-surface-800 bg-surface-950/60 p-4">
       <div className="grid h-full grid-cols-4 grid-rows-2 gap-2">
@@ -373,22 +416,30 @@ function GenerateBody() {
             key={label}
             className="relative flex items-center justify-center overflow-hidden rounded-md border border-surface-800 bg-surface-900/60"
             initial={{ opacity: 0.2, scale: 0.9 }}
-            animate={{
-              opacity: [0.2, 1, 1, 0.2],
-              scale: [0.9, 1, 1, 0.9],
-              borderColor: [
-                'rgb(30 41 59)',
-                'rgb(52 211 153)',
-                'rgb(52 211 153)',
-                'rgb(30 41 59)',
-              ],
-            }}
-            transition={{
-              duration: 2.6,
-              delay: (idx % 4) * 0.15 + Math.floor(idx / 4) * 0.08,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
+            animate={
+              shouldReduceMotion
+                ? { opacity: 1, scale: 1, borderColor: 'rgb(52 211 153)' }
+                : {
+                    opacity: [0.2, 1, 1, 0.2],
+                    scale: [0.9, 1, 1, 0.9],
+                    borderColor: [
+                      'rgb(30 41 59)',
+                      'rgb(52 211 153)',
+                      'rgb(52 211 153)',
+                      'rgb(30 41 59)',
+                    ],
+                  }
+            }
+            transition={
+              shouldReduceMotion
+                ? { duration: 0.2, ease: 'easeOut' }
+                : {
+                    duration: 2.6,
+                    delay: (idx % 4) * 0.15 + Math.floor(idx / 4) * 0.08,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }
+            }
           >
             {/* Background shimmer */}
             <div className="absolute inset-0 overflow-hidden">
@@ -417,50 +468,70 @@ const REVIEW_ROWS = [
 ];
 
 function ReviewBody() {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <div className="h-48 overflow-hidden rounded-lg border border-surface-800 bg-surface-950/60 p-4">
       <div className="flex h-full flex-col justify-between">
-        {REVIEW_ROWS.map((row, idx) => (
-          <div
-            key={row.label}
-            className="flex items-center gap-3 font-mono text-xs"
-          >
-            <span className="w-28 truncate text-surface-400">{row.label}</span>
-            <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-surface-800">
-              <motion.div
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-300"
-                initial={{ width: '0%' }}
-                animate={{ width: [`0%`, `${(row.score * 10).toString()}%`, `${(row.score * 10).toString()}%`, '0%'] }}
-                transition={{
-                  duration: 3.2,
-                  delay: idx * 0.3,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                  times: [0, 0.35, 0.85, 1],
-                }}
-              />
-            </div>
-            <motion.span
-              className={`w-10 text-right font-semibold ${
-                row.score >= 8 ? 'text-accent-300' : 'text-amber-300'
-              }`}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{
-                opacity: [0, 1, 1, 0],
-                scale: [0.5, 1, 1, 0.5],
-              }}
-              transition={{
-                duration: 3.2,
-                delay: idx * 0.3 + 0.5,
-                repeat: Infinity,
-                ease: 'easeInOut',
-                times: [0, 0.2, 0.85, 1],
-              }}
+        {REVIEW_ROWS.map((row, idx) => {
+          const targetWidth = `${(row.score * 10).toString()}%`;
+          return (
+            <div
+              key={row.label}
+              className="flex items-center gap-3 font-mono text-xs"
             >
-              {row.score.toFixed(1)}
-            </motion.span>
-          </div>
-        ))}
+              <span className="w-28 truncate text-surface-400">{row.label}</span>
+              <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-surface-800">
+                <motion.div
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-300"
+                  initial={{ width: '0%' }}
+                  animate={
+                    shouldReduceMotion
+                      ? { width: targetWidth }
+                      : { width: [`0%`, targetWidth, targetWidth, '0%'] }
+                  }
+                  transition={
+                    shouldReduceMotion
+                      ? { duration: 0.2, ease: 'easeOut' }
+                      : {
+                          duration: 3.2,
+                          delay: idx * 0.3,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                          times: [0, 0.35, 0.85, 1],
+                        }
+                  }
+                />
+              </div>
+              <motion.span
+                className={`w-10 text-right font-semibold ${
+                  row.score >= 8 ? 'text-accent-300' : 'text-amber-300'
+                }`}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={
+                  shouldReduceMotion
+                    ? { opacity: 1, scale: 1 }
+                    : {
+                        opacity: [0, 1, 1, 0],
+                        scale: [0.5, 1, 1, 0.5],
+                      }
+                }
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0.2, ease: 'easeOut' }
+                    : {
+                        duration: 3.2,
+                        delay: idx * 0.3 + 0.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                        times: [0, 0.2, 0.85, 1],
+                      }
+                }
+              >
+                {row.score.toFixed(1)}
+              </motion.span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

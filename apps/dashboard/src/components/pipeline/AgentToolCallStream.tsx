@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import gsap from 'gsap';
 import {
   PIPELINE_PHASE_META,
@@ -35,15 +35,23 @@ export function AgentToolCallStream({
 }: AgentToolCallStreamProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const visible = toolCalls.slice(-maxEntries);
+  const shouldReduceMotion = useReducedMotion();
 
   // GSAP-powered auto-scroll to the bottom whenever a new entry
   // arrives. We use GSAP rather than `element.scrollTo({ behavior:
   // 'smooth' })` because the native smooth scroll does not queue
   // cleanly when multiple new entries arrive in the same frame —
   // GSAP's tween system coalesces them into a single animation.
+  //
+  // Under reduced-motion, we snap the scroll position directly so
+  // the user still sees the newest entries without the 0.6s tween.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    if (shouldReduceMotion) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
     const ctx = gsap.context(() => {
       gsap.to(el, {
         scrollTop: el.scrollHeight,
@@ -54,7 +62,7 @@ export function AgentToolCallStream({
     return () => {
       ctx.revert();
     };
-  }, [visible.length]);
+  }, [visible.length, shouldReduceMotion]);
 
   return (
     <div className="card relative overflow-hidden">
@@ -122,8 +130,12 @@ export function AgentToolCallStream({
             <span className="font-mono text-xs text-surface-600">&gt;</span>
             <motion.span
               className="inline-block h-3 w-1.5 bg-accent-400"
-              animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [1, 0, 1] }}
+              transition={
+                shouldReduceMotion
+                  ? { duration: 0 }
+                  : { duration: 1, repeat: Infinity, ease: 'linear' }
+              }
             />
           </motion.div>
         )}

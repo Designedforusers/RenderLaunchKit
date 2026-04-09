@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import type { Asset } from '../lib/api.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
@@ -115,6 +115,7 @@ export function GeneratedAssetCard({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [exportingNarrated, setExportingNarrated] = useState(false);
   const { toast } = useToast();
+  const shouldReduceMotion = useReducedMotion();
 
   const isMedia = ['og_image', 'social_card', 'product_video'].includes(asset.type);
   const isInProgress = ['queued', 'generating', 'regenerating'].includes(asset.status);
@@ -622,9 +623,13 @@ export function GeneratedAssetCard({
                 stroke="currentColor"
                 strokeWidth={2}
                 viewBox="0 0 24 24"
-                animate={regenerating ? { rotate: 360 } : { rotate: 0 }}
+                animate={
+                  regenerating && !shouldReduceMotion
+                    ? { rotate: 360 }
+                    : { rotate: 0 }
+                }
                 transition={
-                  regenerating
+                  regenerating && !shouldReduceMotion
                     ? { duration: 1, repeat: Infinity, ease: 'linear' }
                     : { duration: 0.3 }
                 }
@@ -690,6 +695,7 @@ function QualityScoreRing({ score }: { score: number }) {
 }
 
 function InProgressBody({ tintText }: { tintText: string }) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <div className="relative overflow-hidden py-8 flex flex-col items-center justify-center text-surface-500 min-h-[140px]">
       {/* Shimmer sweep backdrop */}
@@ -698,8 +704,12 @@ function InProgressBody({ tintText }: { tintText: string }) {
       </div>
       <motion.div
         className={`relative mb-3 ${tintText}`}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
+        animate={shouldReduceMotion ? { rotate: 0 } : { rotate: 360 }}
+        transition={
+          shouldReduceMotion
+            ? { duration: 0 }
+            : { duration: 1.4, repeat: Infinity, ease: 'linear' }
+        }
       >
         <svg className="h-8 w-8" viewBox="0 0 24 24">
           <circle
@@ -721,8 +731,12 @@ function InProgressBody({ tintText }: { tintText: string }) {
       <motion.p
         className="text-sm"
         initial={{ opacity: 0.6 }}
-        animate={{ opacity: [0.6, 1, 0.6] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [0.6, 1, 0.6] }}
+        transition={
+          shouldReduceMotion
+            ? { duration: 0 }
+            : { duration: 2, repeat: Infinity, ease: 'easeInOut' }
+        }
       >
         Generating...
       </motion.p>

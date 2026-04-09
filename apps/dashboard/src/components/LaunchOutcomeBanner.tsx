@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 interface LaunchOutcomeBannerProps {
   status: string;
@@ -34,18 +34,24 @@ export function LaunchOutcomeBanner({
 }
 
 function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <motion.div
       initial={{ opacity: 0, y: -16, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -16, scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 240, damping: 22 }}
+      transition={
+        shouldReduceMotion
+          ? { duration: 0.15, ease: 'easeOut' }
+          : { type: 'spring', stiffness: 240, damping: 22 }
+      }
       className="relative overflow-hidden rounded-2xl border border-accent-500/40 bg-gradient-to-br from-accent-500/15 via-accent-500/5 to-transparent px-6 py-5 mb-6"
     >
       {/* Confetti particles. Each one travels along its own path
           using a CSS-variable seeded translate, with a small spin
-          and fade for an organic feel. */}
-      <ConfettiBurst />
+          and fade for an organic feel. Skipped entirely under
+          reduced-motion — the banner itself still fades in. */}
+      {!shouldReduceMotion && <ConfettiBurst />}
 
       <div className="relative flex items-center justify-between gap-6">
         <div className="flex items-center gap-4">
@@ -61,12 +67,14 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
               damping: 18,
             }}
           >
-            {/* Pulsing halo */}
-            <motion.span
-              className="absolute inset-0 rounded-full bg-accent-500/40"
-              animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
-              transition={{ duration: 2.2, repeat: Infinity }}
-            />
+            {/* Pulsing halo — infinite loop suppressed under reduced-motion */}
+            {!shouldReduceMotion && (
+              <motion.span
+                className="absolute inset-0 rounded-full bg-accent-500/40"
+                animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
+                transition={{ duration: 2.2, repeat: Infinity }}
+              />
+            )}
             <motion.svg
               viewBox="0 0 24 24"
               fill="none"
@@ -136,17 +144,26 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
 }
 
 function FailureBanner() {
+  const shouldReduceMotion = useReducedMotion();
   return (
     <motion.div
       initial={{ opacity: 0, y: -16 }}
-      animate={{ opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] }}
+      animate={
+        shouldReduceMotion
+          ? { opacity: 1, y: 0 }
+          : { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, 0] }
+      }
       exit={{ opacity: 0, y: -16 }}
-      transition={{
-        type: 'spring',
-        stiffness: 240,
-        damping: 22,
-        x: { duration: 0.5, ease: 'easeOut', delay: 0.15 },
-      }}
+      transition={
+        shouldReduceMotion
+          ? { duration: 0.15, ease: 'easeOut' }
+          : {
+              type: 'spring',
+              stiffness: 240,
+              damping: 22,
+              x: { duration: 0.5, ease: 'easeOut', delay: 0.15 },
+            }
+      }
       className="relative overflow-hidden rounded-2xl border border-red-500/40 bg-gradient-to-br from-red-500/15 via-red-500/5 to-transparent px-6 py-5 mb-6"
     >
       <div className="relative flex items-center gap-4">
