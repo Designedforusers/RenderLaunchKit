@@ -24,7 +24,7 @@ const VIDEO_ASSET_TYPES: readonly AssetType[] = [
   'video_storyboard',
 ] as const;
 
-export const generateVideoAsset = task<[SingleAssetInput], void>(
+export const generateVideoAsset = task<[SingleAssetInput], SingleAssetInput>(
   {
     name: 'generateVideoAsset',
     plan: 'pro',
@@ -35,12 +35,17 @@ export const generateVideoAsset = task<[SingleAssetInput], void>(
       backoffScaling: 2,
     },
   },
-  async function generateVideoAsset(input: SingleAssetInput): Promise<void> {
+  async function generateVideoAsset(
+    input: SingleAssetInput
+  ): Promise<SingleAssetInput> {
     const parsed = SingleAssetInputSchema.parse(input);
     await dispatchAsset({
       projectId: parsed.projectId,
       assetId: parsed.assetId,
       allowedTypes: VIDEO_ASSET_TYPES,
     });
+    // See `generate-written-asset.ts` for the rationale on echoing
+    // the parsed input as the task result instead of returning void.
+    return parsed;
   }
 );
