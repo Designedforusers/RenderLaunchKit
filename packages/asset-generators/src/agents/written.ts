@@ -1,5 +1,26 @@
 import {
+  BlogPostContentSchema,
+  ChangelogEntryContentSchema,
+  FaqContentSchema,
+  HackerNewsPostContentSchema,
+  LinkedInPostContentSchema,
+  NO_MARKDOWN_PROMPT_RULES,
+  PodcastScriptContentSchema,
+  ProductHuntContentSchema,
+  TipsContentSchema,
+  TwitterThreadContentSchema,
+  VoiceCommercialContentSchema,
+  blogPostToPlainText,
+  changelogEntryToPlainText,
+  faqToPlainText,
+  hackerNewsPostToPlainText,
+  linkedInPostToPlainText,
   parseVoiceoverScript,
+  podcastScriptToPlainText,
+  productHuntToPlainText,
+  tipsToPlainText,
+  twitterThreadToPlainText,
+  voiceCommercialToPlainText,
 } from '@launchkit/shared';
 import type {
   AssetType,
@@ -21,7 +42,26 @@ export interface WriterInput {
 }
 
 export interface WriterResult {
+  /**
+   * Plain-text rendering of the structured content. Stored in the
+   * `assets.content` column so existing text consumers (search,
+   * download-as-text, fallback rendering) keep working. Contains no
+   * markdown syntax, no em dashes, no asterisks — the structured
+   * generators produce clean fields and the plain-text serializers
+   * never inject artifacts.
+   */
   content: string;
+  /**
+   * Structured metadata attached to the asset row. For structured
+   * asset types the full parsed content object lives at
+   * `metadata.structured`, the tagged `contentShape` discriminator
+   * lets consumers narrow the object, and convenience fields
+   * (title, wordCount, etc) stay at the top level for existing
+   * code paths that read them directly. For the single structural-
+   * format type still on the legacy parser (`voiceover_script`),
+   * `structured` and `contentShape` are omitted and the parser's
+   * own fields are stored at the top level exactly as before.
+   */
   metadata: Record<string, unknown>;
 }
 
@@ -29,98 +69,481 @@ export interface WriterAgentDeps {
   llm: LLMClient;
 }
 
-// `as const` plus an `AssetType` index lets us hand each lookup back
-// as a definitely-defined string under `noUncheckedIndexedAccess` —
-// see `systemPrompt` below.
-const ASSET_PROMPTS = {
-  blog_post: `You are an expert developer content writer. Write a compelling blog post that:
-- Opens with a hook that identifies a pain point the reader knows well
-- Explains the product clearly with technical depth (not marketing fluff)
-- Includes realistic code examples or usage demonstrations
-- Has a clear structure: intro, problem, solution, features, getting started, conclusion
-- Uses the specified tone consistently
-- Is 800-1500 words
-- Includes a suggested title and subtitle
+// =====================================================================
+// Shared prompt pieces
+// =====================================================================
 
-Output format:
-# [Title]
-## [Subtitle]
+/**
+ * Base system prompt every structured writer prepends to its
+ * type-specific instructions. Carries the formatting guarantees
+ * (no markdown, no em dashes, no asterisks) that keep the output
+ * clean at the field level. Schema validation is the second line
+ * of defense; this prompt is the first.
+ */
+const STRUCTURED_OUTPUT_PREAMBLE = `You are an expert developer-marketing content writer.
 
-[Content in markdown]`,
+Your output must be VALID JSON that matches the provided schema exactly. Do not include explanations, preamble, or any text outside the JSON object.
 
-  twitter_thread: `You are a developer Twitter strategist. Write a compelling Twitter/X thread that:
-- Opens with a hook tweet that stops the scroll (question, bold claim, or surprising stat)
-- Each tweet is under 280 characters
-- Breaks down the product's value into digestible points
-- Includes suggested hashtags
-- Ends with a CTA (link, try it, star it)
-- 5-10 tweets total
-- Numbers each tweet (1/, 2/, etc.)
+${NO_MARKDOWN_PROMPT_RULES}`;
 
-Output each tweet on its own line, separated by blank lines.`,
+/**
+ * Build the context block that accompanies every writer system
+ * prompt. Pulled out of the old inline definition so every
+ * per-type generator can call the same function rather than
+ * maintaining its own copy.
+ */
+function buildContext(input: WriterInput): string {
+  const revisionBlock =
+    input.revisionInstructions !== undefined &&
+    input.revisionInstructions.length > 0
+      ? `\n\n## Revision Instructions\n${input.revisionInstructions}`
+      : '';
 
-  linkedin_post: `You are a LinkedIn content strategist for tech audiences. Write a LinkedIn post that:
-- Opens with a thought-provoking first line (LinkedIn shows first ~2 lines)
-- Tells a story or shares an insight about the problem space
-- Introduces the product naturally (not salesy)
-- Uses short paragraphs and line breaks for readability
-- Includes relevant emojis sparingly
-- 200-400 words
-- Ends with a question to drive engagement`,
+  const insightsBlock =
+    input.pastInsights.length > 0
+      ? `\n\n## Insights from Similar Projects\n${input.pastInsights
+          .map((i) => `- ${i.insight}`)
+          .join('\n')}`
+      : '';
 
-  product_hunt_description: `You are a Product Hunt launch expert. Write a Product Hunt description that:
-- Has a catchy tagline (under 60 characters)
-- Explains what it does in one clear sentence
-- Lists 3-5 key features with brief descriptions
-- Mentions the tech stack briefly
-- Includes a "Made with" section
-- Keeps the tone enthusiastic but genuine
+  return `## Product Context
 
-Output format:
-**Tagline:** [tagline]
+**Repository:** ${input.repoAnalysis.description || input.research.targetAudience}
+**Language:** ${input.repoAnalysis.language}
+**Tech Stack:** ${input.repoAnalysis.techStack.join(', ')}
+**Stars:** ${input.repoAnalysis.stars.toString()}
 
-**Description:**
-[description]
+## Strategic Direction
+**Positioning:** ${input.strategy.positioning}
+**Tone:** ${input.strategy.tone}
+**Key Messages:**
+${input.strategy.keyMessages.map((m) => `- ${m}`).join('\n')}
 
-**Key Features:**
-[features]`,
+## Research Context
+**Target Audience:** ${input.research.targetAudience}
+**Market Context:** ${input.research.marketContext}
+**Unique Angles:** ${input.research.uniqueAngles.join('; ')}
+**Competitors:** ${input.research.competitors
+    .map((c) => `${c.name}: ${c.differentiator}`)
+    .join('; ')}
 
-  hacker_news_post: `You are an experienced Hacker News poster. Write a Show HN post that:
-- Title follows "Show HN: [Product] – [One-line description]" format
-- Is technically honest and specific
-- Explains the motivation (why you built it)
-- Mentions interesting technical decisions
-- Is conversational and humble (HN hates marketing speak)
-- Under 300 words
-- Acknowledges limitations
+## Asset Generation Instructions
+${input.generationInstructions}${revisionBlock}${insightsBlock}`;
+}
 
-Output format:
-**Title:** Show HN: [title]
+function buildBaseMetadata(input: WriterInput): Record<string, unknown> {
+  return {
+    assetType: input.assetType,
+    tone: input.strategy.tone,
+  };
+}
 
-**Post:**
-[post body]`,
+/**
+ * Assemble a per-type system prompt by prepending the shared
+ * structured-output preamble. Keeps every per-type string focused
+ * on its own "what to generate" instructions.
+ */
+function withStructuredPreamble(typeSpecific: string): string {
+  return `${STRUCTURED_OUTPUT_PREAMBLE}\n\n${typeSpecific}`;
+}
 
-  faq: `You are a technical documentation writer. Write a comprehensive FAQ that:
-- Covers 8-12 common questions developers would ask
-- Includes installation/setup questions
-- Covers "how is this different from X" comparisons
-- Addresses pricing/licensing
-- Includes troubleshooting tips
-- Uses clear, direct language
-- Groups questions logically
+// =====================================================================
+// Per-type generators
+// =====================================================================
 
-Output as markdown with ## for each question.`,
+/** Shared default for structured writer token budgets. Kept at the
+ *  original 4096 so a long blog post or a detailed FAQ has enough
+ *  room to land without hitting the ceiling. */
+const DEFAULT_MAX_TOKENS = 4096;
 
-  changelog_entry: `You are a changelog writer. Write a changelog entry that:
-- Follows Keep a Changelog format
-- Groups changes into Added, Changed, Fixed, Removed
-- Is specific about what changed
-- Links to relevant issues/PRs when applicable
-- Is concise but complete
+async function generateBlogPost(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a compelling developer blog post.
 
-Output in markdown format.`,
+Guidance:
+- Open with a hook that identifies a pain point the reader knows well
+- Explain the product clearly with technical depth, not marketing fluff
+- Include realistic usage details or technical decisions in the body sections
+- Keep a clear arc across sections: problem, solution, how it works, wrap-up
+- 3 to 6 body sections, each with its own heading and 1 to 3 paragraphs
+- Use the specified tone consistently
 
-  voiceover_script: `You are a video script writer for developer product demos. Write a voiceover script that:
+Return a JSON object matching the BlogPostContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    BlogPostContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  const content = blogPostToPlainText(structured);
+  return {
+    content,
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'blog_post',
+      structured,
+      title: structured.title,
+      subtitle: structured.subtitle,
+      wordCount: content.split(/\s+/).filter((w) => w.length > 0).length,
+    },
+  };
+}
+
+async function generateTwitterThread(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a compelling Twitter / X thread.
+
+Guidance:
+- Hook tweet stops the scroll (question, bold claim, surprising stat)
+- Each tweet under 280 characters — keep individual tweets tight
+- Break the product's value into digestible points
+- Closing CTA tweet drives the reader to try, star, or share
+- Include 2 to 5 suggested hashtags
+
+Return a JSON object matching the TwitterThreadContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    TwitterThreadContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: twitterThreadToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'twitter_thread',
+      structured,
+      tweetCount: structured.tweets.length + 2, // hook + body + cta
+    },
+  };
+}
+
+async function generateLinkedInPost(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a LinkedIn post for a technical audience.
+
+Guidance:
+- Open with a thought-provoking first line (LinkedIn shows the first 1-2 lines)
+- Tell a story or share an insight about the problem space
+- Introduce the product naturally, never salesy
+- Use short paragraphs, 1-3 sentences each
+- End with a single question that drives engagement
+
+Return a JSON object matching the LinkedInPostContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    LinkedInPostContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: linkedInPostToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'linkedin_post',
+      structured,
+    },
+  };
+}
+
+/**
+ * NOTE: the asset type key is `product_hunt_description` but the
+ * stored `metadata.contentShape` tag is `'product_hunt'`. The two
+ * strings are intentionally different — `AssetType` is the DB enum
+ * value that existed before this file was rewritten, and
+ * `contentShape` is the shorter label the dashboard's dispatch
+ * switch uses. Do not "fix" the asymmetry by renaming one to match
+ * the other; the dashboard's `parseStructuredAssetContent` matches
+ * on the short form and would stop rendering Product Hunt cards
+ * if the two drifted.
+ */
+async function generateProductHunt(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a Product Hunt launch description.
+
+Guidance:
+- Tagline is a catchy one-liner under 60 characters
+- Description is 2-4 sentences explaining what the product does and why it matters
+- Key features: 3-5 items, each with a short name and a one-sentence description
+- Tech stack is one sentence naming the main technologies
+- First comment is the maker's 2-3 sentence first comment on the thread, conversational
+
+Return a JSON object matching the ProductHuntContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    ProductHuntContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: productHuntToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'product_hunt',
+      structured,
+      tagline: structured.tagline,
+    },
+  };
+}
+
+async function generateHackerNewsPost(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a Show HN post for Hacker News.
+
+Guidance:
+- Title starts with "Show HN: " followed by product name, colon, short description
+- Be technically honest and specific
+- Motivation: why you built it (1-3 sentences)
+- Body: what it does and the interesting technical decisions (2-5 sentences)
+- Technical decisions: 2-5 bullet points of the key technical choices
+- Limitations: an honest note about what doesn't work yet (1-3 sentences)
+- Conversational, humble, technical. HN hates marketing speak.
+
+Return a JSON object matching the HackerNewsPostContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    HackerNewsPostContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: hackerNewsPostToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'hacker_news_post',
+      structured,
+      title: structured.title,
+    },
+  };
+}
+
+async function generateFaq(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a developer FAQ for this product.
+
+Guidance:
+- Cover 8-12 total questions across 2-5 category groups
+- Include installation, comparison, pricing, and troubleshooting questions
+- Use clear, direct language
+- Each answer is 1-4 sentences
+
+Return a JSON object matching the FaqContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    FaqContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  const questionCount = structured.groups.reduce(
+    (sum, g) => sum + g.entries.length,
+    0
+  );
+  return {
+    content: faqToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'faq',
+      structured,
+      questionCount,
+    },
+  };
+}
+
+async function generateChangelogEntry(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a changelog entry.
+
+Guidance:
+- Version follows semantic versioning (e.g. "1.2.0")
+- Date is an ISO date string (YYYY-MM-DD)
+- Group changes into added / changed / fixed / removed buckets
+- Be specific about what changed, each bullet one sentence
+- Buckets can be empty arrays if nothing fits them
+
+Return a JSON object matching the ChangelogEntryContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    ChangelogEntryContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: changelogEntryToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'changelog_entry',
+      structured,
+      version: structured.version,
+    },
+  };
+}
+
+async function generateTips(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate 5-8 actionable launch tips for this product.
+
+Guidance:
+- Tips must be specific to this product's positioning, tone, and category
+- Speak directly to a developer audience, never generic marketing platitudes
+- Action-oriented: tell the reader what to do
+- Each tip is one sentence
+- Reference concrete details from the strategy and research where it sharpens the advice
+
+Return a JSON object matching the TipsContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    TipsContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  return {
+    content: tipsToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'tips',
+      structured,
+      tipCount: structured.tips.length,
+    },
+  };
+}
+
+async function generateVoiceCommercial(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a 30-second voice commercial script for this product.
+
+Guidance:
+- Hook names the pain point in one sentence
+- Body is 60-90 words of flowing prose, a single punch followed by one differentiator
+- Call to action is the closing spoken line
+- Conversational but tight — every word earns its place
+- No stage directions, speaker labels, or production notes
+
+Return a JSON object matching the VoiceCommercialContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    VoiceCommercialContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  const wordCount = structured.body
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+  return {
+    content: voiceCommercialToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'voice_commercial',
+      structured,
+      wordCount,
+      estimatedDurationSeconds: Math.round(wordCount / 2.5),
+    },
+  };
+}
+
+async function generatePodcastScript(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const systemPrompt = withStructuredPreamble(
+    `Generate a 2-3 minute podcast dialog between two hosts named Alex and Sam discussing this product.
+
+Guidance:
+- 18-30 alternating dialog lines
+- Alex asks the questions a curious developer would ask
+- Sam adds technical depth, counterpoints, and specifics
+- The product is the subject throughout
+- Natural rhythm; short reactions are fine
+- End on a clear "where to go next" line
+
+Return a JSON object matching the PodcastScriptContentSchema.`
+  );
+  const structured = await llm.generateJSON(
+    PodcastScriptContentSchema,
+    systemPrompt,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS }
+  );
+  // Compute speaker turn and duration estimates the same way the
+  // old regex-based path did, so existing review and display code
+  // that reads these fields off metadata keeps working.
+  let speakerTurns = 0;
+  let lastSpeaker: string | null = null;
+  let totalWords = 0;
+  for (const line of structured.lines) {
+    if (line.speaker !== lastSpeaker) {
+      speakerTurns += 1;
+      lastSpeaker = line.speaker;
+    }
+    totalWords += line.text.split(/\s+/).filter((w) => w.length > 0).length;
+  }
+  const estimatedDurationSeconds = Math.round(totalWords / 2.3 + speakerTurns * 0.4);
+
+  return {
+    content: podcastScriptToPlainText(structured),
+    metadata: {
+      ...buildBaseMetadata(input),
+      contentShape: 'podcast_script',
+      structured,
+      lineCount: structured.lines.length,
+      speakerTurns,
+      estimatedDurationSeconds,
+    },
+  };
+}
+
+// =====================================================================
+// Voiceover script — legacy parser path
+// =====================================================================
+
+/**
+ * Voiceover script uses a bespoke `[SCREEN: ...] "line"` format
+ * that predates this file's structured-output migration. The
+ * existing parser (`parseVoiceoverScript`) is already structured
+ * and consumed downstream by the narration pipeline, so the
+ * rewrite keeps its prompt-and-parse flow unchanged. Content
+ * field stores the raw script (minus any markdown drift the
+ * NO_MARKDOWN rules suppress); `metadata.segments` is the parser's
+ * typed output.
+ */
+const VOICEOVER_SCRIPT_PROMPT = `${NO_MARKDOWN_PROMPT_RULES}
+
+You are a video script writer for developer product demos. Write a voiceover script that:
 - Is 30-60 seconds when read aloud
 - Opens with the problem statement
 - Shows the solution in action (describe what's on screen)
@@ -136,176 +559,75 @@ Output in markdown format.`,
 
 Output format:
 [SCREEN: description]
-"Voiceover text"`,
+"Voiceover text"`;
 
-  tips: `You are a developer marketing strategist who has shipped many launches. Write a list of actionable, opinionated launch tips that:
-- Are specific to this product's positioning, tone, and category
-- Speak directly to a developer audience (no generic marketing platitudes)
-- Are action-oriented — every tip tells the reader what to do, not what to think
-- Reference concrete details from the strategy and research context where it sharpens the advice
-- Are one sentence each, tight and confident
-- Number 5-8 tips total
-
-Output format:
-1. First tip as a single sentence.
-2. Second tip as a single sentence.
-3. ...
-
-No preamble, no closing remarks, no markdown headings — just the numbered list.`,
-
-  voice_commercial: `You are a copywriter for developer-tool radio ads. Write a 30-second commercial script meant to be read aloud by a single voice that:
-- Is plain prose, 80-120 words total
-- Opens with a hook that names the pain
-- Lands a single product punch in one clean line
-- Highlights exactly one differentiator (the strongest one from the strategy)
-- Closes with a clear, spoken call to action on its own final line
-- Stays conversational but tight — every word earns its place
-- Contains no stage directions, no speaker labels, no markdown, no headings, no bullets, no quotation marks around the script
-
-Output the commercial as flowing prose. Nothing else.`,
-
-  podcast_script: `You are a podcast script writer. Write a 2-3 minute dialogue between two hosts named Alex and Sam discussing this product.
-
-Format requirements (strict — output is parsed line-by-line):
-- Every line begins with either "Alex:" or "Sam:" followed by a single space and the spoken text
-- Lines alternate between Alex and Sam
-- 18-30 lines total
-- No markdown, no stage directions, no narrator, no blank lines between turns, no headings
-- No parenthetical asides like "(laughs)" — just spoken words
-
-Content guidance:
-- Alex sets up topics and asks the questions a curious developer would ask
-- Sam adds technical depth, counterpoints, and specifics drawn from the product context
-- The product is the subject of the conversation throughout
-- Natural rhythm — short reactions are fine, but each line should add something
-- End on a clear "where to go next" line that points listeners to the product
-
-Output format (literal):
-Alex: First line of dialogue.
-Sam: Reply line of dialogue.
-Alex: Next line.
-Sam: ...`,
-} as const satisfies Record<string, string>;
-
-type WriterAssetType = keyof typeof ASSET_PROMPTS;
-
-function isWriterAssetType(value: string): value is WriterAssetType {
-  return value in ASSET_PROMPTS;
-}
-
-export function makeGenerateWrittenAsset(deps: WriterAgentDeps) {
-  return async function generateWrittenAsset(
-    input: WriterInput
-  ): Promise<WriterResult> {
-    // `ASSET_PROMPTS` is `as const`, so the keys are a literal union
-    // and every lookup is a definitely-defined string under
-    // `noUncheckedIndexedAccess`. Unknown asset types fall back to the
-    // blog-post prompt.
-    const systemPrompt = isWriterAssetType(input.assetType)
-      ? ASSET_PROMPTS[input.assetType]
-      : ASSET_PROMPTS.blog_post;
-
-    const context = `## Product Context
-
-**Repository:** ${input.repoAnalysis.description || input.research.targetAudience}
-**Language:** ${input.repoAnalysis.language}
-**Tech Stack:** ${input.repoAnalysis.techStack.join(', ')}
-**Stars:** ${input.repoAnalysis.stars}
-
-## Strategic Direction
-**Positioning:** ${input.strategy.positioning}
-**Tone:** ${input.strategy.tone}
-**Key Messages:**
-${input.strategy.keyMessages.map((m) => `- ${m}`).join('\n')}
-
-## Research Context
-**Target Audience:** ${input.research.targetAudience}
-**Market Context:** ${input.research.marketContext}
-**Unique Angles:** ${input.research.uniqueAngles.join('; ')}
-**Competitors:** ${input.research.competitors.map((c) => `${c.name}: ${c.differentiator}`).join('; ')}
-
-## Asset Generation Instructions
-${input.generationInstructions}
-
-${input.revisionInstructions ? `## Revision Instructions\n${input.revisionInstructions}` : ''}
-
-${input.pastInsights.length > 0 ? `## Insights from Similar Projects\n${input.pastInsights.map((i) => `- ${i.insight}`).join('\n')}` : ''}`;
-
-    const content = await deps.llm.generateContent(systemPrompt, context, {
-      maxTokens: 4096,
-      temperature: 0.7,
-    });
-
-    // Extract metadata based on asset type. We assemble per-type
-    // metadata first, then merge it into the common envelope so the
-    // result keeps a single named shape.
-    const baseMetadata = {
-      assetType: input.assetType,
-      tone: input.strategy.tone,
-    };
-
-    let extraMetadata: Record<string, unknown> = {};
-
-    if (input.assetType === 'blog_post') {
-      const titleMatch = /^#\s+(.+)/m.exec(content);
-      const subtitleMatch = /^##\s+(.+)/m.exec(content);
-      extraMetadata = {
-        title: titleMatch?.[1] ?? 'Untitled',
-        subtitle: subtitleMatch?.[1] ?? '',
-        wordCount: content.split(/\s+/).length,
-      };
-    } else if (input.assetType === 'twitter_thread') {
-      const tweets = content.split(/\n\n+/).filter((t) => t.trim().length > 0);
-      extraMetadata = { tweetCount: tweets.length };
-    } else if (input.assetType === 'product_hunt_description') {
-      const taglineMatch = /\*\*Tagline:\*\*\s*(.+)/.exec(content);
-      extraMetadata = { tagline: taglineMatch?.[1]?.trim() ?? '' };
-    } else if (input.assetType === 'voiceover_script') {
-      const parsed = parseVoiceoverScript(content);
-      extraMetadata = {
-        segments: parsed.segments,
-        plainText: parsed.plainText,
-        segmentCount: parsed.segmentCount,
-      };
-    } else if (input.assetType === 'tips') {
-      const tipCount = content
-        .split('\n')
-        .filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
-      extraMetadata = { tipCount };
-    } else if (input.assetType === 'voice_commercial') {
-      const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
-      extraMetadata = {
-        wordCount,
-        estimatedDurationSeconds: Math.round(wordCount / 2.5),
-      };
-    } else if (input.assetType === 'podcast_script') {
-      const lines = content
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => /^(Alex|Sam):\s/.test(line));
-      let speakerTurns = 0;
-      let lastSpeaker: string | null = null;
-      let totalWords = 0;
-      for (const line of lines) {
-        const speaker = line.startsWith('Alex:') ? 'Alex' : 'Sam';
-        if (speaker !== lastSpeaker) {
-          speakerTurns += 1;
-          lastSpeaker = speaker;
-        }
-        const spoken = line.slice(speaker.length + 1).trim();
-        totalWords += spoken.split(/\s+/).filter((w) => w.length > 0).length;
-      }
-      const speechSeconds = totalWords / 2.3;
-      const gapSeconds = speakerTurns * 0.4;
-      extraMetadata = {
-        lineCount: lines.length,
-        speakerTurns,
-        estimatedDurationSeconds: Math.round(speechSeconds + gapSeconds),
-      };
-    }
-
-    return { content, metadata: { ...baseMetadata, ...extraMetadata } };
+async function generateVoiceoverScript(
+  llm: LLMClient,
+  input: WriterInput
+): Promise<WriterResult> {
+  const content = await llm.generateContent(
+    VOICEOVER_SCRIPT_PROMPT,
+    buildContext(input),
+    { maxTokens: DEFAULT_MAX_TOKENS, temperature: 0.7 }
+  );
+  const parsed = parseVoiceoverScript(content);
+  return {
+    content,
+    metadata: {
+      ...buildBaseMetadata(input),
+      segments: parsed.segments,
+      plainText: parsed.plainText,
+      segmentCount: parsed.segmentCount,
+    },
   };
 }
 
-export type GenerateWrittenAsset = ReturnType<typeof makeGenerateWrittenAsset>;
+// =====================================================================
+// Dispatch
+// =====================================================================
+
+/**
+ * Map from the asset-type literal to the generator function. Keys
+ * must exactly match the entries in the `assetTypeEnum` pgEnum so
+ * an unknown asset type falls through to the blog-post default
+ * (preserves the behavior of the previous implementation).
+ */
+const GENERATOR_BY_TYPE: Partial<
+  Record<
+    AssetType,
+    (llm: LLMClient, input: WriterInput) => Promise<WriterResult>
+  >
+> = {
+  blog_post: generateBlogPost,
+  twitter_thread: generateTwitterThread,
+  linkedin_post: generateLinkedInPost,
+  product_hunt_description: generateProductHunt,
+  hacker_news_post: generateHackerNewsPost,
+  faq: generateFaq,
+  changelog_entry: generateChangelogEntry,
+  tips: generateTips,
+  voice_commercial: generateVoiceCommercial,
+  podcast_script: generatePodcastScript,
+  voiceover_script: generateVoiceoverScript,
+};
+
+/**
+ * Type of the function returned by `makeGenerateWrittenAsset`.
+ * Re-exported so other agents in this package (podcast-script,
+ * voice-commercial) can depend on the generator's shape without
+ * importing the factory.
+ */
+export type GenerateWrittenAsset = (
+  input: WriterInput
+) => Promise<WriterResult>;
+
+export function makeGenerateWrittenAsset(
+  deps: WriterAgentDeps
+): GenerateWrittenAsset {
+  return async function generateWrittenAsset(
+    input: WriterInput
+  ): Promise<WriterResult> {
+    const generator = GENERATOR_BY_TYPE[input.assetType] ?? generateBlogPost;
+    return generator(deps.llm, input);
+  };
+}
