@@ -67,6 +67,19 @@ services:
     # the per-platform checksums) — `npm ci` is enough to land it. No
     # global install or extra build step required at deploy time.
     #
+    # In addition to Node, the worker shells out to the vendored
+    # Pika video-meeting Python CLI at
+    # `vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py`
+    # via `apps/worker/src/lib/pika-stream.ts`. The build command
+    # below installs `python3` + `python3-pip` via apt and then
+    # installs the CLI's single Python dep (`requests>=2.32.5`) so
+    # the subprocess can run without any manual post-deploy setup.
+    # The `--break-system-packages` flag is required on Debian 12+
+    # because the system pip refuses to install outside a virtualenv
+    # by default; we're fine bypassing that because the Render
+    # worker container has no competing Python environment and the
+    # install is scoped to the container lifetime.
+    #
     # Note on the workflows service: Render Workflows is created via
     # the dashboard (New > Workflow) and is not defined in this
     # Blueprint. See README.md § "Create the workflow service" for
@@ -75,7 +88,7 @@ services:
     # web trigger helper (`apps/web/src/lib/trigger-workflow-generation.ts`)
     # both read `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` from
     # their respective service env pages.
-    buildCommand: npm ci && npm run build
+    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci && npm run build
     startCommand: npm run start:worker
     buildFilter:
       paths:
@@ -87,6 +100,7 @@ services:
         - packages/shared/**
         - packages/video/**
         - packages/asset-generators/**
+        - vendor/pikastream-video-meeting/**
         - apps/worker/**
     envVars:
       - key: DATABASE_URL
@@ -120,6 +134,26 @@ services:
       # when the key is absent: only the world_scene branch fails,
       # the rest of the asset fan-out keeps running.
       - key: WORLD_LABS_API_KEY
+        sync: false
+      # Pika video meeting integration — drives the `pika` BullMQ
+      # queue. The worker maps `PIKA_API_KEY` → `PIKA_DEV_KEY` at
+      # subprocess spawn time (see `apps/worker/src/lib/pika-stream.ts`)
+      # so the rest of the codebase can use our standard
+      # `*_API_KEY` naming convention. Both vars are optional at
+      # the Zod schema level so the worker still boots on the
+      # analyze/review/trending path when Pika is not configured;
+      # the invite processor throws a structured `PikaMissingKeyError`
+      # / `PikaMissingAvatarError` at call time if either is missing.
+      #
+      # PIKA_AVATAR accepts either an absolute local file path
+      # (inside the container) or an https URL — the vendored
+      # Python CLI handles both transparently. For the Render
+      # deployment, use a hosted URL (e.g., an S3 / R2 / Cloudinary
+      # public URL) since the worker container has no stable
+      # filesystem for local image files.
+      - key: PIKA_API_KEY
+        sync: false
+      - key: PIKA_AVATAR
         sync: false
       # Base64 32-byte secret for decrypting the per-project GitHub
       # PAT the web service stored on the projects row. Must match
