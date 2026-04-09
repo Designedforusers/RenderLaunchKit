@@ -228,11 +228,9 @@ export {
   WorldSchema,
   OperationMetadataSchema,
   OperationSchema,
-  WorldEnvelopeSchema,
   type WorldAssets,
   type World,
   type Operation,
-  type WorldEnvelope,
 } from './clients/schemas/world-labs.js';
 
 export { accentColorForTone } from './helpers/strategy-style.js';

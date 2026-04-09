@@ -27,11 +27,23 @@ import { z } from 'zod';
 
 // ── Generated world (snapshot or canonical fetch) ─────────────────────
 //
-// Both the operation `response` field and the `GET /worlds/{id}`
-// envelope return objects with this shape. The interesting fields for
-// LaunchKit are:
+// Both the operation `response` field (when `done=true`) and the
+// `GET /worlds/{world_id}` endpoint return objects with this shape.
+// Important: GET /worlds/{world_id} returns the World **directly**,
+// NOT wrapped in a `{ world: ... }` envelope — the Marble docs at
+// https://docs.worldlabs.ai/api/reference/worlds/get.md are
+// explicit on this.
 //
-//   - `id`            — used to build the public viewer URL
+// The interesting fields for LaunchKit:
+//
+//   - `world_id`      — used to build the public viewer URL. Named
+//                       `world_id` at the API level, not `id`. An
+//                       earlier version of this schema had `id` and
+//                       it cost us a real 7-minute Marble render to
+//                       discover that the snapshot parse failed with
+//                       "response.id: Invalid input: expected string,
+//                       received undefined" because the API returned
+//                       the field as `world_id`.
 //   - `assets.thumbnail_url` — surfaced as the asset's mediaUrl thumbnail
 //   - `assets.caption`       — stored on metadata so the dashboard
 //                              can render the AI caption alongside the
@@ -79,7 +91,13 @@ export type WorldAssets = z.infer<typeof WorldAssetsSchema>;
 
 export const WorldSchema = z
   .object({
-    id: z.string().min(1),
+    // The Marble API's canonical identifier field. The docs list this
+    // as required on the World object in both the operation response
+    // and the GET /worlds/{world_id} endpoint. Do NOT rename to `id`
+    // — the API does not have an `id` field, and an earlier version
+    // of this schema paid for that mistake with a real 7-minute
+    // Marble render that failed at the final parse step.
+    world_id: z.string().min(1),
     display_name: z.string().nullish(),
     world_marble_url: z.string().nullish(),
     assets: WorldAssetsSchema.nullish(),
@@ -127,16 +145,11 @@ export const OperationSchema = z
   .passthrough();
 export type Operation = z.infer<typeof OperationSchema>;
 
-// ── Canonical world fetch envelope ────────────────────────────────────
+// ── Canonical world fetch response ────────────────────────────────────
 //
-// `GET /marble/v1/worlds/{world_id}` wraps the world in a `{ world }`
-// object — distinct from the operation `response` field, which is
-// the world directly. We model both shapes so the client can normalise
-// to a single `World` regardless of which surface produced it.
-
-export const WorldEnvelopeSchema = z
-  .object({
-    world: WorldSchema,
-  })
-  .passthrough();
-export type WorldEnvelope = z.infer<typeof WorldEnvelopeSchema>;
+// `GET /marble/v1/worlds/{world_id}` returns the World object
+// DIRECTLY, not wrapped in a `{ world: ... }` envelope. An earlier
+// version of this file exported a `WorldEnvelopeSchema` that assumed
+// the wrapping and has been removed — the client at
+// `../world-labs.ts` now parses the GET response with `WorldSchema`
+// directly. Reference: https://docs.worldlabs.ai/api/reference/worlds/get.md.

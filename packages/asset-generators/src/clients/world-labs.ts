@@ -2,7 +2,6 @@ import type { z } from 'zod';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   OperationSchema,
-  WorldEnvelopeSchema,
   WorldSchema,
   type Operation,
   type World,
@@ -20,9 +19,11 @@ import { recordCost } from '../cost-tracker.js';
  *      envelope immediately with `done: false`.
  *   2. `GET /marble/v1/operations/{operation_id}` is polled until
  *      `done: true`. The completed operation's `response` field
- *      carries a snapshot of the generated `World`.
+ *      carries a snapshot of the generated `World` (identified by
+ *      `world_id`, not `id`).
  *   3. (Optional) `GET /marble/v1/worlds/{world_id}` returns the most
- *      up-to-date version of the world wrapped in a `{ world }`
+ *      up-to-date version of the world DIRECTLY (not wrapped in a
+ *      `{ world }`
  *      envelope — used here as a fallback when the operation snapshot
  *      is missing the canonical `world_marble_url` field.
  *
@@ -203,13 +204,19 @@ export function createWorldLabsClient(
   }
 
   async function fetchCanonicalWorld(worldId: string): Promise<World> {
-    const envelope = await worldLabsFetch({
+    // Marble's GET /worlds/{world_id} returns the World object
+    // DIRECTLY, not wrapped in a `{ world: ... }` envelope. The docs
+    // at https://docs.worldlabs.ai/api/reference/worlds/get.md are
+    // explicit: "The World object is returned directly without a
+    // wrapper object." An earlier version of this client expected
+    // an envelope and it was wrong — verified against the real API
+    // after a Marble render surfaced the schema drift.
+    return worldLabsFetch({
       method: 'GET',
       path: `/worlds/${encodeURIComponent(worldId)}`,
-      schema: WorldEnvelopeSchema,
+      schema: WorldSchema,
       context: `world fetch (${worldId})`,
     });
-    return envelope.world;
   }
 
   function buildPublicMarbleUrl(worldId: string): string {
@@ -261,11 +268,11 @@ export function createWorldLabsClient(
     let canonicalUrl = world.world_marble_url ?? null;
     if (!canonicalUrl) {
       // Snapshot was missing the URL — fetch the canonical world to
-      // confirm the ID is live and grab the marble URL from the
-      // wrapped envelope. We only re-fetch on the missing-URL path so
-      // the happy path stays at one upstream call after polling.
+      // grab the marble URL from the direct-body response. We only
+      // re-fetch on the missing-URL path so the happy path stays at
+      // one upstream call after polling.
       try {
-        const canonical = await fetchCanonicalWorld(world.id);
+        const canonical = await fetchCanonicalWorld(world.world_id);
         canonicalUrl = canonical.world_marble_url ?? null;
       } catch (err) {
         // Don't fail the whole generation just because the canonical
@@ -273,12 +280,12 @@ export function createWorldLabsClient(
         // and log the underlying cause for triage.
         const message = err instanceof Error ? err.message : String(err);
         console.warn(
-          `[world-labs] canonical world fetch failed for ${world.id}, falling back to public URL: ${message}`
+          `[world-labs] canonical world fetch failed for ${world.world_id}, falling back to public URL: ${message}`
         );
       }
     }
 
-    const marbleUrl = canonicalUrl ?? buildPublicMarbleUrl(world.id);
+    const marbleUrl = canonicalUrl ?? buildPublicMarbleUrl(world.world_id);
     const assets = world.assets ?? null;
     const splats = assets?.splats?.spz_urls ?? null;
     const splatUrl =
@@ -296,14 +303,14 @@ export function createWorldLabsClient(
       operation: 'marble-generate',
       costCents: computeWorldLabsCostCents(input.model),
       metadata: {
-        worldId: world.id,
+        worldId: world.world_id,
         operationId: completedOperation.operation_id,
         model: input.model,
       },
     });
 
     return {
-      worldId: world.id,
+      worldId: world.world_id,
       operationId: completedOperation.operation_id,
       marbleUrl,
       thumbnailUrl: assets?.thumbnail_url ?? null,
