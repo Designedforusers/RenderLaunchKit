@@ -136,14 +136,34 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       : null) ??
     `Generate a ${asset.type} for this product`;
 
-  // Revision instructions live on the review's asset note, which the
-  // BullMQ-era code path attached to the re-enqueued job payload. On
-  // the workflow path we pull the most recent set of review notes off
-  // the asset row if present; if the asset is on its first pass the
-  // field is null and nothing gets passed.
-  const reviewNotes = asset.reviewNotes ?? null;
+  // Revision instructions live in a dedicated `revision_instructions`
+  // column on the asset row, populated by the three re-queue paths
+  // before the asset is flipped back to `queued`:
+  //
+  //   1. Creative review rejection in `apps/worker/src/processors/
+  //      review-generated-assets.ts` — writes the reviewer's issues +
+  //      explicit revision instructions.
+  //   2. Commit-marketing refresh in `apps/worker/src/processors/
+  //      process-commit-marketing-run.ts` — writes the commit sha +
+  //      message as revision context for a webhook-driven refresh.
+  //   3. User-driven regenerate in `apps/web/src/routes/
+  //      asset-api-routes.ts` — writes the `body.instructions` the
+  //      caller passed to POST /api/assets/:id/regenerate.
+  //
+  // First-pass generations leave the column null and no revision
+  // overlay is passed to the agents.
+  //
+  // Why this is separate from `asset.reviewNotes`: `reviewNotes` is
+  // the human-readable feedback string the dashboard renders under
+  // "Review feedback" — display-only. Writing the agent-facing
+  // revision prompt to the same column was the semantic overlap
+  // PR #33's code-reviewer flagged: a commit-driven refresh is not
+  // review feedback, and bleeding prompt fragments into the UI is
+  // the wrong abstraction.
   const revisionInstructions =
-    reviewNotes !== null && reviewNotes.length > 0 ? reviewNotes : undefined;
+    asset.revisionInstructions !== null && asset.revisionInstructions.length > 0
+      ? asset.revisionInstructions
+      : undefined;
 
   // ── Mark the asset as generating and publish a progress update
   await db

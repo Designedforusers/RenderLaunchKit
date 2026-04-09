@@ -39,6 +39,13 @@ export default tseslint.config(
       'apps/cron/dist/**',
       'packages/shared/dist/**',
       'packages/video/dist/**',
+      // Claude Code local tooling — agent worktrees, plans, and
+      // other per-session artifacts. Already gitignored via `.claude/`
+      // in the root `.gitignore`; mirroring the ignore here prevents
+      // ESLint from walking into a sibling worktree (which lives at
+      // `.claude/worktrees/<agent-id>/` and contains a full copy of
+      // the repo the lint rules would otherwise try to analyse).
+      '.claude/**',
       // Agentskills.io install artifacts. The skills bundle ships
       // example .tsx files inside the per-rule docs directory; they
       // are documentation, not source we own, and they live outside

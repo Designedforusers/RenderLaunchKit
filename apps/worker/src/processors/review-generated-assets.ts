@@ -65,20 +65,55 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
   );
   const review = await reviewLaunchKitAssets(strategy, assetsForReview);
 
-  // Update each asset with its review
+  // Update each asset with its review. Two columns are in play:
+  //
+  //   `reviewNotes`         — the human-readable summary the dashboard
+  //                           renders under "Review feedback" on the
+  //                           asset card. Strengths, issues, and
+  //                           revision instructions concatenated as a
+  //                           single paragraph. DISPLAY-ONLY.
+  //
+  //   `revisionInstructions` — the agent-facing revision prompt the
+  //                           workflow re-run will pass to the writer /
+  //                           marketing-visual / product-video agents.
+  //                           Issues + explicit revision instructions
+  //                           from the reviewer, joined without the
+  //                           "Strengths:" prefix (which is praise, not
+  //                           a directive). Only set on rejected rows
+  //                           — approved rows clear it so the next
+  //                           legitimate regeneration starts fresh.
+  //
+  // The two fields intentionally overlap in content but serve different
+  // consumers: dashboard vs. agent. Keeping them separate avoids the
+  // semantic overlap PR #33's code-reviewer flagged.
   for (const assetReview of review.assetReviews) {
+    const isRejected = assetReview.score < MIN_APPROVAL_SCORE;
+    const reviewNotes = [
+      `Strengths: ${assetReview.strengths.join(', ')}`,
+      assetReview.issues.length > 0 ? `Issues: ${assetReview.issues.join(', ')}` : null,
+      assetReview.revisionInstructions ? `Revision: ${assetReview.revisionInstructions}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const revisionInstructions = isRejected
+      ? [
+          assetReview.revisionInstructions ?? null,
+          assetReview.issues.length > 0
+            ? `Issues to address: ${assetReview.issues.join('; ')}`
+            : null,
+        ]
+          .filter((line): line is string => line !== null && line.length > 0)
+          .join('\n') || null
+      : null;
+
     await db
       .update(schema.assets)
       .set({
         qualityScore: assetReview.score,
-        reviewNotes: [
-          `Strengths: ${assetReview.strengths.join(', ')}`,
-          assetReview.issues.length > 0 ? `Issues: ${assetReview.issues.join(', ')}` : null,
-          assetReview.revisionInstructions ? `Revision: ${assetReview.revisionInstructions}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n'),
-        status: assetReview.score >= MIN_APPROVAL_SCORE ? 'complete' : 'rejected',
+        reviewNotes,
+        revisionInstructions,
+        status: isRejected ? 'rejected' : 'complete',
         updatedAt: new Date(),
       })
       .where(eq(schema.assets.id, assetReview.assetId));
@@ -122,12 +157,11 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     // The workflow parent task picks up queued assets on its next
     // run and dispatches them through the appropriate child task.
     // `dispatchAsset` in the workflows service reads the asset's
-    // `reviewNotes` directly off the row (which the creative-director
-    // loop above already wrote as a concatenation of strengths,
-    // issues, and the explicit revision instructions) and passes it
-    // through to the agents as the revision prompt — so no per-asset
-    // payload needs to carry a revisionInstructions string the way
-    // the legacy BullMQ path did.
+    // `revisionInstructions` column (already written above as the
+    // reviewer's issues + explicit revision instructions) and passes
+    // it through to the agents as the `revisionInstructions` input —
+    // so no per-asset payload needs to carry a revision string the
+    // way the legacy BullMQ path did.
     let rejectedCount = 0;
     for (const assetReview of rejectedReviews) {
       const asset = projectAssets.find((candidate) => candidate.id === assetReview.assetId);

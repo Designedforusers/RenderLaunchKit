@@ -20,10 +20,18 @@ const pool = new pg.Pool({
 const db = drizzle(pool, { schema });
 
 // ── Helper: deterministic embedding for seed data ──
+//
+// `projects.embedding` is `vector(1024)` because Voyage's
+// `voyage-3-large` (the real embed provider in production) outputs
+// 1024-dim vectors. The seed uses this cheap deterministic function
+// so local dev doesn't need a Voyage API key to have searchable
+// demo projects. The dimension MUST match the DB column — any
+// mismatch fails the UPDATE with `expected 1024 dimensions, not N`
+// and the second seed project onward crashes.
 function fakeEmbedding(text: string): number[] {
-  const vec = new Array(1536).fill(0);
+  const vec = new Array(1024).fill(0);
   for (let i = 0; i < text.length; i++) {
-    const idx = (text.charCodeAt(i) * (i + 1) * 31) % 1536;
+    const idx = (text.charCodeAt(i) * (i + 1) * 31) % 1024;
     vec[idx] += 1 / Math.sqrt(text.length);
   }
   const mag = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
@@ -96,10 +104,10 @@ const SEED_PROJECTS = [
         { channel: 'dev_to', priority: 3, reasoning: 'Long-form technical content fits the audience' },
       ],
       assetsToGenerate: [
-        { type: 'blog_post', brief: 'Technical deep-dive on the trade-offs of bundle size vs UUID', priority: 1 },
-        { type: 'twitter_thread', brief: 'Benchmark thread comparing nanoid to uuid', priority: 2 },
-        { type: 'hacker_news_post', brief: 'Show HN style post focused on technical details', priority: 3 },
-        { type: 'og_image', brief: 'Minimalist OG image emphasizing the 130 bytes claim', priority: 2 },
+        { type: 'blog_post', generationInstructions: 'Technical deep-dive on the trade-offs of bundle size vs UUID', priority: 1 },
+        { type: 'twitter_thread', generationInstructions: 'Benchmark thread comparing nanoid to uuid', priority: 2 },
+        { type: 'hacker_news_post', generationInstructions: 'Show HN style post focused on technical details', priority: 3 },
+        { type: 'og_image', generationInstructions: 'Minimalist OG image emphasizing the 130 bytes claim', priority: 2 },
       ],
       skipAssets: [
         { type: 'product_video', reasoning: 'A library doesn\'t need a video — code examples are more valuable.' },
@@ -166,13 +174,13 @@ const SEED_PROJECTS = [
         { channel: 'linkedin', priority: 4, reasoning: 'Reaches business decision-makers comparing to Calendly' },
       ],
       assetsToGenerate: [
-        { type: 'blog_post', brief: 'Why we built an open-source Calendly alternative', priority: 1 },
-        { type: 'twitter_thread', brief: 'Product launch thread with screenshots', priority: 2 },
-        { type: 'product_hunt_description', brief: 'Compelling PH listing with feature highlights', priority: 1 },
-        { type: 'linkedin_post', brief: 'Business-focused angle on data ownership', priority: 3 },
-        { type: 'faq', brief: 'Address self-hosting, pricing, and migration questions', priority: 2 },
-        { type: 'og_image', brief: 'Premium OG image showing the calendar interface aesthetic', priority: 2 },
-        { type: 'product_video', brief: '10-second hero video showing scheduling flow', priority: 1 },
+        { type: 'blog_post', generationInstructions: 'Why we built an open-source Calendly alternative', priority: 1 },
+        { type: 'twitter_thread', generationInstructions: 'Product launch thread with screenshots', priority: 2 },
+        { type: 'product_hunt_description', generationInstructions: 'Compelling PH listing with feature highlights', priority: 1 },
+        { type: 'linkedin_post', generationInstructions: 'Business-focused angle on data ownership', priority: 3 },
+        { type: 'faq', generationInstructions: 'Address self-hosting, pricing, and migration questions', priority: 2 },
+        { type: 'og_image', generationInstructions: 'Premium OG image showing the calendar interface aesthetic', priority: 2 },
+        { type: 'product_video', generationInstructions: '10-second hero video showing scheduling flow', priority: 1 },
       ],
       skipAssets: [],
     },
@@ -235,11 +243,11 @@ const SEED_PROJECTS = [
         { channel: 'twitter', priority: 2, reasoning: 'Build-in-public community is enthusiastic' },
       ],
       assetsToGenerate: [
-        { type: 'blog_post', brief: 'Technical deep-dive on Bun vs Node.js performance', priority: 1 },
-        { type: 'twitter_thread', brief: 'Benchmark thread with charts', priority: 2 },
-        { type: 'hacker_news_post', brief: 'Show HN: Bun 1.2 - announcement post', priority: 1 },
-        { type: 'og_image', brief: 'Bold OG image with performance numbers', priority: 2 },
-        { type: 'product_video', brief: 'Animated visualization of Bun vs Node.js speed', priority: 3 },
+        { type: 'blog_post', generationInstructions: 'Technical deep-dive on Bun vs Node.js performance', priority: 1 },
+        { type: 'twitter_thread', generationInstructions: 'Benchmark thread with charts', priority: 2 },
+        { type: 'hacker_news_post', generationInstructions: 'Show HN: Bun 1.2 - announcement post', priority: 1 },
+        { type: 'og_image', generationInstructions: 'Bold OG image with performance numbers', priority: 2 },
+        { type: 'product_video', generationInstructions: 'Animated visualization of Bun vs Node.js speed', priority: 3 },
       ],
       skipAssets: [
         { type: 'linkedin_post', reasoning: 'Hardcore technical audience prefers HN/Twitter' },
@@ -304,17 +312,17 @@ const SEED_PROJECTS = [
         { channel: 'product_hunt', priority: 3, reasoning: 'AI tools are popular on PH' },
       ],
       assetsToGenerate: [
-        { type: 'blog_post', brief: 'How LaunchKit works under the hood', priority: 1 },
-        { type: 'twitter_thread', brief: 'Demo thread with screenshots', priority: 2 },
-        { type: 'hacker_news_post', brief: 'Show HN with technical details', priority: 1 },
-        { type: 'product_hunt_description', brief: 'PH launch listing', priority: 3 },
-        { type: 'og_image', brief: 'OG image with the LaunchKit lightning bolt', priority: 2 },
-        { type: 'product_video', brief: '10s demo showing the full flow', priority: 1 },
-        { type: 'faq', brief: 'Common questions about how it works', priority: 2 },
+        { type: 'blog_post', generationInstructions: 'How LaunchKit works under the hood', priority: 1 },
+        { type: 'twitter_thread', generationInstructions: 'Demo thread with screenshots', priority: 2 },
+        { type: 'hacker_news_post', generationInstructions: 'Show HN with technical details', priority: 1 },
+        { type: 'product_hunt_description', generationInstructions: 'PH launch listing', priority: 3 },
+        { type: 'og_image', generationInstructions: 'OG image with the LaunchKit lightning bolt', priority: 2 },
+        { type: 'product_video', generationInstructions: '10s demo showing the full flow', priority: 1 },
+        { type: 'faq', generationInstructions: 'Common questions about how it works', priority: 2 },
         // ── Phase 4 asset types ──
-        { type: 'tips', brief: 'Five actionable launch tips a developer can run today', priority: 2 },
-        { type: 'voice_commercial', brief: '30-second ad-style voice script for a developer audience', priority: 3 },
-        { type: 'podcast_script', brief: 'Two-host dev podcast dialogue introducing the project', priority: 3 },
+        { type: 'tips', generationInstructions: 'Five actionable launch tips a developer can run today', priority: 2 },
+        { type: 'voice_commercial', generationInstructions: '30-second ad-style voice script for a developer audience', priority: 3 },
+        { type: 'podcast_script', generationInstructions: 'Two-host dev podcast dialogue introducing the project', priority: 3 },
       ],
       skipAssets: [],
     },
@@ -452,7 +460,7 @@ async function seed() {
     for (const assetSpec of seedProject.strategy.assetsToGenerate) {
       let content: string | null = null;
       let mediaUrl: string | null = null;
-      let metadata: any = { brief: assetSpec.brief, priority: assetSpec.priority };
+      let metadata: any = { generationInstructions: assetSpec.generationInstructions, priority: assetSpec.priority };
       let status: any = seedProject.status === 'complete' ? 'complete' : 'queued';
 
       // For the "generating" project (bun), make some assets in-progress

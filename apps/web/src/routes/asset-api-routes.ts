@@ -523,25 +523,22 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // every queued asset to `generating` as its first DB write, then
   // to `reviewing` on success (or `failed` on error).
   //
-  // Any generation instructions the caller passed are persisted to
-  // the asset metadata alongside the brief so `dispatchAsset` picks
-  // them up on the re-read (the workflow path does not receive
-  // payload-level generation instructions — it re-reads every
-  // context field from the DB).
-  const existingMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
-  const nextMetadata: Record<string, unknown> = {
-    ...existingMetadata,
-    ...(body.instructions !== undefined
-      ? { generationInstructions: body.instructions }
-      : {}),
-  };
-
+  // If the caller passed `body.instructions`, it's persisted to the
+  // new `revisionInstructions` column as the "here's what to change"
+  // overlay for the next agent run. The asset's original
+  // `generationInstructions` (on metadata) is left untouched —
+  // `dispatchAsset` in the workflows service reads both at run time
+  // and threads them through to the agent as separate prompt inputs,
+  // so the original brief stays stable across regeneration cycles
+  // while the per-run revision overlay changes.
   await database
     .update(assets)
     .set({
       status: 'queued',
       version: asset.version + 1,
-      metadata: nextMetadata,
+      ...(body.instructions !== undefined
+        ? { revisionInstructions: body.instructions }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(assets.id, id));

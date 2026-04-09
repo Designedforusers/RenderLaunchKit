@@ -212,9 +212,23 @@ export const assets = pgTable(
     mediaUrl: text('media_url'),
     metadata: jsonb('metadata'),
 
-    // Creative director scoring
+    // Creative director scoring. `reviewNotes` is the human-readable
+    // feedback string the dashboard renders under "Review feedback".
+    // It is DISPLAY-ONLY — never read by an agent as a prompt. The
+    // agent-facing revision prompt lives in `revisionInstructions`
+    // below so the two concerns stay separate.
     qualityScore: real('quality_score'),
     reviewNotes: text('review_notes'),
+
+    // Agent-facing revision prompt. Populated by the three re-queue
+    // paths (creative review rejection, commit-marketing refresh, and
+    // user-driven "Regenerate" with explicit instructions) before the
+    // asset is flipped back to `queued`. `dispatchAsset` in the
+    // workflows service reads this column off the row at run time and
+    // passes it through to the agents as the `revisionInstructions`
+    // input. Nullable because first-pass generations have no revision
+    // overlay.
+    revisionInstructions: text('revision_instructions'),
 
     // User feedback
     userApproved: boolean('user_approved'),
