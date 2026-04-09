@@ -121,10 +121,10 @@ export function AssetGallery({
               aria-controls={`gallery-panel-${tab}`}
               id={`gallery-tab-${tab}`}
               onClick={() => setActiveTab(tab)}
-              className={`relative px-4 py-2.5 text-sm font-mono uppercase tracking-wider transition-colors ${
+              className={`relative px-4 py-2.5 text-label uppercase transition-colors ${
                 isActive
                   ? 'text-accent-400'
-                  : 'text-surface-500 hover:text-surface-300'
+                  : 'text-text-muted hover:text-text-tertiary'
               } focus-visible:outline-none focus-visible:text-accent-300`}
             >
               <span className="inline-flex items-center gap-2">
@@ -381,15 +381,13 @@ function SectionHeader({
   return (
     <div className="mb-4 flex items-baseline justify-between gap-4">
       <div>
-        <h3
-          className={`font-mono text-sm font-semibold uppercase tracking-wider ${toneClasses[tone]}`}
-        >
+        <h3 className={`text-label uppercase ${toneClasses[tone]}`}>
           {label}{' '}
-          <span className="ml-1 text-xs font-normal text-surface-500">
+          <span className="ml-1 text-body-xs font-normal text-text-muted normal-case tracking-normal">
             ({count})
           </span>
         </h3>
-        <p className="mt-0.5 text-xs text-surface-500">{description}</p>
+        <p className="mt-1 text-body-xs text-text-muted">{description}</p>
       </div>
     </div>
   );

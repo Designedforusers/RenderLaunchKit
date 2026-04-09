@@ -2,6 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FAIRE Octave — variable display font. Trial weights/variable axis
+   loaded via a single woff2. Used for hero/heading "display" surfaces. */
+@font-face {
+  font-family: 'FAIRE Octave';
+  src: url('/fonts/FAIRE-Octave-Trial-Variable.woff2') format('woff2-variations'),
+       url('/fonts/FAIRE-Octave-Trial-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ufficio — body/sans font. One @font-face per weight. */
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-300.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-800.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Ufficio';
+  src: url('/fonts/Ufficio-900.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   * {
     @apply border-surface-800;
@@ -20,13 +82,30 @@
   }
 
   body {
-    @apply bg-surface-950 text-surface-100;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-surface-950 text-text-primary text-body-md;
+    font-family: 'Ufficio', system-ui, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'JetBrains Mono', monospace;
+  /* Heading defaults — Ufficio by default, FAIRE Octave only when the
+     `.font-display` class is added explicitly. This keeps dashboard chrome
+     in the text tier (Cursor/Resend model) and reserves the display tier
+     for marquee surfaces (hero, outcome banner, section openers). */
+  h1 { @apply text-heading-xl; }
+  h2 { @apply text-heading-lg; }
+  h3 { @apply text-heading-md; }
+  h4 { @apply text-heading-sm; }
+  h5, h6 { @apply text-body-md font-semibold; }
+
+  /* Small / caption — tiny positive tracking so 11–12px stays legible. */
+  small { @apply text-body-xs; }
+
+  /* Reading surfaces (prose inside cards, strategy briefs) get the longer
+     line-height automatically via `text-body-lg`. Apply `.prose-reading`
+     to wrapper divs. */
+  .prose-reading {
+    @apply text-body-lg text-text-secondary;
+    max-width: 65ch;
   }
 
   /* Selection color — accent tint so copy-pasting reads as
@@ -77,6 +156,15 @@
 }
 
 @layer components {
+  /* The section label — Resend's move. Dense dashboards with CAPS+tracked
+     labels read as "designed on purpose" vs. AI slop at zero extra cost.
+     Used for card section headers, property list field labels, sidebar
+     group labels, and anything that needs to feel editorial without
+     taking real estate. */
+  .label {
+    @apply text-label text-text-muted uppercase;
+  }
+
   .card {
     @apply bg-surface-900/80 border border-surface-800 rounded-xl p-6 backdrop-blur-sm;
   }

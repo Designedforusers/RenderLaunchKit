@@ -34,10 +34,10 @@ export function StageLoader({ status, detail }: StageLoaderProps) {
     <div className="card relative overflow-hidden">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-accent-400">
+          <p className="label text-accent-400">
             Stage {meta.index.toString().padStart(2, '0')}
           </p>
-          <h3 className="mt-1 font-mono text-lg font-semibold text-surface-100">
+          <h3 className="mt-1 font-display text-heading-lg text-text-primary">
             {meta.label}
           </h3>
         </div>
@@ -46,9 +46,7 @@ export function StageLoader({ status, detail }: StageLoaderProps) {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-400" />
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-accent-400">
-            Running
-          </span>
+          <span className="label text-accent-400">Running</span>
         </div>
       </div>
 
@@ -64,7 +62,7 @@ export function StageLoader({ status, detail }: StageLoaderProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.25 }}
-            className="absolute inset-x-0 truncate font-mono text-xs text-surface-500"
+            className="absolute inset-x-0 truncate font-mono text-mono-sm text-text-muted"
           >
             {detail ?? meta.description}
           </motion.p>

@@ -77,11 +77,9 @@ export function AgentToolCallStream({
       )}
 
       <div className="relative flex items-center justify-between">
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider text-surface-400">
-          Agent Activity
-        </h3>
+        <h3 className="label">Agent Activity</h3>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs text-surface-500">
+          <span className="font-mono text-mono-sm text-text-muted">
             {toolCalls.length} {toolCalls.length === 1 ? 'call' : 'calls'}
           </span>
           {isStreaming && (
@@ -90,9 +88,7 @@ export function AgentToolCallStream({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-400" />
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-accent-400">
-                Live
-              </span>
+              <span className="label text-accent-400">Live</span>
             </span>
           )}
         </div>
@@ -127,7 +123,7 @@ export function AgentToolCallStream({
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
           >
-            <span className="font-mono text-xs text-surface-600">&gt;</span>
+            <span className="font-mono text-mono-sm text-text-muted">&gt;</span>
             <motion.span
               className="inline-block h-3 w-1.5 bg-accent-400"
               animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [1, 0, 1] }}
@@ -166,8 +162,8 @@ function ToolCallLine({
         damping: 28,
         filter: { duration: 0.25 },
       }}
-      className={`flex items-start gap-2 font-mono text-xs leading-snug ${
-        isFresh ? 'text-surface-200' : 'text-surface-500'
+      className={`flex items-start gap-2 font-mono text-mono-sm leading-snug ${
+        isFresh ? 'text-text-primary' : 'text-text-muted'
       }`}
     >
       <span
@@ -213,7 +209,7 @@ function EmptyState({ isStreaming }: { isStreaming: boolean }) {
       className="flex h-full items-center justify-center"
     >
       <div className="text-center">
-        <p className="font-mono text-xs text-surface-600">
+        <p className="font-mono text-mono-sm text-text-muted">
           {isStreaming
             ? 'Waiting for the first tool call'
             : 'No agent activity recorded'}
