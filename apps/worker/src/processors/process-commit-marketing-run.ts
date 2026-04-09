@@ -587,11 +587,28 @@ export async function processCommitMarketingRun(
   // generation instructions and flip the row back to `queued`. The
   // workflow parent task picks up every queued asset on the project
   // on its next run and dispatches each one through the right child
-  // task. The per-asset revision context (commit sha + message) is
-  // persisted to `asset.reviewNotes` — `dispatchAsset` in the
-  // workflows service reads that field as the revision prompt and
-  // passes it through to the writer / marketing-visual / product-video
-  // agents at call time.
+  // task.
+  //
+  // Two columns carry context across the re-queue handoff:
+  //
+  //   `metadata.generationInstructions` — the "original brief" for the
+  //     asset, rewritten here to include the commit context so the
+  //     next agent run has the full story (purpose + latest change).
+  //     Kept on metadata because the legacy BullMQ path did the same,
+  //     and the workflow path's `dispatchAsset` already falls through
+  //     to the metadata field for first-pass generations.
+  //
+  //   `revisionInstructions` — the agent-facing "here's what to
+  //     change" overlay. Written here with the commit sha + message
+  //     as revision context; `dispatchAsset` reads this column on
+  //     re-dispatch and passes it through to the writer /
+  //     marketing-visual / product-video agents as the explicit
+  //     revision prompt.
+  //
+  // `reviewNotes` is explicitly cleared on this path: a webhook-driven
+  // refresh is not creative-director feedback, and leaving a stale
+  // review note attached would confuse the dashboard. A fresh review
+  // runs after this regeneration completes and writes a new note then.
   let requeuedCount = 0;
   for (const asset of assetsToRegenerate) {
     const assetMetadata = (asset.metadata as Record<string, unknown> | null) ?? {};
@@ -622,7 +639,8 @@ export async function processCommitMarketingRun(
       .set({
         status: 'queued',
         userApproved: null,
-        reviewNotes: commitRevisionContext,
+        reviewNotes: null,
+        revisionInstructions: commitRevisionContext,
         qualityScore: null,
         metadata: nextMetadata,
         version: asset.version + 1,
