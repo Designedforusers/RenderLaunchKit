@@ -106,6 +106,32 @@ Plus one on the web side:
 
 Both trigger helpers require `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` at call time. Both env vars are optional at the Zod schema level — the trigger helper throws a structured error at call time if either is missing, rather than failing every service boot when the workflow service hasn't been provisioned yet. Local dev routes through the Render CLI's local task server (`render workflows dev`, port 8120) when `RENDER_USE_LOCAL_DEV=true` is set — the SDK's `get-base-url` helper reads that env var directly in `node_modules/@renderinc/sdk/dist/utils/get-base-url.js`, so the code path is identical between local and prod.
 
+### Cost tracking
+
+Every asset generation records its real provider spend to a per-event log table (`asset_cost_events`) plus a denormalized summary on the `assets` row (`cost_cents`, `cost_breakdown`). The dashboard's "Generated for $X.XX" chip on the project detail page reads a single `SUM(cost_cents) GROUP BY provider` query against the per-event table; the per-asset card label reads the denormalized `cost_cents` field from the existing asset response. Both surfaces hit the same Postgres the asset rows live in — no cross-system join, no external observability backend.
+
+The threading is **`AsyncLocalStorage`-based**, not parameter-passing:
+
+- `apps/workflows/src/lib/dispatch-asset.ts` creates one `CostTracker` per asset generation and runs the agent routing switch inside `runWithCostTracker(tracker, async () => { ... })`.
+- Every upstream client in `packages/asset-generators/src/clients/` (fal, elevenlabs, world-labs) and both copies of `anthropic-claude-client.ts` (worker and workflows) call `recordCost(...)` after their upstream request returns successfully. `recordCost` reads the active tracker from the async-local store; if no tracker is in scope (e.g. the worker's four non-asset-gen agents calling the same Anthropic client), the call is a no-op.
+- After the agent returns, `dispatchAsset` flushes the recorded events to `asset_cost_events` via `persistCostEvents`.
+
+The `AsyncLocalStorage` choice is deliberate: threading a `tracker` parameter through every client signature would have rippled into ~20 files and forced every test to pass a stub. ALS lands the diff in exactly the two places that matter — the dispatch-site wrap and the upstream-call boundaries — and keeps every intermediate agent untouched.
+
+**Non-blocking invariant.** A failure inside `persistCostEvents` MUST NOT fail an asset generation. The helper wraps its DB transaction in a `try/catch` that logs and returns; the caller in `dispatchAsset` additionally wraps the error-path persist call in its own `try/catch` as a belt-and-braces guard. The user's blog post still ships even if the cost write hiccupped, and the operator notices the missing row on the dashboard.
+
+**Cached paths do not record cost.** ElevenLabs cache hits, fal.ai's no-API-key placeholder branch, and World Labs operation polling retries all return before reaching the `recordCost` call. We only charge for what actually hit the upstream.
+
+**Integer cents only.** Pricing constants live in `packages/shared/src/pricing.ts` as compute helpers that return integer cents via `Math.ceil`. The dashboard divides by 100 with `(cents / 100).toFixed(2)` only at display time. No floating-point dollar math at any layer.
+
+**Adding a new provider.** Three steps:
+
+1. Add the rate table and a `compute<Provider>CostCents(...)` helper to `packages/shared/src/pricing.ts`. Match the existing `Record<string, { ... }>` pattern and apply `Math.ceil` at the helper boundary.
+2. Extend the `CostEventProviderSchema` enum in `packages/shared/src/schemas/asset-cost-event.ts` with the new provider name. The DB column is a `varchar(32)` so no migration is needed; the schema enum is the boundary check.
+3. In the client file (`packages/asset-generators/src/clients/<provider>.ts`, or one of the two `anthropic-claude-client.ts` copies), call `recordCost({ provider: '<new-provider>', operation: '...', costCents: compute<Provider>CostCents(...), metadata: { ... } })` after the upstream request returns successfully. **The call must sit BELOW any early-return branches that skip the upstream call** — cache hits, no-API-key placeholder paths, and short-circuit polling retries should `return` before reaching `recordCost` so cached/free outcomes never record a charge. Look at `packages/asset-generators/src/clients/elevenlabs.ts` (cache-hit early return precedes the `recordCost` at line 188) for the canonical pattern.
+
+The tracker sees the new events automatically — no changes to `dispatch-asset.ts`, `persist-cost-events.ts`, or the API route are needed. The `/api/projects/:projectId/costs` route's `GROUP BY provider` query picks up the new provider on its next call.
+
 ### Self-learning Layer 3: forward-compat note (Phase 7)
 
 Phase 7 ships the **data infrastructure** for the self-learning loop's third layer: every approve/reject/edit/regenerate action on an asset writes a row to `asset_feedback_events`, edited rows get an async Voyage embedding via `apps/worker/src/processors/embed-feedback-event.ts`, and `apps/cron/src/aggregate-feedback-insights.ts` clusters the edits by `(asset_type, category)` via pgvector cosine similarity, writing one `strategy_insights` row per cluster with `insight_type='edit_pattern'`.

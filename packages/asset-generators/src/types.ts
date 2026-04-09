@@ -7,8 +7,9 @@ import type { z } from 'zod';
  * The package deliberately does NOT depend on `@anthropic-ai/sdk`.
  * Instead, each consumer app constructs its own `LLMClient`
  * implementation — typically by wrapping the two module-level functions
- * exported by `apps/worker/src/lib/anthropic-claude-client.ts` — and
- * passes it into `createAssetGenerators({ llm, ... })`.
+ * exported by `apps/worker/src/lib/anthropic-claude-client.ts` (or its
+ * literal copy at `apps/workflows/src/lib/anthropic-claude-client.ts`)
+ * — and passes it into `createAssetGenerators({ llm, ... })`.
  *
  * Keeping the package provider-agnostic means:
  *
@@ -22,10 +23,15 @@ import type { z } from 'zod';
  *      launch strategy is not an "asset generator" the way a blog post
  *      or a product video is.
  *
- *   2. **The future workflows service can inject its own client.**
- *      When PR 2 adds `apps/workflows/`, its tasks can wrap their own
- *      Anthropic (or Bedrock, or Vertex) client and pass it in. The
- *      agents don't know or care which provider is underneath.
+ *   2. **The workflows service injects its own client.** Confirmed in
+ *      practice: `apps/workflows/src/lib/asset-generators-instance.ts`
+ *      wraps the workflows-side `anthropic-claude-client.ts` (a literal
+ *      copy of the worker's, keyed to the workflows env module) and
+ *      passes it into `createAssetGenerators({ llm, ... })`. The agents
+ *      don't know which copy of the Anthropic client they're calling
+ *      because the boundary is the `LLMClient` interface, not a concrete
+ *      module reference. Substituting Bedrock or Vertex on a future
+ *      service is the same one-line factory swap.
  *
  *   3. **Tests can inject a fake.** A test can pass a stub
  *      `{ generateContent: async () => 'hello', generateJSON: ... }`
@@ -33,7 +39,7 @@ import type { z } from 'zod';
  *      network.
  *
  * The two method signatures match the existing worker functions
- * verbatim so the adapter on the worker side is just a one-line
+ * verbatim so each backend adapter is just a one-line
  * `{ generateContent, generateJSON }` object literal.
  */
 export interface LLMClient {
