@@ -104,7 +104,32 @@ export async function getInsightsForCategory(
 }
 
 /**
- * Store project embedding after analysis.
+ * Store project embedding after analysis. **Fire-and-forget** — this
+ * helper never throws. Errors (Voyage outage, rate-limit, DB hiccup
+ * on the UPDATE) are logged at `error` level and the promise
+ * resolves normally so the caller's primary work is not disrupted.
+ *
+ * Rationale for the asymmetry with `findSimilarProjects` above:
+ * - `findSimilarProjects` is a READ whose empty result silently
+ *   degrades the strategist's past-project context — failures MUST
+ *   surface so an operator notices the missing context instead of
+ *   shipping a watered-down strategy. That function re-throws
+ *   `VoyageEmbeddingError`.
+ * - `storeProjectEmbedding` is a WRITE side effect with NO
+ *   in-pipeline consumer. The embedding is used only by *future*
+ *   similarity lookups from other projects, so a failure here just
+ *   means "this project won't appear in future similarity search
+ *   results" — not a pipeline blocker. The analyze job has already
+ *   committed `repoAnalysis` and flipped the project to
+ *   `researching` by the time we get here, and failing the job on a
+ *   Voyage hiccup would leave the project stuck in a half-complete
+ *   state with the user staring at a "failed" banner over work that
+ *   actually succeeded.
+ *
+ * Caught in production on project `53258ff1` running against
+ * `pmndrs/zustand` — a Voyage 429 killed the analyze job even
+ * though the repo had been fully analyzed, and the only way to
+ * recover was to delete the project row and start over.
  */
 export async function storeProjectEmbedding(
   projectId: string,
@@ -128,9 +153,9 @@ export async function storeProjectEmbedding(
       WHERE id = ${projectId}
     `);
   } catch (err) {
-    // Same rationale as `findSimilarProjects` above — Voyage config
-    // errors must surface, not get swallowed.
-    if (err instanceof VoyageEmbeddingError) throw err;
-    console.error('[Memory] Error storing embedding:', err);
+    console.error(
+      `[Memory] storeProjectEmbedding failed for ${projectId} — pipeline continues without similarity embedding:`,
+      err
+    );
   }
 }
