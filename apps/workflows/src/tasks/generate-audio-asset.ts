@@ -24,7 +24,7 @@ const AUDIO_ASSET_TYPES: readonly AssetType[] = [
   'podcast_script',
 ] as const;
 
-export const generateAudioAsset = task<[SingleAssetInput], void>(
+export const generateAudioAsset = task<[SingleAssetInput], SingleAssetInput>(
   {
     name: 'generateAudioAsset',
     plan: 'standard',
@@ -35,12 +35,17 @@ export const generateAudioAsset = task<[SingleAssetInput], void>(
       backoffScaling: 2,
     },
   },
-  async function generateAudioAsset(input: SingleAssetInput): Promise<void> {
+  async function generateAudioAsset(
+    input: SingleAssetInput
+  ): Promise<SingleAssetInput> {
     const parsed = SingleAssetInputSchema.parse(input);
     await dispatchAsset({
       projectId: parsed.projectId,
       assetId: parsed.assetId,
       allowedTypes: AUDIO_ASSET_TYPES,
     });
+    // See `generate-written-asset.ts` for the rationale on echoing
+    // the parsed input as the task result instead of returning void.
+    return parsed;
   }
 );

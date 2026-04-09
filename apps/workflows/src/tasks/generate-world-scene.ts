@@ -23,7 +23,7 @@ import { SingleAssetInputSchema, type SingleAssetInput } from './input-schemas.j
 
 const WORLD_SCENE_ASSET_TYPES: readonly AssetType[] = ['world_scene'] as const;
 
-export const generateWorldScene = task<[SingleAssetInput], void>(
+export const generateWorldScene = task<[SingleAssetInput], SingleAssetInput>(
   {
     name: 'generateWorldScene',
     plan: 'pro',
@@ -34,12 +34,17 @@ export const generateWorldScene = task<[SingleAssetInput], void>(
       backoffScaling: 2,
     },
   },
-  async function generateWorldScene(input: SingleAssetInput): Promise<void> {
+  async function generateWorldScene(
+    input: SingleAssetInput
+  ): Promise<SingleAssetInput> {
     const parsed = SingleAssetInputSchema.parse(input);
     await dispatchAsset({
       projectId: parsed.projectId,
       assetId: parsed.assetId,
       allowedTypes: WORLD_SCENE_ASSET_TYPES,
     });
+    // See `generate-written-asset.ts` for the rationale on echoing
+    // the parsed input as the task result instead of returning void.
+    return parsed;
   }
 );

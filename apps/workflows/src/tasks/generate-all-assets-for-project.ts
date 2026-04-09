@@ -117,7 +117,18 @@ async function dispatchChildTask(asset: {
   }
 }
 
-export const generateAllAssetsForProject = task<[AllAssetsInput], void>(
+export interface GenerateAllAssetsResult {
+  projectId: string;
+  queuedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  reviewEnqueued: boolean;
+}
+
+export const generateAllAssetsForProject = task<
+  [AllAssetsInput],
+  GenerateAllAssetsResult
+>(
   {
     name: 'generateAllAssetsForProject',
     plan: 'starter',
@@ -130,7 +141,7 @@ export const generateAllAssetsForProject = task<[AllAssetsInput], void>(
   },
   async function generateAllAssetsForProject(
     input: AllAssetsInput
-  ): Promise<void> {
+  ): Promise<GenerateAllAssetsResult> {
     const parsed = AllAssetsInputSchema.parse(input);
     const { projectId } = parsed;
 
@@ -156,7 +167,13 @@ export const generateAllAssetsForProject = task<[AllAssetsInput], void>(
       console.log(
         `[Workflows:Parent] No queued assets for project ${projectId} — nothing to do`
       );
-      return;
+      return {
+        projectId,
+        queuedCount: 0,
+        succeededCount: 0,
+        failedCount: 0,
+        reviewEnqueued: false,
+      };
     }
 
     await projectProgressPublisher.phaseStart(
@@ -181,10 +198,16 @@ export const generateAllAssetsForProject = task<[AllAssetsInput], void>(
     // `dispatchAsset`, so nothing else needs to happen DB-side for
     // the failures. The console log gives the Render run page a
     // human-readable trace.
+    let succeededCount = 0;
+    let failedCount = 0;
     for (let i = 0; i < results.length; i += 1) {
       const result = results[i];
       const asset = queuedAssets[i];
-      if (result && result.status === 'rejected' && asset) {
+      if (!result || !asset) continue;
+      if (result.status === 'fulfilled') {
+        succeededCount += 1;
+      } else {
+        failedCount += 1;
         const reason =
           result.reason instanceof Error
             ? result.reason.message
@@ -230,7 +253,15 @@ export const generateAllAssetsForProject = task<[AllAssetsInput], void>(
       .where(eq(schema.projects.id, projectId));
 
     console.log(
-      `[Workflows:Parent] Project ${projectId} all ${queuedAssets.length} assets settled, review enqueued`
+      `[Workflows:Parent] Project ${projectId} all ${queuedAssets.length} assets settled (${succeededCount} succeeded, ${failedCount} failed), review enqueued`
     );
+
+    return {
+      projectId,
+      queuedCount: queuedAssets.length,
+      succeededCount,
+      failedCount,
+      reviewEnqueued: true,
+    };
   }
 );

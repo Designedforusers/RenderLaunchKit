@@ -26,7 +26,7 @@ const WRITTEN_ASSET_TYPES: readonly AssetType[] = [
   'tips',
 ] as const;
 
-export const generateWrittenAsset = task<[SingleAssetInput], void>(
+export const generateWrittenAsset = task<[SingleAssetInput], SingleAssetInput>(
   {
     name: 'generateWrittenAsset',
     plan: 'starter',
@@ -37,12 +37,24 @@ export const generateWrittenAsset = task<[SingleAssetInput], void>(
       backoffScaling: 2,
     },
   },
-  async function generateWrittenAsset(input: SingleAssetInput): Promise<void> {
+  async function generateWrittenAsset(
+    input: SingleAssetInput
+  ): Promise<SingleAssetInput> {
     const parsed = SingleAssetInputSchema.parse(input);
     await dispatchAsset({
       projectId: parsed.projectId,
       assetId: parsed.assetId,
       allowedTypes: WRITTEN_ASSET_TYPES,
     });
+    // Return the parsed input as the task result. The Render task
+    // runner requires every task to complete with either a concrete
+    // result value or an explicit throw — a bare `Promise<void>`
+    // surfaces as "Either results or error must be provided" on the
+    // local dev task server (and leaves the prod dashboard with an
+    // empty `results` array that is indistinguishable from a pending
+    // run). Echoing the input gives the Render run page a
+    // human-readable trace of which asset this run handled, costs
+    // nothing, and matches the pattern the other task files use.
+    return parsed;
   }
 );
