@@ -101,4 +101,18 @@ export type {
   // ── Phase 5: influencer discovery pipeline ──
   // influencer candidate (agent/matcher output, not a DB row)
   InfluencerCandidate,
+  // ── Pika video meeting integration ──
+  // subprocess stdout / job payloads / DB row / HTTP boundary shapes
+  PikaSessionStatus,
+  PikaExitCode,
+  PikaSessionUpdate,
+  PikaLeaveResponse,
+  PikaNeedsTopupPayload,
+  PikaInviteRequest,
+  PikaInviteJobData,
+  PikaLeaveJobData,
+  PikaMeetingSessionRow,
+  PikaMeetingSessionListResponse,
+  PikaMeetingSessionDetailResponse,
+  PikaInviteResponse,
 } from './schemas/index.js';

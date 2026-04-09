@@ -10,6 +10,7 @@ export * from './github-webhook.js';
 export * from './influencer-candidate.js';
 export * from './job-data.js';
 export * from './outreach-draft.js';
+export * from './pika.js';
 export * from './progress-event.js';
 export * from './repo-analysis.js';
 export * from './research.js';
