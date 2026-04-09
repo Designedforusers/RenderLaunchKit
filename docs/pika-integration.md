@@ -22,61 +22,94 @@ Every part of the integration is built around this. There is no BullMQ auto-enqu
 
 ## Architecture
 
+Three Render services participate in the Pika lifecycle, each handling a different phase:
+
 ```
 User clicks "Invite AI teammate"
               │
               ▼
-┌─────────────────────────────┐
-│ Dashboard  (PikaMeetingCard)│
-│ React + Vite SPA            │
-└─────────────┬───────────────┘
-              │ POST /api/projects/:id/meetings
-              ▼
-┌─────────────────────────────┐
-│ Web service (Hono)          │
-│ Validates meet URL          │
-│ Inserts pika_meeting_sessions│
-│   row at status='pending'   │
-│ Enqueues pika-invite job    │
-└─────────────┬───────────────┘
-              │ BullMQ (Redis)
-              ▼
-┌─────────────────────────────┐
-│ Worker (process-pika-invite)│
-│ Loads project + assets      │
-│ Builds system prompt        │
-│ Flips row to 'joining'      │
-│ Spawns Python subprocess    │
-└─────────────┬───────────────┘
-              │ child_process.spawn
-              ▼
-┌─────────────────────────────┐
-│ vendor/pikastream-video-    │
-│ meeting/scripts/            │
-│ pikastreaming_videomeeting.py│
-│ (Python CLI, ~600 lines)    │
-└─────────────┬───────────────┘
-              │ HTTPS
-              ▼
-┌─────────────────────────────┐
-│ Pika SaaS (api.worldlabs... │
-│ pika.art)                   │
-│ Headless browser, Google    │
-│ Meet auth, WebRTC, avatar   │
-│ render, voice synth         │
-└─────────────┬───────────────┘
-              │
-              ▼
-         Google Meet
+┌──────────────────────────────────────────────────────────────┐
+│ launchkit-web (existing)                                     │
+│                                                              │
+│   POST /api/projects/:id/meetings                            │
+│   ├─ PikaInviteRequestSchema.parse(body)                     │
+│   ├─ Insert pika_meeting_sessions row (status='pending')     │
+│   └─ enqueuePikaInvite({sessionRowId, projectId})            │
+│        → PIKA_INVITE queue (Redis)                           │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               │ BullMQ notifies via Redis pub/sub (~1 ms)
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ launchkit-pika-worker (DEDICATED, NEW)                       │
+│ Single-purpose dyno, Python 3 + requests installed.          │
+│ Consumes PIKA_INVITE queue ONLY — no other work.             │
+│                                                              │
+│   processPikaInvite(job)                                     │
+│   ├─ Load project + assets                                   │
+│   ├─ buildPikaSystemPrompt (4 KB cap)                        │
+│   ├─ Flip row to 'joining'                                   │
+│   ├─ child_process.spawn('python3', ...)  ~90 s              │
+│   │    │                                                     │
+│   │    └─→ vendor/pikastream-video-meeting/scripts/*.py      │
+│   │         │                                                │
+│   │         └─→ Pika SaaS (HTTPS POST /meeting-session)      │
+│   │              │                                           │
+│   │              └─→ Google Meet (WebRTC, avatar, voice)     │
+│   │                                                          │
+│   ├─ On success: row → 'active', persist pika_session_id     │
+│   └─ Enqueue first pika-poll (5 s delay)                     │
+│        → PIKA_CONTROL queue                                  │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               │ BullMQ PIKA_CONTROL queue
+               ▼
+┌──────────────────────────────────────────────────────────────┐
+│ launchkit-worker (existing SHARED)                           │
+│ Runs analysis, review, trending AND pika-poll + pika-leave.  │
+│ NO Python install — leave/poll are pure-TS fetch() calls.    │
+│                                                              │
+│   processPikaPoll(job)   [re-enqueues every 30 s]            │
+│   ├─ Load session row                                        │
+│   ├─ Check 60-min safety cap                                 │
+│   ├─ fetchPikaSessionState() via pure-TS fetch()             │
+│   │    ├─ status='ready'     → re-enqueue poll               │
+│   │    ├─ status='closed'    → enqueuePikaLeave(pika_closed) │
+│   │    ├─ status='error'     → enqueuePikaLeave(pika_error)  │
+│   │    ├─ HTTP 404           → enqueuePikaLeave(pika_closed) │
+│   │    └─ HTTP transient err → re-enqueue poll               │
+│                                                              │
+│   processPikaLeave(job)   [user click | poll | safety]       │
+│   ├─ Terminal-status guard (idempotent)                      │
+│   ├─ endMeeting() → HTTPS DELETE via pure-TS fetch()         │
+│   ├─ Flip row to 'ended', compute cost_cents                 │
+│   └─ Write asset_cost_events (provider='pika')               │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Every arrow is a boundary we validate at:
+### Why two services
+
+The 90-second Python subprocess burst is the only part of the lifecycle that needs isolation guarantees. Everything else on our side is lightweight HTTPS. Splitting the invite onto a dedicated dyno keeps click-to-subprocess-spawn latency under 100 ms regardless of what analysis, research, or trending work is in flight on the shared worker. The control-plane operations (poll, leave) are single HTTPS calls taking <1 s each — putting them on their own dedicated dyno would be waste.
+
+### Same workspace, two entry points
+
+Both services compile from the **same** `apps/worker` workspace:
+
+- `apps/worker/src/index.ts` → `dist/index.js` → `launchkit-worker` (shared)
+- `apps/worker/src/index.pika.ts` → `dist/index.pika.js` → `launchkit-pika-worker` (dedicated)
+
+The two entry points share every helper: `lib/pika-stream.ts` (subprocess wrapper + pure-TS helpers), `lib/pika-system-prompt-builder.ts`, `lib/database.ts`, `lib/job-queues.ts`, `env.ts`. Zero duplication, zero cross-workspace import chain. The split is at the PROCESS boundary, not the code boundary.
+
+### Boundary validation
+
+Every arrow in the diagram is a runtime boundary we validate through Zod:
 
 - **Dashboard → Web:** `PikaInviteRequestSchema` parses the POST body. Invalid URLs get a 400 with a structured error list.
-- **Web → DB:** the insert uses the drizzle `pikaMeetingSessions` table from `packages/shared/src/schema.ts`; the column shape is authoritative.
-- **Web → BullMQ:** `PikaInviteJobDataSchema` parses the job payload.
-- **Worker → Python:** the wrapper writes a tmp file for the system prompt and passes it via `--system-prompt-file`; the CLI args are shell-quoted by `child_process.spawn`.
-- **Python → Worker:** `PikaSessionUpdateSchema` + `PikaLeaveResponseSchema` + `PikaNeedsTopupPayloadSchema` parse every line of stdout. Non-JSON lines are ignored silently.
+- **Web → DB:** the insert uses the drizzle `pikaMeetingSessions` table; the column shape is authoritative.
+- **Web → BullMQ:** `PikaInviteJobDataSchema` parses the job payload before enqueue.
+- **Pika-worker → Python:** the wrapper writes a tmp file for the system prompt and passes it via `--system-prompt-file`; the CLI args are passed as an array to `child_process.spawn` (no shell, no quoting issues).
+- **Python → Pika-worker:** `PikaSessionUpdateSchema` + `PikaLeaveResponseSchema` + `PikaNeedsTopupPayloadSchema` parse every line of stdout. Non-JSON lines are ignored silently.
+- **Shared worker → Pika HTTPS:** `PikaSessionStateSchema` parses the `fetchPikaSessionState` response; a non-matching shape throws a structured `PikaHttpError`.
 - **Worker → DB:** every row update goes through drizzle's typed query builder.
 
 ---
@@ -186,21 +219,28 @@ The `PIKA_AVATAR` env var is passed verbatim to the Python CLI's `--image` flag.
 
 ---
 
-## BullMQ queue + session lifecycle
+## BullMQ queues + session lifecycle
 
-The `pika` BullMQ queue carries two job names:
+Two queues, three job names, two services:
 
-| Job name | Producer | Purpose |
-|---|---|---|
-| `pika-invite` | web service on user click | kick off the `join` subprocess |
-| `pika-leave`  | web service (user End click) OR worker invite processor (30-min delayed auto-timeout) | kick off the `leave` subprocess |
+| Queue | Job name | Producer | Consumer | Purpose |
+|---|---|---|---|---|
+| `pika-invite`  | `pika-invite` | web service on user click | dedicated `launchkit-pika-worker` | spawns the `join` Python subprocess (~90 s) |
+| `pika-control` | `pika-poll`   | invite processor (initial), then self-re-enqueue every 30 s | shared `launchkit-worker` | HTTPS GET to Pika's session endpoint, decides stay/leave |
+| `pika-control` | `pika-leave`  | web service (user End) OR poll processor (closed/error/safety-cap) | shared `launchkit-worker` | HTTPS DELETE to Pika's session endpoint, pure TS |
 
 Queue config in `packages/shared/src/constants.ts`:
 
+**`pika-invite`** (dedicated dyno, Python subprocess burst):
 - `concurrency: 2` — max two active joins at once per worker process
 - `attempts: 1` — deliberate. A failed join with a structured error (exit 2-6) will NOT get better on retry, and a second attempt would burn Pika credits for nothing. The retry story is the user clicking Invite again, not a BullMQ retry loop.
 - `PIKA_INVITE timeout: 300_000 ms` (5 min) — generous cover for the ~90 s join flow plus a slow Meet auth handshake
-- `PIKA_LEAVE timeout: 90_000 ms` (90 s) — single HTTP DELETE + DB writes
+
+**`pika-control`** (shared dyno, pure-TS HTTP):
+- `concurrency: 5` — each job is a single HTTPS call taking <1 s, concurrency is only a ceiling against pathological backlog
+- `attempts: 3` with `exponential` backoff at 2 s — control calls are idempotent and cost nothing to retry, so transient network errors SHOULD retry automatically
+- `PIKA_POLL timeout: 30_000 ms` (30 s) — single HTTPS GET + DB read + conditional enqueue
+- `PIKA_LEAVE timeout: 30_000 ms` (30 s) — single HTTPS DELETE + DB update (was 90 s when leave spawned Python)
 
 ### Session lifecycle state machine
 
@@ -211,14 +251,40 @@ pending → joining → active → ending → ended
 
 | State | Set by | Meaning |
 |---|---|---|
-| `pending`  | web route (insert) | row created, BullMQ job not yet picked up |
-| `joining`  | invite processor   | subprocess spawned, waiting for Pika to bring bot online |
-| `active`   | invite processor   | `status=ready` observed, bot is in the meeting |
-| `ending`   | leave processor    | `leave` subprocess in flight |
-| `ended`    | leave processor    | `leave` subprocess returned exit 0 |
-| `failed`   | invite or leave    | any non-zero exit code, timeout, or DB write error |
+| `pending`  | web route (insert)        | row created, BullMQ job not yet picked up |
+| `joining`  | invite processor          | Python subprocess spawned, waiting for Pika to bring bot online |
+| `active`   | invite processor          | `status=ready` observed, bot is in the meeting; poll loop takes over |
+| `ending`   | leave processor           | HTTPS DELETE in flight |
+| `ended`    | leave processor           | DELETE returned 2xx (or 404 = already gone), cost event written |
+| `failed`   | invite / poll / leave     | any non-zero exit code, timeout, HTTP error, or DB write error |
 
-The invite processor schedules a delayed `pika-leave` job 30 minutes after a successful join, with a deterministic `jobId` (`pika-leave-auto__<sessionRowId>`) so retries cannot stack duplicates. The user's End click enqueues a separate `pika-leave-user__<sessionRowId>` job. Both paths land on the same leave processor; whichever fires first terminates the session, and the second sees a terminal row and no-ops via the idempotency guard at `process-pika-leave.ts`.
+### Who terminates a session
+
+Four possible triggers, all converging on the same `pika-leave` handler with different `triggeredBy` values:
+
+| Trigger | When | `triggeredBy` |
+|---|---|---|
+| User click | User hits "End meeting" on the dashboard | `user` |
+| Pika backend closed | Poll observes `status=closed` (Meet ended naturally) | `pika_closed` |
+| Pika backend error | Poll observes `status=error` | `pika_error` |
+| 60-minute safety cap | Poll observes `now - started_at > 60 min` | `safety_cap` |
+
+Each trigger enqueues a `pika-leave` with a deterministic `jobId` scoped to the trigger source:
+
+- `pika-leave-user__<sessionRowId>`
+- `pika-leave-pika_closed__<sessionRowId>`
+- `pika-leave-pika_error__<sessionRowId>`
+- `pika-leave-safety_cap__<sessionRowId>`
+
+Multiple triggers on the same session (e.g. user clicks End just as the safety cap fires) cannot stack duplicates at the queue level — BullMQ drops the second `add` with the same jobId. The first leave to run flips the row to `ended`; any subsequent `pika-leave` job sees the terminal status and no-ops via the idempotency guard in `process-pika-leave.ts`.
+
+### Why polling instead of a webhook
+
+Pika does not expose a push notification when a meeting ends. The only way to know the state is to ask. A 30-s poll cadence is cheap (single HTTPS GET per tick, <200 bytes of traffic), has <30 s worst-case termination latency, and does not require us to expose a public webhook endpoint that Pika would need to authenticate. If Pika ships webhooks later, swap the polling loop for a webhook receiver — the state machine stays the same.
+
+### 60-minute safety cap rationale
+
+The previous design had a hard 30-minute cap, enforced by a delayed BullMQ leave job scheduled at invite time. That was wrong for two reasons: legitimate meetings can run longer than 30 minutes, and a hard cap masks the fact that the user is actively paying per-minute and should be allowed to use as much as they want. The 60-minute cap is a **runaway ceiling**, not a usage limit. A forgotten session cannot drain the credit balance overnight, but a real 50-minute meeting runs to completion. The cap is trivially bumpable in `process-pika-poll.ts:SAFETY_CAP_MS` if longer sessions become a legitimate use case.
 
 ---
 

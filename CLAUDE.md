@@ -136,13 +136,35 @@ The tracker sees the new events automatically — no changes to `dispatch-asset.
 
 LaunchKit's AI teammate grows a face: a user clicks **Invite AI teammate to a meet** on the project dashboard, drops a Google Meet URL, and the Pika-hosted avatar joins the call as a real video participant that already knows the project's repo, launch strategy, and generated assets.
 
-**What Pika is.** [Pika](https://www.pika.me) is a SaaS product for real-time AI video avatars in meetings. We use their `pikastream-video-meeting` skill — a ~600-line Python CLI that wraps Pika's HTTPS API. All the heavy lifting (headless browser, Google Meet auth, WebRTC, avatar rendering, voice synthesis) runs on Pika's backend. Our side is a short-lived Python subprocess with one dep (`requests>=2.32.5`).
+**What Pika is.** [Pika](https://www.pika.me) is a SaaS product for real-time AI video avatars in meetings. We use their `pikastream-video-meeting` skill — a ~600-line Python CLI that wraps Pika's HTTPS API. All the heavy lifting (headless browser, Google Meet auth, WebRTC, avatar rendering, voice synthesis) runs on Pika's backend. Our side is a short-lived Python subprocess with one dep (`requests>=2.32.5`) — and ONLY for the 90-second join handshake. Every other operation (leave, health poll) is pure-TypeScript `fetch()` with no Python involved.
 
-**Why a Python subprocess, given the rest of the repo is TypeScript.** The alternative is reimplementing Pika's CLI in Node — porting four subcommands (`join`, `leave`, `generate-avatar`, `clone-voice`) to TypeScript and keeping them in sync with every upstream change. Instead we vendor the upstream CLI at `vendor/pikastream-video-meeting/` (Apache 2.0, pinned to a specific upstream commit SHA) and wrap it with a ~60-line TypeScript subprocess wrapper at `apps/worker/src/lib/pika-stream.ts`. The `child_process.spawn` + Zod-validated stdout pattern is the same "TypeScript → subprocess" precedent the Claude Agent SDK runner already uses in the worker (`apps/worker/src/lib/agent-sdk-runner.ts`). See `vendor/README.md` for the refresh procedure.
+**Two services, two queues, one responsibility split.** The Pika integration runs across two Render worker services:
 
-**Env var mapping.** LaunchKit's codebase uses `PIKA_API_KEY` for naming consistency with every other `*_API_KEY`. The upstream Python CLI reads from `PIKA_DEV_KEY`. The wrapper performs the rename at subprocess spawn time (`pika-stream.ts:runPikaSubprocess`) so the rest of our code never sees `PIKA_DEV_KEY` and a grep for `PIKA_API_KEY` lands every consumer. `PIKA_AVATAR` is passed through verbatim as the `--image` flag value — the Python CLI handles both local file paths and `https://` URLs transparently.
+| Service | Queue | Job types | Code path |
+|---|---|---|---|
+| `launchkit-pika-worker` (dedicated) | `pika-invite` | `pika-invite` | `apps/worker/src/index.pika.ts` spawns Python for ~90 s per join |
+| `launchkit-worker` (shared) | `pika-control` | `pika-poll`, `pika-leave` | `apps/worker/src/index.ts` runs pure-TS `fetch()` for the control plane |
 
-**Exit code → error class mapping.** The Python CLI exits with a documented code for every failure mode, and the wrapper maps each to a typed error class that extends `PikaSubprocessError`:
+Both services compile from the **same** `apps/worker` workspace — `dist/index.js` and `dist/index.pika.js` are two entry points sharing every helper, db client, env module, and subprocess wrapper. The split is at the PROCESS boundary, not the code boundary: no duplication, no cross-workspace imports. Only the Python install (`apt-get python3 + pip install requests`) is unique to the pika-worker's `buildCommand`.
+
+**Why the split.** The 90-second Python subprocess burst is the part of the lifecycle that needs isolation guarantees — a heavy analysis job on the shared worker could otherwise contend with the pika subprocess spawn for the Node event loop, adding latency to the user's click → bot joins meeting path. A dedicated dyno with a single-purpose BullMQ Worker keeps click-to-spawn latency under 100 ms regardless of what else is running. The control-plane operations (poll + leave) are single pure-TS HTTPS calls taking <1 s each; they share the shared worker's event loop with analysis/review/trending because there's no contention concern at that size.
+
+**Session lifecycle.** Six states, linear state machine with a `failed` escape hatch:
+
+```
+pending → joining → active → ending → ended
+                 ↘ failed
+```
+
+The flow:
+
+1. **User clicks Invite.** Web service validates the meet URL, inserts a `pika_meeting_sessions` row at `status='pending'`, and enqueues a `pika-invite` job on the PIKA_INVITE queue. The dedicated `launchkit-pika-worker` picks it up within ~100 ms.
+2. **Dedicated worker runs the invite.** Loads the project + assets, builds the per-project system prompt (4 KB cap), flips the row to `joining`, spawns `python3 vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py join ...` with bounded stdio buffers and a 240 s wall-clock. On success, flips the row to `active`, persists `pika_session_id` + `started_at`, and enqueues a `pika-poll` job (5 s delay) on the PIKA_CONTROL queue.
+3. **Shared worker polls every 30 s.** The `pika-poll` processor loads the row, enforces the 60-minute safety cap (age check on `started_at`), fetches Pika's session state via pure-TS `fetchPikaSessionState`, and decides to either re-enqueue itself with a 30 s delay OR enqueue a `pika-leave` job with the appropriate `triggeredBy` value (`safety_cap` | `pika_closed` | `pika_error`).
+4. **Leave is a pure-TS HTTPS DELETE.** The `pika-leave` processor calls `endMeeting` which issues `DELETE https://srkibaanghvsriahb.pika.art/proxy/realtime/session/{id}` directly via `fetch()` — no Python subprocess, no subprocess startup tax. Flips the row to `ended`, computes cost via `computePikaMeetingCostCents(durationSeconds)`, and writes a session-scoped cost event to `asset_cost_events` with `asset_id=NULL`.
+5. **User-initiated End.** Same `pika-leave` handler, `triggeredBy='user'`. Idempotent via terminal-status guard against any concurrent safety-cap leave.
+
+**Exit code → error class mapping** (applies only to the Python subprocess for the join path — leave/poll use typed HTTP errors):
 
 | Exit | Error class | Meaning |
 |---|---|---|
@@ -154,21 +176,19 @@ LaunchKit's AI teammate grows a face: a user clicks **Invite AI teammate to a me
 | 5 | `PikaTimeoutError` | subprocess reached `--timeout-sec` without ready |
 | 6 | `PikaInsufficientCreditsError` | funding check failed; carries a `checkoutUrl` the dashboard surfaces on the failed session row |
 
-**Session lifecycle and BullMQ queue.** The `pika` BullMQ queue carries two job types:
-- `pika-invite`, enqueued by the web service on every user click. The invite processor inserts a `pika_meeting_sessions` row at `status='pending'`, builds a per-project system prompt from `repoAnalysis + research + strategy + assets` (capped at 4 KB by `pika-system-prompt-builder.ts`), flips to `joining`, spawns the `join` subprocess, and on success flips to `active` and schedules a delayed `pika-leave` job 30 minutes out.
-- `pika-leave`, enqueued by the web service on a user End click AND by the invite processor itself for the 30-minute auto-timeout. Both entry points use deterministic `jobId`s so retries cannot stack duplicates, and the processor's terminal-status guard makes the two leave paths idempotent against each other.
+Special rule: `mapExitCodeToError` promotes any run with a captured `checkoutUrl` to `PikaInsufficientCreditsError` regardless of exit code, because `ensure_funded()` polls for payment for up to 300 seconds and our wall-clock kill can beat it to exit. The presence of a checkout URL is a stronger signal than the exit code.
 
-The six lifecycle states form a linear state machine with a `failed` escape hatch from any non-terminal state:
-```
-pending → joining → active → ending → ended
-                 ↘ failed
-```
+**Env var mapping.** LaunchKit's codebase uses `PIKA_API_KEY` for naming consistency with every other `*_API_KEY`. The upstream Python CLI reads from `PIKA_DEV_KEY`. The wrapper performs the rename at subprocess spawn time (`apps/worker/src/lib/pika-stream.ts:runPikaSubprocess`) so the rest of our code never sees `PIKA_DEV_KEY` and a grep for `PIKA_API_KEY` lands every consumer. `PIKA_AVATAR` is passed through verbatim as the `--image` flag value — the Python CLI handles both local file paths and `https://` URLs transparently.
+
+**Service env var scoping.** Only the dedicated `launchkit-pika-worker` service has `PIKA_AVATAR` set in its envVars (it's the only service that spawns the subprocess). Both services have `PIKA_API_KEY` because the shared worker needs it for the pure-TS leave/poll `Authorization` headers. The web service has NEITHER — it only enqueues BullMQ jobs; Pika secrets never touch the web dyno.
+
+**60-minute safety cap.** The poll processor enforces a 60-minute ceiling on bot runtime as a runaway safety, not a usage limit. Legitimate meetings longer than 60 minutes should be possible by bumping the constant; the cap exists so a forgotten session cannot drain the credit balance overnight. Every poll tick reads `started_at`, compares against `now`, and enqueues a `pika-leave` with `triggeredBy='safety_cap'` if exceeded.
 
 **Cost tracking.** Pika bills at a flat $0.275/minute of bot runtime. The leave processor computes `durationSeconds = ended_at - started_at` (in seconds), passes it through `computePikaMeetingCostCents()` in `packages/shared/src/pricing.ts`, and writes a `provider='pika'` row to `asset_cost_events` with `asset_id=NULL` — the column nullability was relaxed in migration `0010_pika_meeting_sessions.sql` specifically so session-scoped cost events can share the existing aggregation surface without forcing the dashboard's project cost chip to UNION a second table. The chip picks up Pika spend automatically via the existing `GROUP BY provider` query.
 
 **The "do not auto-invoke" invariant.** Pika is never auto-invoked. No strategist heuristic picks it. No review loop spawns it. No cron auto-joins a meet. Every Pika session is triggered by an explicit user click on the dashboard's **Invite AI teammate to a meet** button. This invariant exists because a Pika session burns real money and an unexpected avatar joining a live meeting is a UX disaster — the user must always be the one pressing the button.
 
-**Avatar privacy.** The `PIKA_AVATAR` value is user-private and must NEVER be committed to the repo, echoed in logs, or included in commit messages. The wrapper's error messages deliberately quote the redacted meet URL (`host + pathname`, no query string since Zoom encodes passwords there) and never the avatar ref. The web service's env surface does NOT include `PIKA_AVATAR` — only the worker reads it at spawn time, so the secret stays scoped to the one service that needs it.
+**Avatar privacy.** The `PIKA_AVATAR` value is user-private and must NEVER be committed to the repo, echoed in logs, or included in commit messages. The wrapper's error messages deliberately quote the redacted meet URL (`host + pathname`, no query string since Zoom encodes passwords there) and never the avatar ref. The web service's env surface does NOT include `PIKA_AVATAR` — only the dedicated pika-worker reads it at spawn time, so the secret stays scoped to the one service that needs it.
 
 ### Self-learning Layer 3: forward-compat note (Phase 7)
 

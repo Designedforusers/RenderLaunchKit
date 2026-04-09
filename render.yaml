@@ -67,18 +67,12 @@ services:
     # the per-platform checksums) — `npm ci` is enough to land it. No
     # global install or extra build step required at deploy time.
     #
-    # In addition to Node, the worker shells out to the vendored
-    # Pika video-meeting Python CLI at
-    # `vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py`
-    # via `apps/worker/src/lib/pika-stream.ts`. The build command
-    # below installs `python3` + `python3-pip` via apt and then
-    # installs the CLI's single Python dep (`requests>=2.32.5`) so
-    # the subprocess can run without any manual post-deploy setup.
-    # The `--break-system-packages` flag is required on Debian 12+
-    # because the system pip refuses to install outside a virtualenv
-    # by default; we're fine bypassing that because the Render
-    # worker container has no competing Python environment and the
-    # install is scoped to the container lifetime.
+    # Python is NOT installed on this dyno. The Pika video-meeting
+    # integration's `join` subprocess runs on the dedicated
+    # `launchkit-pika-worker` service below; this shared worker only
+    # handles the pika-poll (HTTPS GET) and pika-leave (HTTPS DELETE)
+    # control-plane jobs, both pure TypeScript with no Python
+    # dependency.
     #
     # Note on the workflows service: Render Workflows is created via
     # the dashboard (New > Workflow) and is not defined in this
@@ -88,7 +82,7 @@ services:
     # web trigger helper (`apps/web/src/lib/trigger-workflow-generation.ts`)
     # both read `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` from
     # their respective service env pages.
-    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start:worker
     buildFilter:
       paths:
@@ -100,7 +94,6 @@ services:
         - packages/shared/**
         - packages/video/**
         - packages/asset-generators/**
-        - vendor/pikastream-video-meeting/**
         - apps/worker/**
     envVars:
       - key: DATABASE_URL
@@ -135,25 +128,15 @@ services:
       # the rest of the asset fan-out keeps running.
       - key: WORLD_LABS_API_KEY
         sync: false
-      # Pika video meeting integration — drives the `pika` BullMQ
-      # queue. The worker maps `PIKA_API_KEY` → `PIKA_DEV_KEY` at
-      # subprocess spawn time (see `apps/worker/src/lib/pika-stream.ts`)
-      # so the rest of the codebase can use our standard
-      # `*_API_KEY` naming convention. Both vars are optional at
-      # the Zod schema level so the worker still boots on the
-      # analyze/review/trending path when Pika is not configured;
-      # the invite processor throws a structured `PikaMissingKeyError`
-      # / `PikaMissingAvatarError` at call time if either is missing.
-      #
-      # PIKA_AVATAR accepts either an absolute local file path
-      # (inside the container) or an https URL — the vendored
-      # Python CLI handles both transparently. For the Render
-      # deployment, use a hosted URL (e.g., an S3 / R2 / Cloudinary
-      # public URL) since the worker container has no stable
-      # filesystem for local image files.
+      # Pika control-plane operations (pika-poll + pika-leave)
+      # run on this shared worker and hit Pika's HTTPS endpoints
+      # directly — `DELETE /session/{id}` for leave, `GET
+      # /session/{id}` for the 30-second health poll. Both are
+      # single-HTTP-call pure-TypeScript jobs, no Python needed.
+      # The avatar ref (`PIKA_AVATAR`) is NOT set here because
+      # the shared worker never spawns the join subprocess —
+      # that's on the dedicated launchkit-pika-worker below.
       - key: PIKA_API_KEY
-        sync: false
-      - key: PIKA_AVATAR
         sync: false
       # Base64 32-byte secret for decrypting the per-project GitHub
       # PAT the web service stored on the projects row. Must match
@@ -173,6 +156,88 @@ services:
       # definitions, copied from the dashboard after one-time
       # creation. Required.
       - key: RENDER_WORKFLOW_SLUG
+        sync: false
+
+  # ── Pika Invite Worker ─────────────────────────────────────────────
+  #
+  # Dedicated single-purpose dyno for the Pika video-meeting JOIN
+  # flow. Every job on its `pika-invite` BullMQ queue spawns the
+  # vendored Python CLI's `join` subcommand for ~90 seconds to bring
+  # a Pika-hosted avatar into a live Google Meet. This is the ONLY
+  # service in the LaunchKit stack that runs Python — the shared
+  # worker above uses pure-TypeScript `fetch()` calls for the
+  # control-plane operations (poll + leave).
+  #
+  # Why a dedicated dyno for a single queue
+  # ---------------------------------------
+  #
+  # Reliability for the "user clicks Invite, bot joins meeting"
+  # UX demands ZERO event-loop contention with the
+  # analysis/research/trending jobs that run on the shared worker.
+  # A dedicated dyno with a single-purpose BullMQ Worker keeps
+  # click-to-subprocess-spawn latency under 100 ms regardless of
+  # what other work is in flight. The dyno exists to sit warm and
+  # ready to `child_process.spawn('python3', ...)` the instant a
+  # job arrives on Redis.
+  #
+  # Both entry points (`dist/index.js` and `dist/index.pika.js`)
+  # are compiled from the SAME `apps/worker` workspace — they share
+  # code, not deployment. The only things different between the two
+  # services are the `startCommand` and the `buildCommand` (this
+  # one installs Python, the shared worker does not).
+  #
+  # This service consumes the `pika-invite` queue ONLY. It does
+  # NOT touch analysis, review, trending, or pika-control —
+  # those all live on the shared `launchkit-worker` above.
+  - type: worker
+    name: launchkit-pika-worker
+    runtime: node
+    plan: starter
+    rootDir: .
+    # Python 3 + `requests` install lives here, NOT on the shared
+    # worker. The vendored CLI's only Python dep is `requests>=2.32.5`.
+    # The `--break-system-packages` flag is required on Debian 12+
+    # because the system pip refuses to install outside a virtualenv
+    # by default — fine here because the Render container has no
+    # competing Python environment and the install is scoped to
+    # the container lifetime.
+    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci && npm run build
+    startCommand: npm run start:pika-worker
+    buildFilter:
+      paths:
+        - package.json
+        - package-lock.json
+        - render.yaml
+        - packages/shared/**
+        - vendor/pikastream-video-meeting/**
+        - apps/worker/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: launchkit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: launchkit-redis
+          type: keyvalue
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      # Pika Developer Key (required). The wrapper at
+      # `apps/worker/src/lib/pika-stream.ts:runPikaSubprocess`
+      # renames this to `PIKA_DEV_KEY` in the subprocess env at
+      # spawn time so the rest of the codebase stays on our
+      # standard `*_API_KEY` naming convention.
+      - key: PIKA_API_KEY
+        sync: false
+      # Avatar reference — either an absolute container filesystem
+      # path OR an https URL. For production, use a hosted URL
+      # (e.g., a raw GitHub URL or an R2 public URL) since Render
+      # worker containers have no stable filesystem for local
+      # image files. The value is user-private and must NEVER be
+      # committed to the repo. See docs/pika-integration.md §
+      # "PIKA_AVATAR" for the full guidance.
+      - key: PIKA_AVATAR
         sync: false
 
   - type: cron
