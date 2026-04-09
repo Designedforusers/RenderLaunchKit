@@ -1,5 +1,10 @@
 import { fal } from '@fal-ai/client';
 import {
+  computeFalImageCostCents,
+  computeFalVideoCostCents,
+} from '@launchkit/shared';
+import { recordCost } from '../cost-tracker.js';
+import {
   FluxImageResponseSchema,
   KlingVideoResponseSchema,
 } from './schemas/fal.js';
@@ -128,6 +133,24 @@ export function createFalMediaClient(
     }
     const imageUrl = firstImage.url;
 
+    // Record the cost for the successful image render. This is a
+    // fixed-cost operation (one FLUX.2 Pro Ultra image) so no
+    // per-unit count is meaningful. The placeholder/no-API-key
+    // branch above returns early before reaching this line, so
+    // placeholder renders never record a cost — we only charge
+    // for what actually hit the upstream.
+    recordCost({
+      provider: 'fal',
+      operation: 'flux-pro-ultra-image',
+      costCents: computeFalImageCostCents(),
+      metadata: {
+        ...(options?.aspectRatio !== undefined
+          ? { aspectRatio: options.aspectRatio }
+          : {}),
+        ...(options?.style !== undefined ? { style: options.style } : {}),
+      },
+    });
+
     return { url: imageUrl, prompt };
   }
 
@@ -172,8 +195,24 @@ export function createFalMediaClient(
       );
     }
     const videoUrl = parsed.data.video.url;
+    const durationSeconds = options?.duration ?? 5;
 
-    return { url: videoUrl, prompt, duration: options?.duration ?? 5 };
+    // Record the per-second video render cost. The placeholder
+    // branch above returns early before reaching this line, so
+    // placeholder (no-API-key) renders never record a cost — we
+    // only charge for what actually hit the upstream.
+    recordCost({
+      provider: 'fal',
+      operation: 'kling-video-standard',
+      outputUnits: durationSeconds,
+      costCents: computeFalVideoCostCents(durationSeconds),
+      metadata: {
+        endpoint,
+        hasImageUrl: options?.imageUrl !== undefined,
+      },
+    });
+
+    return { url: videoUrl, prompt, duration: durationSeconds };
   }
 
   return {

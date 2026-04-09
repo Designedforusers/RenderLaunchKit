@@ -2,9 +2,10 @@ import { z } from 'zod';
 import {
   AssetResponseSchema,
   CreateProjectResponseSchema,
+  ProjectCostsResponseSchema,
   ProjectResponseSchema,
 } from '@launchkit/shared';
-import type { AssetResponse } from '@launchkit/shared';
+import type { AssetResponse, ProjectCostsResponse } from '@launchkit/shared';
 
 const API_BASE = '/api';
 
@@ -110,6 +111,7 @@ export type Asset = AssetResponse;
 export type ProjectDetail = z.infer<typeof DashboardProjectDetailSchema>;
 export type ProjectSummary = z.infer<typeof ProjectSummarySchema>;
 export type Job = z.infer<typeof JobSummarySchema>;
+export type ProjectCosts = ProjectCostsResponse;
 
 // Small helpers for the few endpoints that return a custom envelope
 // shape rather than a documented domain object.
@@ -134,6 +136,15 @@ export const api = {
 
   getProject: (id: string) =>
     request(DashboardProjectDetailSchema, `/projects/${id}`),
+
+  // Project-level cost aggregation for the "Generated for $X.XX"
+  // chip on the detail page and the eventual per-provider
+  // breakdown modal. The server-side handler aggregates
+  // `asset_cost_events` by provider and validates the response
+  // against the same Zod schema we use here — single source of
+  // truth across server and client.
+  getProjectCosts: (id: string) =>
+    request(ProjectCostsResponseSchema, `/projects/${id}/costs`),
 
   createProject: (repoUrl: string, githubToken?: string) =>
     request(CreateProjectResponseSchema, '/projects', {

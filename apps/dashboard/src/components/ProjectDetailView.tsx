@@ -8,6 +8,7 @@ import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
+import { ProjectCostChip } from './ProjectCostChip.js';
 import { Tooltip } from './ui/index.js';
 import { AssetGallery } from './gallery/index.js';
 import {
@@ -398,18 +399,26 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               falling into a catch-all bucket. Owns its own empty
               state; renders the full kit on the default "All" tab. */}
           {(project.assets.length > 0 || isGenerating || !isInProgress) && (
-            <AssetGallery
-              assets={project.assets}
-              expectedCount={expectedAssetCount}
-              isGenerating={isGenerating}
-              renderAsset={(asset) => (
-                <GeneratedAssetCard
-                  asset={asset}
-                  onRefresh={refresh}
-                  projectAssets={project.assets}
-                />
-              )}
-            />
+            <div>
+              {/* Project-level provider cost chip. Hides itself when
+                  the total is zero (seed / placeholder projects) or
+                  when the costs API request fails — the chip is
+                  informational and a cost-tracking hiccup should not
+                  show as an error in the gallery. */}
+              <ProjectCostChip projectId={project.id} />
+              <AssetGallery
+                assets={project.assets}
+                expectedCount={expectedAssetCount}
+                isGenerating={isGenerating}
+                renderAsset={(asset) => (
+                  <GeneratedAssetCard
+                    asset={asset}
+                    onRefresh={refresh}
+                    projectAssets={project.assets}
+                  />
+                )}
+              />
+            </div>
           )}
         </div>
 

@@ -98,6 +98,8 @@ assetApiRoutes.get('/:id', async (c) => {
     userEdited: asset.userEdited,
     userEditedContent: asset.userEditedContent,
     version: asset.version,
+    costCents: asset.costCents,
+    costBreakdown: asset.costBreakdown,
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString(),
   });

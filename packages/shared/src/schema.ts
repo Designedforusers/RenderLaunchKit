@@ -6,6 +6,7 @@ import {
   boolean,
   real,
   integer,
+  bigint,
   uuid,
   uniqueIndex,
   varchar,
@@ -242,6 +243,24 @@ export const assets = pgTable(
     // semantic search ("find me high-scoring exemplars in this
     // category") and the cross-asset deduplication guard.
     contentEmbedding: vector('content_embedding'),
+
+    // ── Cost tracking (Phase 9) ──
+    //
+    // Denormalized per-asset total in integer cents. Summed across the
+    // asset's rows in `asset_cost_events` and written by the workflows
+    // service's `persistCostEvents` helper after a successful dispatch.
+    // Defaults to 0 so seed data and historical rows read as "not
+    // priced yet" rather than NULL.
+    costCents: integer('cost_cents').notNull().default(0),
+
+    // Per-event breakdown pinned on the asset for dashboard display
+    // (shape: `AssetCostBreakdownSchema` in
+    // `packages/shared/src/schemas/asset-cost-event.ts`). Denormalized
+    // alongside `cost_cents` so the per-asset detail modal can render
+    // the provider breakdown without a second query to
+    // `asset_cost_events`. NULL when no events have been persisted
+    // for the asset yet.
+    costBreakdown: jsonb('cost_breakdown'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -533,6 +552,66 @@ export const assetFeedbackEvents = pgTable(
   ]
 );
 
+// ── Asset cost events (Phase 9 cost tracking) ──
+//
+// Per-upstream-API-call cost log. Every successful request to an
+// external provider inside an asset generation writes one row here
+// via the `persistCostEvents` helper in the workflows service. The
+// granularity is "one row per upstream call" so an operator can
+// answer "what did the Anthropic call for this blog post cost us?"
+// without approximating from the denormalized summary on
+// `assets.cost_cents`.
+//
+// The tracker in `@launchkit/asset-generators` accumulates the
+// events in Node's AsyncLocalStorage during the dispatch; the
+// workflows service's `dispatchAsset` flushes them to this table
+// after the agent returns, inside a transaction that also updates
+// the asset row's denormalized total.
+//
+// Non-blocking invariant: a failed insert into this table MUST NOT
+// fail the asset generation it's tracking. The persist helper wraps
+// the transaction in try/catch and logs on failure. A user's blog
+// post always ships, even if the cost write crashes.
+export const assetCostEvents = pgTable(
+  'asset_cost_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    assetId: uuid('asset_id')
+      .references(() => assets.id, { onDelete: 'cascade' })
+      .notNull(),
+    projectId: uuid('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    // `anthropic | fal | elevenlabs | world_labs | voyage`. Not a
+    // pgEnum so adding a provider doesn't require a migration — the
+    // Zod enum in `schemas/asset-cost-event.ts` is the source of
+    // truth for which values the dashboard knows how to render.
+    provider: varchar('provider', { length: 32 }).notNull(),
+    // `messages.create | flux-pro-ultra-image | kling-video-standard
+    // | tts | marble-generate | embed`. Free-form so a future
+    // provider-specific operation can be added without a schema
+    // change.
+    operation: varchar('operation', { length: 64 }).notNull(),
+    // Input unit count (tokens, characters). Null for fixed-cost
+    // operations that don't have a meaningful per-unit count.
+    inputUnits: bigint('input_units', { mode: 'number' }),
+    // Output unit count (tokens, video seconds, images). Null for
+    // fixed-cost operations.
+    outputUnits: bigint('output_units', { mode: 'number' }),
+    costCents: integer('cost_cents').notNull(),
+    // Per-event free-form metadata (model id, aspect ratio, voice
+    // id, …). Displayed on the dashboard's breakdown modal; never
+    // read by the worker.
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('asset_cost_events_project_id_idx').on(table.projectId),
+    index('asset_cost_events_asset_id_idx').on(table.assetId),
+    index('asset_cost_events_provider_idx').on(table.provider),
+  ]
+);
+
 // ── Relations ──
 
 export const projectsRelations = relations(projects, ({ many }) => ({
@@ -540,6 +619,7 @@ export const projectsRelations = relations(projects, ({ many }) => ({
   jobs: many(jobs),
   webhookEvents: many(webhookEvents),
   commitMarketingRuns: many(commitMarketingRuns),
+  costEvents: many(assetCostEvents),
 }));
 
 export const assetsRelations = relations(assets, ({ one, many }) => ({
@@ -548,7 +628,22 @@ export const assetsRelations = relations(assets, ({ one, many }) => ({
     references: [projects.id],
   }),
   feedbackEvents: many(assetFeedbackEvents),
+  costEvents: many(assetCostEvents),
 }));
+
+export const assetCostEventsRelations = relations(
+  assetCostEvents,
+  ({ one }) => ({
+    asset: one(assets, {
+      fields: [assetCostEvents.assetId],
+      references: [assets.id],
+    }),
+    project: one(projects, {
+      fields: [assetCostEvents.projectId],
+      references: [projects.id],
+    }),
+  })
+);
 
 export const jobsRelations = relations(jobs, ({ one }) => ({
   project: one(projects, {

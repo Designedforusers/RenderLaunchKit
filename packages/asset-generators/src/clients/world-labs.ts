@@ -7,7 +7,8 @@ import {
   type Operation,
   type World,
 } from './schemas/world-labs.js';
-import type { WorldLabsModel } from '@launchkit/shared';
+import { computeWorldLabsCostCents, type WorldLabsModel } from '@launchkit/shared';
+import { recordCost } from '../cost-tracker.js';
 
 /**
  * Factory-constructed World Labs (Marble) client.
@@ -282,6 +283,24 @@ export function createWorldLabsClient(
     const splats = assets?.splats?.spz_urls ?? null;
     const splatUrl =
       splats?.['500k'] ?? splats?.['100k'] ?? splats?.full_res ?? null;
+
+    // Record the fixed per-world cost for the successful generation.
+    // Every failure path above (polling timeout, operation error,
+    // HTTP error, schema mismatch) throws before reaching this line,
+    // so we only charge for completed worlds. The canonical-world
+    // re-fetch warn-and-continue branch never throws — a failed
+    // re-fetch is degraded-but-still-usable, not a generation
+    // failure, so it correctly still counts as a completed world.
+    recordCost({
+      provider: 'world_labs',
+      operation: 'marble-generate',
+      costCents: computeWorldLabsCostCents(input.model),
+      metadata: {
+        worldId: world.id,
+        operationId: completedOperation.operation_id,
+        model: input.model,
+      },
+    });
 
     return {
       worldId: world.id,

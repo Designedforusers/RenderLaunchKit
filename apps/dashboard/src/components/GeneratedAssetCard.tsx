@@ -302,6 +302,13 @@ export function GeneratedAssetCard({
             </h4>
             <div className="flex items-center gap-2 text-xs text-surface-500">
               <span>v{asset.version}</span>
+              {asset.costCents > 0 && (
+                <Tooltip label="Provider cost for this asset generation">
+                  <span className="font-mono text-surface-400">
+                    ${(asset.costCents / 100).toFixed(2)}
+                  </span>
+                </Tooltip>
+              )}
               {asset.userEdited && (
                 <Tooltip label="This asset was edited by a reviewer">
                   <span className="flex items-center gap-0.5 text-amber-400">
