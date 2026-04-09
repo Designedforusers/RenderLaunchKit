@@ -70,7 +70,7 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
           className="flex items-center justify-between mb-6"
           variants={childVariant}
         >
-          <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider">
+          <h3 className="label">
             Launch Strategy
           </h3>
           <motion.span
@@ -90,14 +90,14 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
 
         {/* Positioning */}
         <motion.div className="mb-6" variants={childVariant}>
-          <p className="text-lg text-surface-100 font-medium leading-relaxed">
+          <p className="font-display text-display-md text-text-primary">
             &ldquo;{strategy.positioning}&rdquo;
           </p>
         </motion.div>
 
         {/* Key Messages */}
         <motion.div className="mb-6" variants={childVariant}>
-          <h4 className="text-xs font-mono text-surface-500 uppercase tracking-wider mb-3">
+          <h4 className="label mb-3">
             Key Messages
           </h4>
           <motion.ul
@@ -125,10 +125,10 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
                   },
                 }}
               >
-                <span className="text-accent-500 mt-0.5 font-mono text-xs">
+                <span className="text-accent-500 mt-0.5 font-mono text-mono-sm">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span className="text-sm text-surface-300">{msg}</span>
+                <span className="text-body-md text-text-secondary">{msg}</span>
               </motion.li>
             ))}
           </motion.ul>
@@ -136,7 +136,7 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
 
         {/* Channels */}
         <motion.div className="mb-6" variants={childVariant}>
-          <h4 className="text-xs font-mono text-surface-500 uppercase tracking-wider mb-3">
+          <h4 className="label mb-3">
             Target Channels
           </h4>
           <motion.div
@@ -168,7 +168,7 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
                 whileHover={{ y: -2, scale: 1.04 }}
               >
                 <span className="badge bg-surface-800 text-surface-300 border border-surface-700">
-                  <span className="text-accent-500 mr-1 font-mono text-[10px]">
+                  <span className="text-accent-500 mr-1 font-mono text-[0.625rem] font-semibold">
                     #{ch.priority}
                   </span>
                   {ch.channel.replace(/_/g, ' ')}
@@ -181,21 +181,21 @@ export function LaunchStrategyCard({ strategy }: LaunchStrategyCardProps) {
         {/* Skipped Assets */}
         {strategy.skipAssets.length > 0 && (
           <motion.div variants={childVariant}>
-            <h4 className="text-xs font-mono text-surface-500 uppercase tracking-wider mb-3">
+            <h4 className="label mb-3">
               Skipped Assets
             </h4>
             <div className="space-y-1.5">
               {strategy.skipAssets.map((skip, i) => (
                 <motion.div
                   key={skip.type}
-                  className="flex items-start gap-2 text-sm"
+                  className="flex items-start gap-2 text-body-sm"
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.6 + i * 0.05 }}
                 >
-                  <span className="text-surface-600">~</span>
-                  <span className="text-surface-500">
-                    <span className="text-surface-400">
+                  <span className="text-text-muted">~</span>
+                  <span className="text-text-muted">
+                    <span className="text-text-tertiary">
                       {skip.type.replace(/_/g, ' ')}
                     </span>
                     {' — '}

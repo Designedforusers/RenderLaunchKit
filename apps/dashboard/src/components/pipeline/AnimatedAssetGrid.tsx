@@ -140,9 +140,7 @@ function AssetSkeletonCard({ index }: { index: number }) {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400/80" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent-400" />
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-accent-400/70">
-              Generating
-            </span>
+            <span className="label text-accent-400/70">Generating</span>
           </div>
         </div>
       </div>

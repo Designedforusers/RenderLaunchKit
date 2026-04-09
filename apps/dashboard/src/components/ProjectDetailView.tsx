@@ -70,7 +70,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
         <div>
           <Link
             to="/"
-            className="text-surface-500 hover:text-surface-300 text-sm mb-2 inline-flex items-center gap-1 transition-colors group"
+            className="text-text-muted hover:text-text-tertiary text-body-sm mb-2 inline-flex items-center gap-1 transition-colors group"
           >
             <motion.svg
               className="h-3 w-3"
@@ -87,7 +87,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
           </Link>
           <div className="flex items-center gap-4">
             <motion.h1
-              className="font-mono text-2xl font-bold"
+              className="font-display text-display-md text-text-primary"
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1, duration: 0.4 }}
@@ -100,7 +100,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             href={project.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-surface-500 hover:text-accent-400 text-sm mt-1 inline-flex items-center gap-1.5 transition-colors group"
+            className="text-text-muted hover:text-accent-400 font-mono text-mono-sm mt-2 inline-flex items-center gap-1.5 transition-colors group"
             initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.16, duration: 0.4 }}
@@ -134,11 +134,9 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               damping: 22,
             }}
           >
-            <p className="text-xs font-mono text-surface-500 uppercase tracking-wider">
-              Score
-            </p>
+            <p className="label">Score</p>
             <p
-              className={`text-3xl font-mono font-bold ${
+              className={`font-display text-display-lg mt-1 ${
                 project.reviewScore >= 7
                   ? 'text-accent-400'
                   : project.reviewScore >= 5
@@ -217,7 +215,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                 aria-expanded={showResearch}
                 aria-controls="research-panel"
               >
-                <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider">
+                <h3 className="label">
                   Research Findings
                 </h3>
                 <motion.svg
@@ -268,10 +266,10 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                           visible: { opacity: 1, y: 0 },
                         }}
                       >
-                        <h4 className="text-xs font-mono text-surface-500 uppercase mb-1">
+                        <h4 className="label mb-2">
                           Target Audience
                         </h4>
-                        <p className="text-sm text-surface-300">
+                        <p className="text-body-md text-text-secondary">
                           {project.research.targetAudience}
                         </p>
                       </motion.div>
@@ -283,10 +281,10 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                           visible: { opacity: 1, y: 0 },
                         }}
                       >
-                        <h4 className="text-xs font-mono text-surface-500 uppercase mb-1">
+                        <h4 className="label mb-2">
                           Market Context
                         </h4>
-                        <p className="text-sm text-surface-300">
+                        <p className="text-body-md text-text-secondary">
                           {project.research.marketContext}
                         </p>
                       </motion.div>
@@ -299,7 +297,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                             visible: { opacity: 1, y: 0 },
                           }}
                         >
-                          <h4 className="text-xs font-mono text-surface-500 uppercase mb-2">
+                          <h4 className="label mb-2">
                             Competitors
                           </h4>
                           <motion.div
@@ -325,11 +323,11 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                                   className="p-3 bg-surface-800/50 rounded-lg border border-transparent hover:border-surface-700 transition-colors"
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm">
+                                    <span className="text-heading-sm text-text-primary">
                                       {comp.name}
                                     </span>
                                     {comp.stars && (
-                                      <span className="text-xs text-surface-500 flex items-center gap-0.5">
+                                      <span className="text-body-xs text-text-muted flex items-center gap-0.5">
                                         <svg
                                           className="h-3 w-3"
                                           fill="currentColor"
@@ -341,7 +339,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-surface-400 mt-0.5">
+                                  <p className="text-body-xs text-text-tertiary mt-1">
                                     {comp.differentiator}
                                   </p>
                                 </motion.div>
@@ -359,7 +357,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                             visible: { opacity: 1, y: 0 },
                           }}
                         >
-                          <h4 className="text-xs font-mono text-surface-500 uppercase mb-2">
+                          <h4 className="label mb-2">
                             Unique Angles
                           </h4>
                           <motion.ul
@@ -376,7 +374,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                                     hidden: { opacity: 0, x: -6 },
                                     visible: { opacity: 1, x: 0 },
                                   }}
-                                  className="text-sm text-surface-300 flex items-start gap-2"
+                                  className="text-body-md text-text-secondary flex items-start gap-2"
                                 >
                                   <span className="text-accent-500">*</span>
                                   {angle}
@@ -440,7 +438,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             >
-              <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
+              <h3 className="label mb-4">
                 Job History
               </h3>
               <motion.div
@@ -456,7 +454,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                 {project.jobs.slice(0, 10).map((job) => (
                   <motion.div
                     key={job.id}
-                    className="flex items-center justify-between text-sm group"
+                    className="flex items-center justify-between text-body-sm group"
                     variants={{
                       hidden: { opacity: 0, x: -8 },
                       visible: { opacity: 1, x: 0 },
@@ -465,13 +463,13 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                     <div className="flex items-center gap-2 min-w-0">
                       <JobStatusDot status={job.status} />
                       <Tooltip label={job.name}>
-                        <span className="text-surface-300 font-mono text-xs truncate group-hover:text-surface-100 transition-colors">
+                        <span className="text-text-secondary font-mono text-mono-sm truncate group-hover:text-text-primary transition-colors">
                           {job.name}
                         </span>
                       </Tooltip>
                     </div>
                     {job.duration && (
-                      <span className="text-surface-500 text-xs font-mono flex-shrink-0">
+                      <span className="text-text-muted font-mono text-mono-sm flex-shrink-0">
                         {(job.duration / 1000).toFixed(1)}s
                       </span>
                     )}
@@ -489,11 +487,11 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             >
-              <h3 className="font-mono font-semibold text-sm text-surface-400 uppercase tracking-wider mb-4">
+              <h3 className="label mb-4">
                 Repo Analysis
               </h3>
               <motion.div
-                className="space-y-3 text-sm"
+                className="space-y-3 text-body-sm"
                 initial="hidden"
                 animate="visible"
                 variants={{
@@ -577,10 +575,10 @@ function RepoAnalysisRow({ label, value }: { label: string; value: string }) {
       }}
       className="flex justify-between items-center group"
     >
-      <span className="text-surface-500 group-hover:text-surface-400 transition-colors">
+      <span className="label group-hover:text-text-tertiary transition-colors">
         {label}
       </span>
-      <span className="text-surface-300 font-mono text-xs">{value}</span>
+      <span className="text-text-secondary font-mono text-mono-sm">{value}</span>
     </motion.div>
   );
 }
@@ -718,7 +716,7 @@ function ProjectDetailErrorCard({ message }: { message: string }) {
           </svg>
         </motion.div>
         <motion.p
-          className="font-mono text-[11px] uppercase tracking-[0.18em] text-red-300/70"
+          className="label text-red-300/70"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -726,7 +724,7 @@ function ProjectDetailErrorCard({ message }: { message: string }) {
           Something went wrong
         </motion.p>
         <motion.p
-          className="mt-2 text-base text-surface-200"
+          className="font-display text-heading-lg text-text-primary mt-2"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.28 }}

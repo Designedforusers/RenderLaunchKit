@@ -99,7 +99,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
 
           <div>
             <motion.p
-              className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-300/80"
+              className="label text-accent-300/80"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.18 }}
@@ -107,7 +107,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
               Launch Ready
             </motion.p>
             <motion.p
-              className="text-lg font-semibold text-surface-100 mt-0.5"
+              className="font-display text-display-md text-text-primary mt-1"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.26 }}
@@ -129,12 +129,10 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
               damping: 22,
             }}
           >
-            <p className="font-mono text-[10px] uppercase tracking-wider text-accent-300/70">
-              Reviewer
-            </p>
-            <p className="font-mono text-2xl font-bold text-accent-300">
+            <p className="label text-accent-300/70">Reviewer</p>
+            <p className="font-display text-display-lg text-accent-300">
               {reviewScore.toFixed(1)}
-              <span className="text-accent-500/60 text-base">/10</span>
+              <span className="text-accent-500/60 text-heading-lg">/10</span>
             </p>
           </motion.div>
         )}
@@ -188,10 +186,8 @@ function FailureBanner() {
           </svg>
         </motion.div>
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-red-300/80">
-            Launch Failed
-          </p>
-          <p className="text-base text-surface-200 mt-0.5">
+          <p className="label text-red-300/80">Launch Failed</p>
+          <p className="text-body-md text-text-secondary mt-1">
             One of the pipeline stages couldn&rsquo;t complete. Check the job
             history below for details.
           </p>

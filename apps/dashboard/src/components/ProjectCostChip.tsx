@@ -82,7 +82,7 @@ export function ProjectCostChip({ projectId }: ProjectCostChipProps) {
       initial={{ opacity: 0, y: 6, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className="mb-4 inline-flex items-center gap-2 rounded-full border border-surface-800 bg-surface-900/60 px-3.5 py-1.5 text-xs font-mono text-surface-300"
+      className="mb-4 inline-flex items-center gap-2 rounded-full border border-surface-800 bg-surface-900/60 px-3.5 py-1.5 font-mono text-mono-sm text-text-secondary"
       aria-label={`Total provider cost for this project: ${formatCents(costs.totalCents)}`}
     >
       <svg
@@ -98,10 +98,8 @@ export function ProjectCostChip({ projectId }: ProjectCostChipProps) {
           d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
         />
       </svg>
-      <span className="uppercase tracking-wider text-surface-500">
-        Generated for
-      </span>
-      <span className="font-semibold text-surface-100">
+      <span className="label">Generated for</span>
+      <span className="font-semibold text-text-primary">
         {formatCents(costs.totalCents)}
       </span>
     </motion.div>
