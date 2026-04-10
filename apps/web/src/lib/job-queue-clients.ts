@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { JOB_NAMES, QUEUE_NAMES, QUEUE_CONFIG } from '@launchkit/shared';
+import { JOB_NAMES, QUEUE_NAMES, QUEUE_CONFIG, parseRedisUrl } from '@launchkit/shared';
 import type {
   AnalyzeRepoJobData,
   EmbedFeedbackEventJobData,
@@ -9,13 +9,7 @@ import type {
 } from '@launchkit/shared';
 import { env } from '../env.js';
 
-const redisUrl = new URL(env.REDIS_URL);
-
-const connection = {
-  host: redisUrl.hostname,
-  port: parseInt(redisUrl.port || '6379'),
-  password: redisUrl.password || undefined,
-};
+const connection = parseRedisUrl(env.REDIS_URL);
 
 // BullMQ queues the web service produces to.
 //

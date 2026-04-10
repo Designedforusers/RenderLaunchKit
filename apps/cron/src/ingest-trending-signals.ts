@@ -1,15 +1,14 @@
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
-import * as schema from '@launchkit/shared';
 import {
   JOB_NAMES,
   ProjectCategorySchema,
   QUEUE_NAMES,
+  parseRedisUrl,
   type IngestTrendingSignalsJobData,
   type ProjectCategory,
 } from '@launchkit/shared';
+import { database } from './database.js';
 import { env } from './env.js';
 
 /**
@@ -44,9 +43,6 @@ import { env } from './env.js';
  * to load the category list.
  */
 
-const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
-const db = drizzle(pool, { schema });
-
 // Fallback categories used when the projects table is empty (fresh
 // deploy, demo environment). Keeps the cron producing useful data
 // from day one instead of silently no-op'ing. Matches a sensible
@@ -80,13 +76,8 @@ export async function ingestTrendingSignals(): Promise<void> {
   // worker consumes from. The cron exits immediately after main()
   // in `index.ts`, so we close the queue inside this function
   // rather than holding a process-lifetime singleton.
-  const redisUrl = new URL(env.REDIS_URL);
   const trendingQueue = new Queue(QUEUE_NAMES.TRENDING, {
-    connection: {
-      host: redisUrl.hostname,
-      port: parseInt(redisUrl.port || '6379', 10),
-      password: redisUrl.password || undefined,
-    },
+    connection: parseRedisUrl(env.REDIS_URL),
   });
 
   const expiresAt = new Date(
@@ -128,7 +119,7 @@ export async function ingestTrendingSignals(): Promise<void> {
  * projects table is empty (first deploy, demo environment).
  */
 async function loadActiveCategories(): Promise<ProjectCategory[]> {
-  const rows = await db.execute(sql`
+  const rows = await database.execute(sql`
     SELECT DISTINCT repo_analysis ->> 'category' AS category
     FROM projects
     WHERE repo_analysis IS NOT NULL

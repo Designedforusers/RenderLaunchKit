@@ -107,6 +107,24 @@ export function sanitizeText(text: string): string {
     .replace(/'/g, '&#x27;');
 }
 
+/**
+ * Parse a Redis URL into the connection object shape BullMQ expects.
+ *
+ * Browser-safe: uses the platform `URL` constructor, no Node imports.
+ */
+export function parseRedisUrl(redisUrl: string): {
+  host: string;
+  port: number;
+  password: string | undefined;
+} {
+  const parsed = new URL(redisUrl);
+  return {
+    host: parsed.hostname,
+    port: parseInt(parsed.port || '6379', 10),
+    password: parsed.password || undefined,
+  };
+}
+
 // `simpleHash` (a 32-bit djb2 variant) was previously exported here for
 // Redis cache keys. It was removed because the ~4 billion-key space allowed
 // collisions across cached GitHub API responses, which could serve the wrong
