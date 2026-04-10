@@ -5,7 +5,7 @@ import type {
   StrategyBrief,
 } from '@launchkit/shared';
 import type { LLMClient } from '../types.js';
-import type { FalMediaClient } from '../clients/fal.js';
+import type { FalMediaClient, FalImageModel } from '../clients/fal.js';
 
 export interface ArtDirectorInput {
   repoAnalysis: RepoAnalysis;
@@ -13,6 +13,7 @@ export interface ArtDirectorInput {
   strategy: StrategyBrief;
   assetType: 'og_image' | 'social_card';
   generationInstructions: string;
+  imageModel?: FalImageModel;
 }
 
 export interface MarketingImageResult {
@@ -83,6 +84,7 @@ Design an image that a developer would stop scrolling for.`;
     const image = await deps.fal.generateImage(promptResult.prompt, {
       aspectRatio: input.assetType === 'og_image' ? '16:9' : '1:1',
       style: promptResult.style,
+      ...(input.imageModel !== undefined ? { model: input.imageModel } : {}),
     });
 
     return {

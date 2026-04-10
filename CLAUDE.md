@@ -88,6 +88,33 @@ If you need a new domain type, write the Zod schema first.
 - `generationInstructions` always means the exact instructions used to create or regenerate an asset. It is not a synonym for `brief`, `prompt`, or `description`.
 - Role-based agent names (`launch-research-agent`, `launch-strategy-agent`, `creative-director-agent`) describe the AI persona. Processor names (`analyze-project-repository`, `build-project-launch-strategy`) describe the concrete system action.
 
+### Asset status lifecycle
+
+Every asset row in the `assets` table follows a linear state machine defined by the `asset_status` pgEnum in `packages/shared/src/schema.ts:138-147`:
+
+```
+queued → generating → reviewing → complete
+                          ↓
+                    approved / rejected
+                          ↓
+                    regenerating → queued  (loop)
+                    
+              any state → failed  (escape hatch)
+```
+
+| Status | What's happening | Who drives the transition |
+|---|---|---|
+| `queued` | Asset row exists, waiting for the Render Workflow parent task to pick it up. | `buildProjectLaunchStrategy` (initial), `regenerateAsset` route (re-queue), creative-review re-queue path. |
+| `generating` | Workflow child task (`generateWrittenAsset`, `generateImageAsset`, etc.) is actively running the provider call (Claude, fal.ai, ElevenLabs, World Labs). | `dispatchAsset` in `apps/workflows/src/lib/dispatch-asset.ts`. |
+| `reviewing` | Generation succeeded. The `creative-director-agent` (`apps/worker/src/processors/review-generated-assets.ts`) is scoring the asset for quality, writing Creative Director Notes, and deciding whether to auto-approve or flag for revision. | The review BullMQ job enqueued by the workflow parent task after all children settle. |
+| `approved` | User clicked Approve on the dashboard, or the creative-director-agent auto-approved based on quality score. | `POST /api/assets/:id/approve` or the review processor. |
+| `rejected` | User clicked Reject on the dashboard, or the creative-director-agent rejected based on quality score. Rejected assets may be re-queued for regeneration. | `POST /api/assets/:id/reject` or the review processor. |
+| `complete` | Terminal success state after the full review pass settles. All assets in the kit have been evaluated. | The review processor's finalization step. |
+| `regenerating` | User clicked Regenerate (or the review loop triggered a re-queue). The asset flips back to `queued` on the next workflow trigger. | `POST /api/assets/:id/regenerate` or the creative-review re-queue path. |
+| `failed` | Generation or review errored out. The error message is persisted on the asset row. Partial failures are first-class — other assets in the same kit continue. | `dispatchAsset` catch block or review processor error handler. |
+
+**Key invariant:** the `reviewing` state is an automated AI step, not a user action. A user never manually puts an asset into `reviewing` — the system transitions to it automatically after generation completes. If an asset appears stuck in `reviewing`, either the review BullMQ job hasn't been dequeued yet or the creative-director-agent errored silently.
+
 ### Workflows service
 
 `apps/workflows/` is a monorepo workspace that hosts the asset-generation tasks as Render Workflows task definitions. Its library surface mirrors the worker's own (`database.ts` owns a drizzle pool, `project-progress-publisher.ts` owns a Redis pub client, `anthropic-claude-client.ts` is a literal copy of the worker's file keyed to the workflows env, `asset-generators-instance.ts` wires the `@launchkit/asset-generators` package) because each backend service owns its own process-lifecycle infra per the existing convention. The duplication of `anthropic-claude-client.ts` across the worker and workflows services is explicit and intentional: moving it into `packages/asset-generators/` would force the worker's four non-asset-gen agents (`launch-strategy-agent`, `outreach-draft-agent`, `commit-marketability-agent`, `launch-kit-review-agent`) to take a dependency on the asset-generators package, which is semantically wrong.

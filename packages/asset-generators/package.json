@@ -13,9 +13,10 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.85.0",
+    "@fal-ai/client": "^1.2.0",
     "@launchkit/shared": "*",
     "@launchkit/video": "*",
-    "@fal-ai/client": "^1.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

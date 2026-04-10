@@ -137,6 +137,61 @@ const AssetIdEnvelopeSchema = z.object({
 });
 const OkSchema = z.object({ ok: z.boolean(), id: z.string().optional() });
 
+const TrendItemSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  topic: z.string(),
+  headline: z.string(),
+  url: z.string().nullable(),
+  velocityScore: z.number(),
+  category: z.string().nullable(),
+  ingestedAt: z.string(),
+});
+
+const TrendsResponseSchema = z.object({
+  trends: z.array(TrendItemSchema),
+});
+
+export type TrendItem = z.infer<typeof TrendItemSchema>;
+
+// ── Trend search (aggregated Google Trends + Exa + signals) ──────
+
+const InterestPointSchema = z.object({
+  date: z.string(),
+  value: z.number(),
+});
+
+const RelatedQuerySchema = z.object({
+  query: z.string(),
+  value: z.number(),
+});
+
+const GoogleTrendsDataSchema = z.object({
+  interestOverTime: z.array(InterestPointSchema),
+  risingQueries: z.array(RelatedQuerySchema),
+  topQueries: z.array(RelatedQuerySchema),
+}).nullable();
+
+const ExaResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  publishedDate: z.string().nullable(),
+  score: z.number(),
+});
+
+const TrendSearchResponseSchema = z.object({
+  query: z.string(),
+  googleTrends: GoogleTrendsDataSchema,
+  exaResults: z.array(ExaResultSchema),
+  matchedSignals: z.array(TrendItemSchema),
+});
+
+export type TrendSearchResponse = z.infer<typeof TrendSearchResponseSchema>;
+export type InterestPoint = z.infer<typeof InterestPointSchema>;
+export type RelatedQuery = z.infer<typeof RelatedQuerySchema>;
+export type ExaResult = z.infer<typeof ExaResultSchema>;
+
 export const api = {
   // Projects
   listProjects: () =>
@@ -197,10 +252,26 @@ export const api = {
       body: JSON.stringify({ content }),
     }),
 
-  regenerateAsset: (id: string, instructions?: string) =>
+  regenerateAsset: (
+    id: string,
+    options?: {
+      instructions?: string;
+      modelPreferences?: {
+        imageModel?: 'auto' | 'flux-pro-ultra' | 'nano-banana-pro';
+        videoModel?: 'auto' | 'kling-v3' | 'seedance-2';
+      };
+    }
+  ) =>
     request(ProjectIdEnvelopeSchema, `/assets/${id}/regenerate`, {
       method: 'POST',
-      body: JSON.stringify({ instructions }),
+      body: JSON.stringify({
+        ...(options?.instructions !== undefined
+          ? { instructions: options.instructions }
+          : {}),
+        ...(options?.modelPreferences !== undefined
+          ? { modelPreferences: options.modelPreferences }
+          : {}),
+      }),
     }),
 
   // Pika video meeting sessions
@@ -241,6 +312,92 @@ export const api = {
       PikaMeetingSessionDetailResponseSchema,
       `/projects/${projectId}/meetings/${sessionRowId}/leave`,
       { method: 'POST' }
+    ),
+
+  // Trends
+  getTrends: () => request(TrendsResponseSchema, '/trends'),
+
+  searchTrends: (query: string) =>
+    request(
+      TrendSearchResponseSchema,
+      `/trends/search?q=${encodeURIComponent(query)}`
+    ),
+
+  // ── Direct generation ────────────────────────────────────────────
+
+  generateImage: (input: {
+    prompt: string;
+    model?: string;
+    aspectRatio?: string;
+    style?: string;
+    enhance?: boolean;
+  }) =>
+    request(
+      z.object({
+        url: z.string(),
+        prompt: z.string(),
+        enhancedPrompt: z.string().nullable(),
+        model: z.string(),
+        aspectRatio: z.string(),
+        costCents: z.number(),
+      }),
+      '/generate/image',
+      { method: 'POST', body: JSON.stringify(input) }
+    ),
+
+  generateVideo: (input: {
+    prompt: string;
+    model?: string;
+    duration?: number;
+    imageUrl?: string;
+    generateAudio?: boolean;
+    enhance?: boolean;
+  }) =>
+    request(
+      z.object({
+        url: z.string(),
+        prompt: z.string(),
+        enhancedPrompt: z.string().nullable(),
+        model: z.string(),
+        duration: z.number(),
+        costCents: z.number(),
+      }),
+      '/generate/video',
+      { method: 'POST', body: JSON.stringify(input) }
+    ),
+
+  generateAudio: (input:
+    | { type: 'single'; text: string }
+    | { type: 'dialogue'; lines: { speaker: 'alex' | 'sam'; text: string }[] }
+  ) =>
+    request(
+      z.object({
+        audioUrl: z.string(),
+        cacheKey: z.string(),
+        durationSeconds: z.number(),
+        cached: z.boolean(),
+        costCents: z.number(),
+      }),
+      '/generate/audio',
+      { method: 'POST', body: JSON.stringify(input) }
+    ),
+
+  generateWorld: (input: {
+    prompt: string;
+    displayName?: string;
+    model?: string;
+  }) =>
+    request(
+      z.object({
+        worldId: z.string(),
+        marbleUrl: z.string(),
+        thumbnailUrl: z.string().nullable(),
+        prompt: z.string(),
+        model: z.string(),
+        costCents: z.number(),
+      }),
+      '/generate/world',
+      { method: 'POST', body: JSON.stringify(input) }
     ),
 
   // Health

@@ -8,21 +8,18 @@ import {
 } from './trending-signal-types.js';
 
 /**
- * Grok (xAI) — live X (Twitter) search.
+ * Grok (xAI) — live X (Twitter) search via the Responses API.
  *
  * The only trending-signal source with live access to posts on X.
- * xAI exposes Live Search through the chat completions endpoint via
- * the `search_parameters` field; passing `sources: [{type: 'x'}]`
- * restricts the search surface to X posts and returns citations
- * alongside the model's synthesized answer.
+ * Uses the xAI Responses API (`/v1/responses`) with the native
+ * `x_search` tool — Grok searches X natively, returns citations,
+ * and we force structured JSON output via `text.format.json_schema`
+ * so the model emits a machine-parseable array of posts.
  *
- * We then ask Grok to emit a structured JSON array of the posts it
- * considered most relevant, forced through an OpenAI-compatible
- * `response_format: json_schema` so the model cannot drift into prose.
- * A best-effort Zod parse validates the payload at the boundary; if
- * the response shape is malformed (shouldn't happen with a forced
- * schema, but defensive anyway) the tool returns `[]` and the agent
- * moves on to the other sources rather than failing the whole turn.
+ * The `x_search` tool supports `from_date` / `to_date` date-range
+ * filtering (ISO 8601 "YYYY-MM-DD"), so we restrict the search
+ * window to the last 72 hours at the API level rather than relying
+ * on the prompt alone.
  *
  * Failure contract
  * ----------------
@@ -31,7 +28,7 @@ import {
  *   - Missing `GROK_API_KEY` (the source is optional; the plan calls
  *     out that the agent degrades gracefully to the free APIs)
  *   - Non-2xx response from xAI
- *   - Upstream timeout (30s)
+ *   - Upstream timeout (60s — reasoning models are slower)
  *   - Response body that does not match the expected shape
  *
  * Config errors in the env module are still thrown by the `env`
@@ -39,15 +36,15 @@ import {
  * running when a single source is flaky.
  */
 
-const GROK_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
-const GROK_REQUEST_TIMEOUT_MS = 30_000;
+const GROK_RESPONSES_ENDPOINT = 'https://api.x.ai/v1/responses';
+const GROK_REQUEST_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_POSTS = 15;
 
 /**
- * JSON schema the model is forced to emit. Matches the subset of
- * `SignalItem` that Grok can plausibly know from an X post — the
- * source, topic, engagement, and publishedAt fields are filled in
- * by the tool wrapper below.
+ * JSON schema the model is forced to emit via `text.format`. Matches
+ * the subset of `SignalItem` that Grok can plausibly know from an
+ * X post — the source, topic, engagement, and publishedAt fields
+ * are filled in by the tool wrapper below.
  */
 const GROK_RESPONSE_JSON_SCHEMA = {
   name: 'grok_x_posts',
@@ -113,23 +110,29 @@ const GrokContentPayloadSchema = z.object({
   posts: z.array(GrokPostSchema),
 });
 
-const GrokResponseSchema = z.object({
-  choices: z
-    .array(
-      z.object({
-        message: z.object({
-          content: z.string(),
-        }),
-      })
-    )
-    .min(1),
-  citations: z.array(z.string()).optional(),
+/**
+ * Responses API envelope. The output array contains message items;
+ * we extract the first `output_text` content block from the first
+ * message item. Citations live at the top level.
+ */
+const ResponsesOutputTextSchema = z.object({
+  type: z.literal('output_text'),
+  text: z.string(),
+});
+
+const ResponsesMessageSchema = z.object({
+  type: z.literal('message'),
+  content: z.array(ResponsesOutputTextSchema).min(1),
+});
+
+const ResponsesEnvelopeSchema = z.object({
+  output: z.array(z.unknown()).min(1),
 });
 
 export interface GrokXSearchInput {
   /**
    * Topic keyword or phrase the agent is exploring. Passed through
-   * to Grok's live-search prompt verbatim and used as the
+   * to Grok's x_search prompt verbatim and used as the
    * `SignalItem.topic` on every returned row.
    */
   topic: string;
@@ -141,14 +144,20 @@ export interface GrokXSearchInput {
   maxPosts?: number;
 }
 
+/**
+ * Returns an ISO 8601 date string (YYYY-MM-DD) for N days ago.
+ */
+function daysAgoDate(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function grokXSearch(
   input: GrokXSearchInput
 ): Promise<SignalItem[]> {
   const apiKey = env.GROK_API_KEY;
   if (!apiKey) {
-    // Grok is optional — the agent is expected to tolerate its
-    // absence and fall back to the free APIs. Log once at debug
-    // level rather than throwing.
     return [];
   }
 
@@ -167,31 +176,29 @@ export async function grokXSearch(
     if (rehydrated.length > 0) return rehydrated;
   }
 
-  const systemPrompt = `You are a dev-community trend scout. You will search live X (Twitter) for the user's topic and return the most engaging, relevant posts from the last 72 hours. Only include posts that are directly about the topic — not tangential mentions. Return every post's real URL (x.com/handle/status/id), not shortened links. If you cannot find any posts, return an empty array.`;
-
-  const userPrompt = `Topic: ${topic}\n\nFind the ${String(maxPosts)} most engaging X posts about this topic from the last 72 hours. Prioritize posts from developers, engineers, and technical founders.`;
+  const userPrompt = `You are a dev-community trend scout. Search X for "${topic}" and return the ${String(maxPosts)} most engaging posts. Only include posts directly about the topic — not tangential mentions. Prioritize posts from developers, engineers, and technical founders. Return every post's real URL (x.com/handle/status/id), not shortened links. If you cannot find any posts, return an empty array.`;
 
   const requestBody = {
     model: env.GROK_MODEL,
-    messages: [
-      { role: 'system', content: systemPrompt },
+    input: [
       { role: 'user', content: userPrompt },
     ],
-    // xAI Live Search: restrict the search surface to X posts only.
-    // `mode: 'on'` forces the model to always run the search rather
-    // than deciding adaptively; for a trending-signal ingest pass we
-    // always want the fresh data even if the model thinks it could
-    // answer from memory.
-    search_parameters: {
-      mode: 'on',
-      sources: [{ type: 'x' }],
-      max_search_results: maxPosts,
-      return_citations: true,
-    },
-    // Force structured output — the model cannot drift into prose.
-    response_format: {
-      type: 'json_schema',
-      json_schema: GROK_RESPONSE_JSON_SCHEMA,
+    // Native x_search tool — Grok searches X at the API level.
+    // Date range restricts to the last 72 hours so we get fresh
+    // signals without relying on the prompt alone.
+    tools: [
+      {
+        type: 'x_search',
+        from_date: daysAgoDate(3),
+        to_date: new Date().toISOString().slice(0, 10),
+      },
+    ],
+    // Force structured output via the Responses API text format.
+    text: {
+      format: {
+        type: 'json_schema',
+        json_schema: GROK_RESPONSE_JSON_SCHEMA,
+      },
     },
   };
 
@@ -203,7 +210,7 @@ export async function grokXSearch(
 
   let response: Response;
   try {
-    response = await fetch(GROK_ENDPOINT, {
+    response = await fetch(GROK_RESPONSES_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -231,7 +238,10 @@ export async function grokXSearch(
   }
 
   const rawJson: unknown = await response.json().catch(() => null);
-  const parsedEnvelope = GrokResponseSchema.safeParse(rawJson);
+
+  // Parse the Responses API envelope — extract the first message's
+  // first output_text content block.
+  const parsedEnvelope = ResponsesEnvelopeSchema.safeParse(rawJson);
   if (!parsedEnvelope.success) {
     console.warn(
       '[grokXSearch] response envelope did not match expected shape'
@@ -239,12 +249,27 @@ export async function grokXSearch(
     return [];
   }
 
-  const firstChoice = parsedEnvelope.data.choices[0];
-  if (!firstChoice) return [];
+  // Find the first message-type item in the output array.
+  let textContent: string | null = null;
+  for (const item of parsedEnvelope.data.output) {
+    const parsed = ResponsesMessageSchema.safeParse(item);
+    if (parsed.success) {
+      const firstText = parsed.data.content[0];
+      if (firstText) {
+        textContent = firstText.text;
+        break;
+      }
+    }
+  }
+
+  if (textContent === null) {
+    console.warn('[grokXSearch] no message output found in response');
+    return [];
+  }
 
   let parsedContent: unknown;
   try {
-    parsedContent = JSON.parse(firstChoice.message.content);
+    parsedContent = JSON.parse(textContent);
   } catch {
     console.warn('[grokXSearch] model returned non-JSON content');
     return [];
@@ -271,12 +296,7 @@ export async function grokXSearch(
       replies: post.replies,
     },
     publishedAt: post.posted_at.length > 0 ? post.posted_at : null,
-    rawPayload: {
-      post,
-      // Citations are the URLs Grok actually pulled during live
-      // search. Kept so the audit trail shows what the model saw.
-      citations: parsedEnvelope.data.citations ?? [],
-    },
+    rawPayload: { post },
   }));
 
   await writeSignalCache('grok', cacheFingerprint, signals);

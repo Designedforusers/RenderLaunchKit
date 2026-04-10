@@ -65,10 +65,10 @@ export function ProjectSummaryList({
             animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             transition={{
               type: 'spring',
-              stiffness: 200,
-              damping: 26,
-              mass: 1,
-              delay: 0.15 + index * 0.08,
+              stiffness: 140,
+              damping: 24,
+              mass: 1.1,
+              delay: 0.2 + index * 0.12,
             }}
             exit={{
               opacity: 0,
@@ -93,7 +93,7 @@ export function ProjectSummaryList({
               className="pointer-events-none absolute inset-0 rounded-xl opacity-0 animate-card-glow"
               style={{
                 boxShadow: '0 0 20px 2px var(--color-accent-500)',
-                animationDelay: `${String(0.55 + index * 0.08)}s`,
+                animationDelay: `${String(0.65 + index * 0.12)}s`,
               }}
             />
             <div className="flex items-start justify-between mb-3">

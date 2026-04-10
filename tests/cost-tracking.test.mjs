@@ -75,21 +75,42 @@ test('computeAnthropicCostCents: unknown model returns 0 and logs a warning', as
   }
 });
 
-test('computeFalImageCostCents: fixed-cost fal image returns 6', async () => {
+test('computeFalImageCostCents: FLUX Pro Ultra returns 6', async () => {
   const { computeFalImageCostCents } = await import(
     '../packages/shared/dist/pricing.js'
   );
   // Rate is 5.5 cents per image → Math.ceil(5.5) = 6
-  assert.equal(computeFalImageCostCents(), 6);
+  assert.equal(computeFalImageCostCents('flux-pro-ultra-image'), 6);
 });
 
-test('computeFalVideoCostCents: 5 seconds at 15 cents/sec = 75', async () => {
+test('computeFalImageCostCents: Nano Banana Pro returns 15', async () => {
+  const { computeFalImageCostCents } = await import(
+    '../packages/shared/dist/pricing.js'
+  );
+  assert.equal(computeFalImageCostCents('nano-banana-pro-image'), 15);
+});
+
+test('computeFalVideoCostCents: Kling v3 at 16.8 cents/sec', async () => {
   const { computeFalVideoCostCents } = await import(
     '../packages/shared/dist/pricing.js'
   );
-  assert.equal(computeFalVideoCostCents(5), 75);
+  assert.equal(computeFalVideoCostCents('kling-v3-standard-per-second', 5), 84); // ceil(16.8 * 5 = 84)
   // Fractional duration should round up
-  assert.equal(computeFalVideoCostCents(5.5), 83); // ceil(82.5) = 83
+  assert.equal(computeFalVideoCostCents('kling-v3-standard-per-second', 5.5), 93); // ceil(16.8 * 5.5 = 92.4) = 93
+});
+
+test('computeFalVideoCostCents: Seedance 2.0 fast at 24.19 cents/sec', async () => {
+  const { computeFalVideoCostCents } = await import(
+    '../packages/shared/dist/pricing.js'
+  );
+  assert.equal(computeFalVideoCostCents('seedance-2-fast-per-second', 5), 121); // ceil(24.19 * 5 = 120.95) = 121
+});
+
+test('computeFalVideoCostCents: unknown model returns 0', async () => {
+  const { computeFalVideoCostCents } = await import(
+    '../packages/shared/dist/pricing.js'
+  );
+  assert.equal(computeFalVideoCostCents('nonexistent-model', 5), 0);
 });
 
 test('computeElevenLabsCostCents: 1000 chars at Turbo v2 returns 18', async () => {

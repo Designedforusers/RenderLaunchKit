@@ -55,6 +55,6 @@ export const StrategyBriefSchema = z.object({
   keyMessages: z.array(z.string()),
   selectedChannels: z.array(ChannelStrategySchema),
   assetsToGenerate: z.array(AssetGenerationPlanSchema),
-  skipAssets: z.array(SkippedAssetSchema),
+  skipAssets: z.array(SkippedAssetSchema).default([]),
 });
 export type StrategyBrief = z.infer<typeof StrategyBriefSchema>;

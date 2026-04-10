@@ -82,8 +82,6 @@ export const BlogPostContentSchema = z.object({
     ),
   sections: z
     .array(BlogPostSectionSchema)
-    .min(3)
-    .max(6)
     .describe(
       'Body sections, 3-6 total. Each section has a heading and an array of paragraphs.'
     ),
@@ -138,8 +136,6 @@ export const TwitterThreadContentSchema = z.object({
     ),
   tweets: z
     .array(TwitterTweetSchema)
-    .min(4)
-    .max(9)
     .describe(
       'Body tweets of the thread, 4-9 total (not counting the hook tweet). Numbered starting at 2 since the hook is tweet 1.'
     ),
@@ -168,8 +164,6 @@ export const LinkedInPostContentSchema = z.object({
     ),
   body: z
     .array(z.string())
-    .min(2)
-    .max(6)
     .describe(
       'Body paragraphs. 2-6 short paragraphs, each 1-3 sentences. Plain prose, no markdown, no em dashes, no asterisks.'
     ),
@@ -203,8 +197,6 @@ export const HackerNewsPostContentSchema = z.object({
     ),
   technicalDecisions: z
     .array(z.string())
-    .min(2)
-    .max(5)
     .describe(
       'Key technical choices worth calling out, each one sentence. Plain text, no markdown, no em dashes, no asterisks.'
     ),
@@ -250,8 +242,6 @@ export type FaqGroup = z.infer<typeof FaqGroupSchema>;
 export const FaqContentSchema = z.object({
   groups: z
     .array(FaqGroupSchema)
-    .min(2)
-    .max(5)
     .describe(
       'Question groups, 2-5 total. Each group bundles related questions under a short category label.'
     ),
@@ -306,8 +296,6 @@ export type ChangelogEntryContent = z.infer<typeof ChangelogEntryContentSchema>;
 export const TipsContentSchema = z.object({
   tips: z
     .array(z.string())
-    .min(5)
-    .max(8)
     .describe(
       '5-8 actionable launch tips, each one sentence. Plain prose, no markdown, no em dashes, no asterisks, no leading numbering (the renderer adds numbers).'
     ),
@@ -356,8 +344,6 @@ export type PodcastLine = z.infer<typeof PodcastLineSchema>;
 export const PodcastScriptContentSchema = z.object({
   lines: z
     .array(PodcastLineSchema)
-    .min(18)
-    .max(30)
     .describe(
       '18-30 alternating dialog lines between Alex and Sam. Alex asks the questions a curious developer would ask; Sam adds technical depth and specifics.'
     ),
@@ -420,8 +406,6 @@ export const ProductHuntContentSchema = z.object({
     ),
   keyFeatures: z
     .array(ProductHuntFeatureSchema)
-    .min(3)
-    .max(5)
     .describe('3 to 5 key features, each as a name plus a one-sentence description.'),
   techStack: z
     .string()

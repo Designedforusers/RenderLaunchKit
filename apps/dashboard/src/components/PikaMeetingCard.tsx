@@ -93,7 +93,17 @@ export function PikaMeetingCard({ projectId }: PikaMeetingCardProps) {
   );
 
   if (!loaded) {
-    return null;
+    return (
+      <div className="card mt-6 animate-pulse">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="space-y-2 flex-1">
+            <div className="h-3 w-40 rounded-full bg-surface-800" />
+            <div className="h-3 w-64 rounded-full bg-surface-800/60" />
+          </div>
+          <div className="h-8 w-28 rounded-lg bg-surface-800/70" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -138,9 +148,16 @@ export function PikaMeetingCard({ projectId }: PikaMeetingCardProps) {
       )}
 
       {sessions.length === 0 && (
-        <p className="text-body-sm text-text-muted italic">
-          No meetings yet for this project.
-        </p>
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-surface-800/60 bg-surface-900/20 px-4 py-4">
+          <div className="w-8 h-8 rounded-lg bg-surface-800/40 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <p className="text-body-sm text-text-muted">
+            No meetings yet. Click Invite teammate to get started.
+          </p>
+        </div>
       )}
 
       <AnimatePresence>
@@ -194,7 +211,12 @@ function ActiveSessionPanel({
   }, [projectId, session.id, onUpdated]);
 
   return (
-    <div className="rounded border border-surface-800 bg-surface-900/60 p-4 mb-4">
+    <motion.div
+      className="rounded-xl border border-accent-500/15 bg-accent-500/[0.03] p-4 mb-4"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <StatusChip status={session.status} />
@@ -236,11 +258,16 @@ function ActiveSessionPanel({
         </div>
       </div>
       {session.error && (
-        <p className="mt-3 text-body-sm text-red-400 font-mono">
-          {session.error}
-        </p>
+        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5">
+          <svg className="h-4 w-4 flex-shrink-0 text-red-400/70 mt-0.5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <p className="text-body-xs text-red-300/80 leading-relaxed font-mono">
+            {session.error}
+          </p>
+        </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -298,7 +325,7 @@ function EndedSessionList({ sessions }: EndedSessionListProps) {
         {sessions.map((session) => (
           <li
             key={session.id}
-            className="flex items-center justify-between gap-3 rounded border border-surface-800 bg-surface-900/40 px-3 py-2"
+            className="flex items-center justify-between gap-3 rounded-lg border border-surface-800/60 bg-surface-900/30 px-3.5 py-2.5 hover:bg-surface-900/50 hover:border-surface-700/60 transition-colors duration-150"
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <StatusChip status={session.status} />
@@ -307,7 +334,7 @@ function EndedSessionList({ sessions }: EndedSessionListProps) {
                   {session.botName}
                 </div>
                 {session.error && (
-                  <div className="font-mono text-xs text-red-400 truncate">
+                  <div className="text-body-xs text-red-400/70 truncate mt-0.5">
                     {session.error}
                   </div>
                 )}
@@ -331,20 +358,31 @@ interface StatusChipProps {
   status: PikaMeetingSession['status'];
 }
 
-const STATUS_COLORS: Record<PikaMeetingSession['status'], string> = {
-  pending: 'text-text-muted bg-surface-800',
-  joining: 'text-yellow-300 bg-yellow-900/30',
-  active: 'text-green-300 bg-green-900/30',
-  ending: 'text-orange-300 bg-orange-900/30',
-  ended: 'text-text-muted bg-surface-800',
-  failed: 'text-red-300 bg-red-900/30',
+const STATUS_STYLES: Record<PikaMeetingSession['status'], { text: string; bg: string; dot: string }> = {
+  pending: { text: 'text-text-muted', bg: 'bg-surface-800/60', dot: 'bg-surface-500' },
+  joining: { text: 'text-amber-300', bg: 'bg-amber-500/12', dot: 'bg-amber-400' },
+  active: { text: 'text-accent-300', bg: 'bg-accent-500/12', dot: 'bg-accent-400' },
+  ending: { text: 'text-orange-300', bg: 'bg-orange-500/12', dot: 'bg-orange-400' },
+  ended: { text: 'text-text-muted', bg: 'bg-surface-800/60', dot: 'bg-surface-500' },
+  failed: { text: 'text-red-300', bg: 'bg-red-500/12', dot: 'bg-red-400' },
 };
 
+const ACTIVE_CHIP_STATUSES = new Set(['pending', 'joining', 'active', 'ending']);
+
 function StatusChip({ status }: StatusChipProps) {
+  const styles = STATUS_STYLES[status];
+  const isLive = ACTIVE_CHIP_STATUSES.has(status);
+
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 font-mono text-mono-sm capitalize ${STATUS_COLORS[status]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-mono text-mono-sm capitalize ${styles.text} ${styles.bg}`}
     >
+      <span className="relative flex h-1.5 w-1.5">
+        {isLive && (
+          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${styles.dot} opacity-50`} />
+        )}
+        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+      </span>
       {status}
     </span>
   );
@@ -447,7 +485,14 @@ function InviteModal({ projectId, onClose, onCreated }: InviteModalProps) {
             />
           </div>
           {error && (
-            <p className="text-body-sm text-red-400 font-mono">{error}</p>
+            <div className="flex items-start gap-2.5 rounded-lg border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5">
+              <svg className="h-4 w-4 flex-shrink-0 text-red-400/70 mt-0.5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-body-xs text-red-300/80 leading-relaxed">
+                {error}
+              </p>
+            </div>
           )}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button

@@ -16,10 +16,32 @@ import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
 import pikaRoutes from './routes/pika-routes.js';
 import chatRoutes from './routes/chat-routes.js';
+import trendsApiRoutes from './routes/trends-api-routes.js';
+import { generateRoutes } from './routes/generate-routes.js';
+import { fileURLToPath } from 'node:url';
 import { env } from './env.js';
 
 const app = new Hono();
-const dashboardDistDir = path.resolve(process.cwd(), 'apps/dashboard/dist');
+
+app.onError((err, c) => {
+  console.error('[Error]', err.message, err.stack);
+  return c.json(
+    {
+      error: err.message || 'Internal server error',
+      ...(env.NODE_ENV !== 'production' && { stack: err.stack }),
+    },
+    500
+  );
+});
+
+// Resolve paths relative to the monorepo root via import.meta.url so
+// they work regardless of process.cwd() (tsx watch sets cwd to apps/web/).
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..', '..', '..'
+);
+
+const dashboardDistDir = path.resolve(REPO_ROOT, 'apps/dashboard/dist');
 const dashboardIndexPath = path.join(dashboardDistDir, 'index.html');
 
 const contentTypes: Record<string, string> = {
@@ -134,6 +156,8 @@ app.route('/api/projects', pikaRoutes);
 app.route('/api/projects', chatRoutes);
 app.route('/api/assets', assetApiRoutes);
 app.route('/api/outreach', outreachApiRoutes);
+app.route('/api/trends', trendsApiRoutes);
+app.route('/api/generate', generateRoutes);
 
 // ── Health Check ──
 

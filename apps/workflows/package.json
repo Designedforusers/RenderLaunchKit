@@ -9,9 +9,9 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.85.0",
     "@launchkit/asset-generators": "*",
     "@launchkit/shared": "*",
-    "@anthropic-ai/sdk": "^0.85.0",
     "@renderinc/sdk": "^0.5.1",
     "bullmq": "^5.25.0",
     "dotenv": "^16.6.1",

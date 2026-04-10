@@ -691,65 +691,65 @@ function ProjectDetailSkeleton() {
  */
 function ProjectDetailErrorCard({ message }: { message: string }) {
   return (
-    <div className="max-w-6xl mx-auto px-6 py-16 flex justify-center">
+    <div className="max-w-6xl mx-auto px-6 py-24 flex justify-center">
       <motion.div
-        initial={{ opacity: 0, y: 16, scale: 0.96 }}
+        initial={{ opacity: 0, y: 20, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent p-8 text-center"
+        className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-red-500/15 bg-surface-900/60 p-10 text-center"
       >
         <motion.div
-          className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/15 text-red-300"
-          initial={{ scale: 0.5, rotate: -45 }}
+          className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10 text-red-400/80"
+          initial={{ scale: 0, rotate: -30 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{
             delay: 0.1,
             type: 'spring',
-            stiffness: 360,
-            damping: 18,
+            stiffness: 400,
+            damping: 22,
           }}
         >
           <svg
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth={2}
-            className="h-7 w-7"
+            strokeWidth={1.5}
+            className="h-6 w-6"
           >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
             />
           </svg>
         </motion.div>
         <motion.p
-          className="label text-red-300/70"
+          className="text-heading-md text-text-primary"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          Something went wrong
+          {message}
         </motion.p>
         <motion.p
-          className="font-display text-heading-lg text-text-primary mt-2"
+          className="text-body-sm text-text-muted mt-2"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28 }}
+          transition={{ delay: 0.26 }}
         >
-          {message}
+          This project may have been removed or the URL is incorrect.
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.36 }}
+          transition={{ delay: 0.34 }}
         >
           <Link
             to="/"
-            className="btn-secondary mt-6 inline-flex items-center gap-2"
+            className="btn-secondary mt-7 inline-flex items-center gap-2 text-body-sm"
           >
             <svg
-              className="h-4 w-4"
+              className="h-3.5 w-3.5"
               fill="none"
               stroke="currentColor"
               strokeWidth={2}

@@ -12,7 +12,7 @@ import type {
 } from '@launchkit/shared';
 import { accentColorForTone } from '../helpers/strategy-style.js';
 import type { LLMClient } from '../types.js';
-import type { FalMediaClient } from '../clients/fal.js';
+import type { FalMediaClient, FalImageModel, FalVideoModel } from '../clients/fal.js';
 
 export interface VideoDirectorInput {
   repoName: string;
@@ -20,6 +20,8 @@ export interface VideoDirectorInput {
   research: ResearchResult;
   strategy: StrategyBrief;
   generationInstructions: string;
+  videoModel?: FalVideoModel;
+  imageModel?: FalImageModel;
 }
 
 export interface VideoStoryboardResult {
@@ -144,6 +146,7 @@ Return a concise storyboard for a polished launch video and write prompts for st
           .generateImage(shot.visualPrompt, {
             aspectRatio: '16:9',
             style: 'cinematic dark tech',
+            ...(input.imageModel !== undefined ? { model: input.imageModel } : {}),
           })
           .then((image) => image.url)
       )
@@ -217,6 +220,7 @@ export function makeGenerateProductVideoAsset(deps: ProductVideoAgentDeps) {
             ),
             10
           ),
+          ...(input.videoModel !== undefined ? { model: input.videoModel } : {}),
         }
       );
       videoUrl = video.url;

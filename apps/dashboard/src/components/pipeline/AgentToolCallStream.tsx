@@ -209,9 +209,22 @@ function EmptyState({ isStreaming }: { isStreaming: boolean }) {
       className="flex h-full items-center justify-center"
     >
       <div className="text-center">
+        <div className="mx-auto mb-2.5 w-8 h-8 rounded-lg bg-surface-800/40 flex items-center justify-center">
+          {isStreaming ? (
+            <motion.span
+              className="w-1.5 h-1.5 rounded-full bg-accent-400"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          ) : (
+            <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          )}
+        </div>
         <p className="font-mono text-mono-sm text-text-muted">
           {isStreaming
-            ? 'Waiting for the first tool call'
+            ? 'Waiting for the first tool call...'
             : 'No agent activity recorded'}
         </p>
       </div>

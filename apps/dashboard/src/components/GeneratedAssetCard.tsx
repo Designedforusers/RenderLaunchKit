@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { AssetLightbox } from './AssetLightbox.js';
 import {
   blogPostToMarkdown,
   changelogEntryToMarkdown,
@@ -16,7 +17,7 @@ import { api } from '../lib/api.js';
 import type { Asset } from '../lib/api.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchVideoPreview } from './LaunchVideoPreview.js';
-import { Tooltip, CopyButton, useToast } from './ui/index.js';
+import { Tooltip, CopyButton, useToast, ModelSelector } from './ui/index.js';
 import {
   WrittenAssetContent,
   parseStructuredAssetContent,
@@ -160,6 +161,21 @@ const DEFAULT_TINT = {
   text: 'text-surface-300',
 };
 
+// ── Model selector options (mirrors @launchkit/shared model registry) ──
+
+const IMAGE_MODEL_OPTIONS = [
+  { id: 'flux-pro-ultra', name: 'FLUX Pro Ultra', badge: 'reliable', costLabel: '$0.06' },
+  { id: 'nano-banana-pro', name: 'Gemini Pro Image', badge: 'best text', costLabel: '$0.15' },
+] as const;
+
+const VIDEO_MODEL_OPTIONS = [
+  { id: 'kling-v3', name: 'Kling 3.0', badge: 'recommended', costLabel: '$0.17/s' },
+  { id: 'seedance-2', name: 'Seedance 2.0', badge: 'native audio', costLabel: '$0.24/s' },
+] as const;
+
+const IMAGE_ASSET_TYPES = new Set(['og_image', 'social_card']);
+const VIDEO_ASSET_TYPES = new Set(['product_video', 'video_storyboard']);
+
 interface GeneratedAssetCardProps {
   asset: Asset;
   onRefresh: () => void;
@@ -176,8 +192,12 @@ export function GeneratedAssetCard({
   const [videoVariant, setVideoVariant] = useState<'visual' | 'narrated'>('visual');
   const [videoError, setVideoError] = useState<string | null>(null);
   const [exportingNarrated, setExportingNarrated] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('auto');
   const { toast } = useToast();
   const shouldReduceMotion = useReducedMotion();
+  const openLightbox = useCallback(() => setLightboxOpen(true), []);
+  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
 
   // Structured content dispatch — null for legacy pre-migration
   // assets and for non-written asset types. Drives both the
@@ -301,7 +321,21 @@ export function GeneratedAssetCard({
   const handleRegenerate = async () => {
     setRegenerating(true);
     try {
-      await api.regenerateAsset(asset.id);
+      // Build model preferences from the selector — only include the
+      // relevant key for this asset's media type so we don't override
+      // preferences for unrelated types.
+      const modelPreferences =
+        selectedModel !== 'auto'
+          ? IMAGE_ASSET_TYPES.has(asset.type)
+            ? { imageModel: selectedModel as 'flux-pro-ultra' | 'nano-banana-pro' }
+            : VIDEO_ASSET_TYPES.has(asset.type)
+              ? { videoModel: selectedModel as 'kling-v3' | 'seedance-2' }
+              : undefined
+          : undefined;
+
+      await api.regenerateAsset(asset.id, {
+        ...(modelPreferences !== undefined ? { modelPreferences } : {}),
+      });
       setVideoVariant('visual');
       setVideoError(null);
       toast({
@@ -374,77 +408,112 @@ export function GeneratedAssetCard({
       whileHover={{ y: -2 }}
       className={`card group relative overflow-hidden bg-gradient-to-br ${tint.from} ${tint.to} hover:border-surface-700 transition-colors`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <motion.div
-            className={`w-10 h-10 rounded-lg bg-surface-900/80 border border-surface-800 flex items-center justify-center ${tint.text}`}
-            whileHover={{ rotate: -6, scale: 1.06 }}
-            transition={{ type: 'spring', stiffness: 360, damping: 18 }}
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+      {/* Lightbox (portalled to body) */}
+      <AnimatePresence>
+        {lightboxOpen && isMedia && (
+          <AssetLightbox
+            asset={asset}
+            onClose={closeLightbox}
+            actions={{
+              onApprove: () => void handleApprove(),
+              onReject: () => void handleReject(),
+              onRegenerate: () => void handleRegenerate(),
+              regenerating,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Header — full version for non-media cards only.
+          Media cards are content-dominant: the header is replaced by
+          a thin overlay label at the bottom of the media preview,
+          and all metadata + actions live in the lightbox. */}
+      {!isMedia && (
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <motion.div
+              className={`w-10 h-10 rounded-lg bg-surface-900/80 border border-surface-800 flex items-center justify-center ${tint.text}`}
+              whileHover={{ rotate: -6, scale: 1.06 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 18 }}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.75}
-                d={iconPath}
-              />
-            </svg>
-          </motion.div>
-          <div>
-            <h4 className="font-mono font-semibold text-sm text-surface-100">
-              {label}
-            </h4>
-            <div className="flex items-center gap-2 text-xs text-surface-500">
-              <span>v{asset.version}</span>
-              {asset.costCents > 0 && (
-                <Tooltip label="Provider cost for this asset generation">
-                  <span className="font-mono text-surface-400">
-                    ${(asset.costCents / 100).toFixed(2)}
-                  </span>
-                </Tooltip>
-              )}
-              {asset.userEdited && (
-                <Tooltip label="This asset was edited by a reviewer">
-                  <span className="flex items-center gap-0.5 text-amber-400">
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                    edited
-                  </span>
-                </Tooltip>
-              )}
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d={iconPath}
+                />
+              </svg>
+            </motion.div>
+            <div>
+              <h4 className="font-mono font-semibold text-sm text-surface-100">
+                {label}
+              </h4>
+              <div className="flex items-center gap-2 text-xs text-surface-500">
+                <span>v{asset.version}</span>
+                {asset.costCents > 0 && (
+                  <Tooltip label="Provider cost for this asset generation">
+                    <span className="font-mono text-surface-400">
+                      ${(asset.costCents / 100).toFixed(2)}
+                    </span>
+                  </Tooltip>
+                )}
+                {asset.userEdited && (
+                  <Tooltip label="This asset was edited by a reviewer">
+                    <span className="flex items-center gap-0.5 text-amber-400">
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
+                      edited
+                    </span>
+                  </Tooltip>
+                )}
+              </div>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            {asset.qualityScore !== null && (
+              <QualityScoreRing score={asset.qualityScore} />
+            )}
+            <LaunchStatusBadge status={asset.status} />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {asset.qualityScore !== null && (
-            <QualityScoreRing score={asset.qualityScore} />
-          )}
-          <LaunchStatusBadge status={asset.status} />
-        </div>
-      </div>
+      )}
 
       {/* Content Preview */}
       {isInProgress ? (
         <InProgressBody tintText={tint.text} />
       ) : isMedia && asset.mediaUrl ? (
-        <div className="mb-4">
+        <div
+          className="mb-4 relative group/media cursor-pointer"
+          onClick={openLightbox}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openLightbox(); }}
+        >
+          {/* Hover overlay — expand icon */}
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/0 group-hover/media:bg-black/30 transition-colors duration-200 pointer-events-none">
+            <div className="opacity-0 group-hover/media:opacity-100 transition-opacity duration-200 bg-surface-900/80 rounded-full p-3 backdrop-blur-sm border border-surface-700">
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+            </div>
+          </div>
           {asset.type === 'product_video' ? (
             <LaunchVideoPreview
               videoUrl={videoVariant === 'narrated' ? narratedPreviewUrl : asset.mediaUrl}
@@ -483,13 +552,20 @@ export function GeneratedAssetCard({
             <motion.img
               src={asset.mediaUrl}
               alt={label}
-              className="w-full rounded-lg bg-surface-800 object-cover"
+              className="w-full rounded-lg bg-surface-800 object-cover min-h-[200px]"
               loading="lazy"
               initial={{ opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
             />
           )}
+          {/* Thin overlay label bar — replaces the full header for media cards */}
+          <div className="absolute bottom-0 inset-x-0 z-[5] flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-t from-black/70 to-transparent rounded-b-lg pointer-events-none">
+            <span className="font-mono text-xs font-semibold text-white/90 truncate">{label}</span>
+            <div className="pointer-events-auto">
+              <LaunchStatusBadge status={asset.status} />
+            </div>
+          </div>
         </div>
       ) : asset.type === 'product_video' && remotionProps ? (
         <div className="mb-4">
@@ -568,19 +644,31 @@ export function GeneratedAssetCard({
       {asset.type === 'product_video' && videoError ? (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0, x: [0, -4, 4, -2, 2, 0] }}
-          transition={{
-            duration: 0.5,
-            x: { duration: 0.4, ease: 'easeOut' },
-          }}
-          className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="mb-4 flex items-start gap-2.5 rounded-lg border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5"
         >
-          {videoError}
+          <svg
+            className="h-4 w-4 flex-shrink-0 text-red-400/70 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+            />
+          </svg>
+          <p className="text-body-xs text-red-300/80 leading-relaxed">
+            {videoError}
+          </p>
         </motion.div>
       ) : null}
 
       {/* Review Notes */}
-      {asset.reviewNotes && (
+      {asset.reviewNotes && !isMedia && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -607,8 +695,9 @@ export function GeneratedAssetCard({
         </motion.div>
       )}
 
-      {/* Actions */}
-      {!isInProgress && hasPreview && (
+      {/* Actions — for media cards these now live in the lightbox.
+          Non-media cards (written, audio) keep the inline footer. */}
+      {!isInProgress && hasPreview && !isMedia && (
         <div className="flex items-center gap-2 pt-3 border-t border-surface-800">
           <AnimatePresence mode="wait" initial={false}>
             {asset.userApproved === null ? (
@@ -751,6 +840,21 @@ export function GeneratedAssetCard({
             </Tooltip>
           ) : null}
           <div className="flex-1" />
+          {IMAGE_ASSET_TYPES.has(asset.type) ? (
+            <ModelSelector
+              label="Image"
+              value={selectedModel}
+              options={IMAGE_MODEL_OPTIONS}
+              onChange={setSelectedModel}
+            />
+          ) : VIDEO_ASSET_TYPES.has(asset.type) ? (
+            <ModelSelector
+              label="Video"
+              value={selectedModel}
+              options={VIDEO_MODEL_OPTIONS}
+              onChange={setSelectedModel}
+            />
+          ) : null}
           <Tooltip label="Discard this version and regenerate">
             <motion.button
               type="button"
@@ -890,27 +994,33 @@ function FailedAssetBody() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0, x: [0, -4, 4, -2, 2, 0] }}
-      transition={{
-        duration: 0.5,
-        x: { duration: 0.4, ease: 'easeOut' },
-      }}
-      className="py-6 text-center text-red-400 text-sm flex flex-col items-center gap-2"
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="py-8 flex flex-col items-center gap-3"
     >
-      <svg
-        className="h-6 w-6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-        />
-      </svg>
-      Generation failed
+      <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+        <svg
+          className="h-5 w-5 text-red-400/80"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+          />
+        </svg>
+      </div>
+      <div className="text-center">
+        <p className="text-body-sm text-red-300/80 font-medium">
+          Generation failed
+        </p>
+        <p className="text-body-xs text-text-muted mt-1">
+          Try regenerating this asset
+        </p>
+      </div>
     </motion.div>
   );
 }

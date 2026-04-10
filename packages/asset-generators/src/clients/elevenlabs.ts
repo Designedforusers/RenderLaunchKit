@@ -7,11 +7,17 @@ import { recordCost } from '../cost-tracker.js';
 
 /**
  * Fallback model id used for cost computation when the consumer
- * passes `modelId: null`. Matches ElevenLabs's cheapest production
- * tier (Turbo v2) so a missing config falls back to the "low"
- * price rather than defaulting silently to the expensive rate.
+ * passes `modelId: null`. Uses Eleven v3 — the only model that
+ * supports the Text-to-Dialogue endpoint. The deprecated Turbo v2
+ * is no longer the default.
  */
-const DEFAULT_ELEVENLABS_MODEL_FOR_COST = 'eleven_turbo_v2';
+const DEFAULT_ELEVENLABS_MODEL_FOR_COST = 'eleven_v3';
+
+/**
+ * Model used for the Text-to-Dialogue endpoint. Only `eleven_v3`
+ * is supported by the dialogue API.
+ */
+const DIALOGUE_MODEL = 'eleven_v3';
 
 /**
  * Factory-constructed ElevenLabs client. Handles both:
@@ -44,13 +50,6 @@ const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 // hints; not accurate enough for tight A/V sync (which Phase 4 does
 // not require for the eager commercial + podcast assets).
 const CHARS_PER_SECOND = 14;
-
-// Extra silence the listener hears at every speaker turn boundary in
-// the multi-voice path. We do not actually splice silence into the
-// MP3 stream — see the comment in `synthesizeMultiVoiceDialogue` for
-// why — but we do credit the duration estimate so the playback UI
-// reports a realistic length.
-const TURN_GAP_SECONDS = 0.4;
 
 export interface ElevenLabsClientConfig {
   apiKey: string;
@@ -85,6 +84,16 @@ export interface ElevenLabsClient {
     cacheKey: string;
     text: string;
   }): Promise<ElevenLabsRenderResult>;
+  /**
+   * Synthesize a multi-speaker dialogue using the Text-to-Dialogue
+   * endpoint (`POST /v1/text-to-dialogue`). Produces a single audio
+   * file with natural turn-taking, prosody matching, and emotional
+   * continuity between speakers. Requires `eleven_v3`.
+   *
+   * Falls back to per-line TTS + byte-concat if the dialogue
+   * endpoint is unavailable (wrong voice IDs, model mismatch, etc.)
+   * so the pipeline never breaks during a demo.
+   */
   synthesizeMultiVoiceDialogue(input: {
     cacheKey: string;
     lines: PodcastDialogueLine[];
@@ -210,24 +219,29 @@ export function createElevenLabsClient(
     };
   }
 
+  /**
+   * Try the Text-to-Dialogue API (`POST /v1/text-to-dialogue`) first.
+   * If it fails (voice not found, model not available, permissions),
+   * fall back to the legacy per-line TTS + byte-concat approach.
+   *
+   * The dialogue API produces dramatically better audio — natural
+   * turn-taking, prosody matching, emotional continuity — but
+   * requires `eleven_v3` and v3-compatible voice IDs. The fallback
+   * ensures the pipeline never breaks during a demo.
+   */
   async function synthesizeMultiVoiceDialogue(input: {
     cacheKey: string;
     lines: PodcastDialogueLine[];
   }): Promise<ElevenLabsRenderResult> {
     const audioPath = getAudioPath(input.cacheKey);
-    // `estimateDurationSeconds` is `Math.max(1, ⌈chars / 14⌉)`. We feed
-    // it the total character count directly rather than allocating a
-    // throwaway `' '.repeat(totalChars)` string just to call `.length`
-    // on it. The `.text` indirection is wrapped in a tiny shim so the
-    // single-voice path keeps its existing string-input contract.
     const totalChars = input.lines.reduce(
       (sum, line) => sum + line.text.length,
       0
     );
-    const turnBoundaries = Math.max(0, input.lines.length - 1);
-    const estimatedDuration =
-      Math.max(1, Math.ceil(totalChars / CHARS_PER_SECOND)) +
-      turnBoundaries * TURN_GAP_SECONDS;
+    const estimatedDuration = Math.max(
+      1,
+      Math.ceil(totalChars / CHARS_PER_SECOND)
+    );
 
     if (existsSync(audioPath)) {
       return {
@@ -238,19 +252,26 @@ export function createElevenLabsClient(
       };
     }
 
+    // Try Text-to-Dialogue first (best quality)
+    const dialogueResult = await tryTextToDialogue(input.lines, totalChars);
+
+    if (dialogueResult !== null) {
+      await writeAtomic(audioPath, dialogueResult);
+      return {
+        audioPath,
+        cacheKey: input.cacheKey,
+        durationSeconds: estimatedDuration,
+        cached: false,
+      };
+    }
+
+    // Fallback: per-line TTS + byte-concat
+    console.log('[ElevenLabs] Text-to-Dialogue unavailable, falling back to per-line TTS');
     const buffers: Buffer[] = [];
     for (const line of input.lines) {
       const voiceId =
         line.speaker === 'alex' ? config.primaryVoiceId : config.altVoiceId;
-      const buffer = await fetchVoiceMp3({
-        voiceId,
-        text: line.text,
-      });
-      // Per-line cost record. Each dialogue line is its own upstream
-      // `fetchVoiceMp3` call so we charge per line rather than lumping
-      // the whole dialogue into a single event — the dashboard
-      // breakdown modal shows the per-line shape the operator
-      // actually sees on the ElevenLabs dashboard.
+      const buffer = await fetchVoiceMp3({ voiceId, text: line.text });
       recordCost({
         provider: 'elevenlabs',
         operation: 'tts',
@@ -263,22 +284,13 @@ export function createElevenLabsClient(
           voiceId,
           speaker: line.speaker,
           modelId: config.modelId ?? DEFAULT_ELEVENLABS_MODEL_FOR_COST,
-          path: 'multi-voice',
+          path: 'multi-voice-fallback',
         },
       });
       buffers.push(buffer);
     }
 
-    // Concatenate the per-line MP3 buffers in order. MP3 frames are
-    // self-delimiting and do not carry an outer container, so byte-level
-    // concatenation produces a stream that every standard player decodes
-    // as one continuous track. We deliberately do NOT splice silent
-    // padding between lines: a raw zero-byte run inside an MP3 stream
-    // is undefined behavior (the decoder may emit clicks, drop frames,
-    // or refuse to seek), and the natural breath at sentence boundaries
-    // already gives the listener enough of a turn-taking cue.
     const merged = Buffer.concat(buffers);
-
     await writeAtomic(audioPath, merged);
 
     return {
@@ -287,6 +299,71 @@ export function createElevenLabsClient(
       durationSeconds: estimatedDuration,
       cached: false,
     };
+  }
+
+  /**
+   * Attempt a Text-to-Dialogue call. Returns the audio buffer on
+   * success, `null` on any failure so the caller can fall back.
+   */
+  async function tryTextToDialogue(
+    lines: PodcastDialogueLine[],
+    totalChars: number
+  ): Promise<Buffer | null> {
+    try {
+      const dialogueInputs = lines.map((line) => ({
+        text: line.text,
+        voice_id:
+          line.speaker === 'alex'
+            ? config.primaryVoiceId
+            : config.altVoiceId,
+      }));
+
+      const response = await fetch(
+        `${ELEVENLABS_API_BASE}/text-to-dialogue?output_format=mp3_44100_128`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key': config.apiKey,
+          },
+          body: JSON.stringify({
+            inputs: dialogueInputs,
+            model_id: DIALOGUE_MODEL,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const msg = await response.text();
+        console.warn(
+          `[ElevenLabs] Text-to-Dialogue failed (${response.status}): ${msg.slice(0, 150)}`
+        );
+        return null;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      recordCost({
+        provider: 'elevenlabs',
+        operation: 'text-to-dialogue',
+        inputUnits: totalChars,
+        costCents: computeElevenLabsCostCents(DIALOGUE_MODEL, totalChars),
+        metadata: {
+          modelId: DIALOGUE_MODEL,
+          lineCount: lines.length,
+          path: 'text-to-dialogue',
+        },
+      });
+
+      return buffer;
+    } catch (err) {
+      console.warn(
+        '[ElevenLabs] Text-to-Dialogue error, will fall back:',
+        err instanceof Error ? err.message : String(err)
+      );
+      return null;
+    }
   }
 
   return {

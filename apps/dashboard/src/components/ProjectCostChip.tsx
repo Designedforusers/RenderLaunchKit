@@ -73,7 +73,16 @@ export function ProjectCostChip({ projectId }: ProjectCostChipProps) {
     };
   }, [projectId]);
 
-  if (!loaded || !costs || costs.totalCents === 0) {
+  // Show a subtle skeleton while loading so the chip doesn't pop from nothing.
+  if (!loaded) {
+    return (
+      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-surface-800/60 bg-surface-900/40 px-3.5 py-1.5">
+        <div className="h-3 w-24 animate-pulse rounded-full bg-surface-800/60" />
+      </div>
+    );
+  }
+
+  if (!costs || costs.totalCents === 0) {
     return null;
   }
 

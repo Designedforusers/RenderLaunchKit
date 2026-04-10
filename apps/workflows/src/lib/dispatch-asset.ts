@@ -5,6 +5,9 @@ import {
   RepoAnalysisSchema,
   ResearchResultSchema,
   StrategyBriefSchema,
+  ModelPreferencesSchema,
+  resolveImageModel,
+  resolveVideoModel,
 } from '@launchkit/shared';
 import type { AssetType } from '@launchkit/shared';
 import { CostTracker, runWithCostTracker } from '@launchkit/asset-generators';
@@ -138,6 +141,18 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       : null) ??
     `Generate a ${asset.type} for this product`;
 
+  // Pull optional model preferences off the asset metadata. The
+  // regenerate endpoint and the strategy phase can persist these;
+  // first-pass generations that predate the model-selector feature
+  // will have no `modelPreferences` key and the auto-router picks.
+  const rawPrefs = assetMetadata['modelPreferences'];
+  const modelPreferences = rawPrefs !== undefined
+    ? ModelPreferencesSchema.safeParse(rawPrefs)
+    : undefined;
+  const parsedPrefs = modelPreferences?.success === true
+    ? modelPreferences.data
+    : undefined;
+
   // Revision instructions live in a dedicated `revision_instructions`
   // column on the asset row, populated by the three re-queue paths
   // before the asset is flipped back to `queued`:
@@ -205,12 +220,18 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
 
     await runWithCostTracker(costTracker, async () => {
       if (assetType === 'og_image' || assetType === 'social_card') {
+        const imageModel = resolveImageModel(parsedPrefs?.imageModel, {
+          assetType,
+          generationInstructions,
+          tone: strategy.tone,
+        });
         const result = await assetGenerators.generateMarketingImageAsset({
           repoAnalysis,
           research,
           strategy,
           assetType,
           generationInstructions,
+          imageModel,
         });
         mediaUrl = result.url;
         metadata = {
@@ -219,12 +240,24 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           style: result.style,
         };
       } else if (assetType === 'product_video') {
+        const videoModel = resolveVideoModel(parsedPrefs?.videoModel, {
+          assetType,
+          generationInstructions,
+          tone: strategy.tone,
+        });
+        const imageModel = resolveImageModel(parsedPrefs?.imageModel, {
+          assetType,
+          generationInstructions,
+          tone: strategy.tone,
+        });
         const result = await assetGenerators.generateProductVideoAsset({
           repoName: project.repoName,
           repoAnalysis,
           research,
           strategy,
           generationInstructions,
+          videoModel,
+          imageModel,
         });
         mediaUrl = result.videoUrl;
         metadata = {
@@ -233,12 +266,18 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           storyboard: result.storyboard,
         };
       } else if (assetType === 'video_storyboard') {
+        const imageModel = resolveImageModel(parsedPrefs?.imageModel, {
+          assetType,
+          generationInstructions,
+          tone: strategy.tone,
+        });
         const result = await assetGenerators.generateVideoStoryboardAsset({
           repoName: project.repoName,
           repoAnalysis,
           research,
           strategy,
           generationInstructions,
+          imageModel,
         });
         content = JSON.stringify(result.storyboard, null, 2);
         metadata = {

@@ -63,8 +63,10 @@ export const ANTHROPIC_PRICING: Record<
 //
 // https://fal.ai/models — rates as of 2026-04.
 //
-//   FLUX.2 Pro Ultra (image):     ~$0.055 per image
-//   Kling 3.0 Standard (video):   ~$0.15  per second
+//   FLUX.2 Pro Ultra (image):          ~$0.055  per image
+//   Nano Banana Pro (image):           ~$0.15   per image
+//   Kling v3 Standard (video):         ~$0.168  per second
+//   Seedance 2.0 Fast (video):         ~$0.2419 per second
 //
 // Note on fractional `perImageCents`: the FLUX.2 Pro Ultra rate is
 // $0.055 / image, which is 5.5 cents. We store the exact provider
@@ -78,7 +80,9 @@ export const ANTHROPIC_PRICING: Record<
 
 export const FAL_PRICING: Record<string, { perImageCents?: number; perSecondCents?: number }> = {
   'flux-pro-ultra-image': { perImageCents: 5.5 },
-  'kling-video-standard-per-second': { perSecondCents: 15 },
+  'nano-banana-pro-image': { perImageCents: 15 },
+  'kling-v3-standard-per-second': { perSecondCents: 16.8 },
+  'seedance-2-fast-per-second': { perSecondCents: 24.19 },
 };
 
 // ── ElevenLabs ──────────────────────────────────────────────────────
@@ -91,6 +95,8 @@ export const FAL_PRICING: Record<string, { perImageCents?: number; perSecondCent
 export const ELEVENLABS_PRICING: Record<string, { centsPer1kChars: number }> = {
   eleven_turbo_v2: { centsPer1kChars: 18 },
   eleven_multilingual_v2: { centsPer1kChars: 30 },
+  eleven_v3: { centsPer1kChars: 30 },
+  eleven_flash_v2_5: { centsPer1kChars: 15 },
 };
 
 // ── World Labs (Marble) ─────────────────────────────────────────────
@@ -172,29 +178,31 @@ export function computeAnthropicCostCents(
 }
 
 /**
- * Compute the fixed per-image cost for a FLUX.2 Pro Ultra render.
- * The underlying rate is a fractional cent (5.5) so `Math.ceil`
- * lifts it to 6 — the integer-cents invariant holds even on a
- * single-image render.
+ * Compute the fixed per-image cost for a fal.ai image model. The
+ * `model` key must match one of the `perImageCents` entries in
+ * `FAL_PRICING` (e.g. `'flux-pro-ultra-image'`, `'nano-banana-pro-image'`).
+ * An unknown key logs a warning and returns 0.
  */
-export function computeFalImageCostCents(): number {
-  const rate = FAL_PRICING['flux-pro-ultra-image'];
+export function computeFalImageCostCents(model: string): number {
+  const rate = FAL_PRICING[model];
   if (!rate?.perImageCents) {
-    console.warn('[pricing] Missing FAL flux-pro-ultra-image rate — cost will be 0');
+    console.warn(`[pricing] Missing FAL "${model}" rate — cost will be 0`);
     return 0;
   }
   return Math.ceil(rate.perImageCents);
 }
 
 /**
- * Compute the Kling video cost for a given duration in seconds.
- * Kling's billing is per-second; we round up at the end so a
- * 5.5-second render still bills as 83 cents (15 * 5.5 = 82.5).
+ * Compute the fal.ai video cost for a given model and duration in
+ * seconds. The `model` key must match one of the `perSecondCents`
+ * entries in `FAL_PRICING` (e.g. `'kling-v3-standard-per-second'`,
+ * `'seedance-2-fast-per-second'`). An unknown key logs a warning and
+ * returns 0 — the cost tracker is non-blocking by design.
  */
-export function computeFalVideoCostCents(durationSeconds: number): number {
-  const rate = FAL_PRICING['kling-video-standard-per-second'];
+export function computeFalVideoCostCents(model: string, durationSeconds: number): number {
+  const rate = FAL_PRICING[model];
   if (!rate?.perSecondCents) {
-    console.warn('[pricing] Missing FAL kling-video-standard rate — cost will be 0');
+    console.warn(`[pricing] Missing FAL "${model}" rate — cost will be 0`);
     return 0;
   }
   return Math.ceil(durationSeconds * rate.perSecondCents);

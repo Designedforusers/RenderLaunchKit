@@ -196,6 +196,8 @@ export {
   type FalVideoResult,
   type FalImageOptions,
   type FalVideoOptions,
+  type FalImageModel,
+  type FalVideoModel,
 } from './clients/fal.js';
 
 export {
@@ -217,10 +219,15 @@ export {
 export {
   FluxImageSchema,
   FluxImageResponseSchema,
+  NanoBananaImageSchema,
+  NanoBananaResponseSchema,
   KlingVideoFileSchema,
   KlingVideoResponseSchema,
+  SeedanceVideoResponseSchema,
   type FluxImageResponse,
+  type NanoBananaResponse,
   type KlingVideoResponse,
+  type SeedanceVideoResponse,
 } from './clients/schemas/fal.js';
 
 export {
@@ -234,6 +241,23 @@ export {
 } from './clients/schemas/world-labs.js';
 
 export { accentColorForTone } from './helpers/strategy-style.js';
+
+export {
+  createAnthropicLLMClient,
+  type AnthropicLLMClientConfig,
+} from './lib/create-anthropic-llm-client.js';
+
+export {
+  enhanceImagePrompt,
+  enhanceVideoPrompt,
+  enhanceForFlux,
+  enhanceForNanoBanana,
+  enhanceForKlingV3,
+  enhanceForSeedance,
+  type ImagePromptContext,
+  type VideoPromptContext,
+  type KlingEnhancedPrompt,
+} from './lib/prompt-enhancer.js';
 
 export {
   CostTracker,

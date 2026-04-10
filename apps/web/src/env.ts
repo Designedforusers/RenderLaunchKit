@@ -62,7 +62,19 @@ const envSchema = z.object({
   // missing rather than failing the whole web service to boot.
   ELEVENLABS_API_KEY: z.string().optional(),
   ELEVENLABS_VOICE_ID: z.string().optional(),
+  ELEVENLABS_VOICE_ID_ALT: z.string().optional(),
   ELEVENLABS_MODEL_ID: z.string().optional(),
+
+  // ── fal.ai (direct generation) ─────────────────────────────────
+  FAL_API_KEY: z.string().optional(),
+
+  // ── World Labs (direct generation) ─────────────────────────────
+  WORLD_LABS_API_KEY: z.string().optional(),
+  WORLD_LABS_POLL_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .default(15 * 60),
+  WORLD_LABS_POLL_INTERVAL_SECONDS: z.coerce.number().int().default(5),
 
   // ── Remotion render ────────────────────────────────────────────
   REMOTION_CONCURRENCY: z.string().default('50%'),

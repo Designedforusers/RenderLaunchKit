@@ -11,6 +11,8 @@ import { RocketLaunch } from '@phosphor-icons/react';
 import { RepositoryUrlForm } from './components/RepositoryUrlForm.js';
 import { ProjectSummaryList } from './components/ProjectSummaryList.js';
 import { ProjectDetailView } from './components/ProjectDetailView.js';
+import { TrendsPage } from './components/TrendsPage.js';
+import { CreatePage } from './components/CreatePage.js';
 import { useProjectListData } from './hooks/useProjectData.js';
 
 function HomePage() {
@@ -104,7 +106,15 @@ function HomePage() {
         transition={{ delay: 0.35, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="label">Projects</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="label">Projects</h2>
+            <Link
+              to="/trends"
+              className="text-body-xs text-accent-400 hover:text-accent-300 transition-colors font-mono"
+            >
+              Trending Topics
+            </Link>
+          </div>
           <button onClick={refresh} className="btn-ghost text-body-xs">
             Refresh
           </button>
@@ -149,6 +159,64 @@ function ProjectPage() {
   );
 }
 
+function TrendsPageWrapper() {
+  return (
+    <div className="min-h-screen">
+      <motion.header
+        className="border-b border-surface-800"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 group">
+            <motion.div
+              className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
+              whileHover={{ scale: 1.12, rotate: -6 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 20 }}
+            >
+              <RocketLaunch weight="fill" size={14} className="text-white" />
+            </motion.div>
+            <span className="font-display text-heading-md text-text-primary group-hover:text-accent-400 transition-colors">
+              LaunchKit
+            </span>
+          </Link>
+        </div>
+      </motion.header>
+      <TrendsPage />
+    </div>
+  );
+}
+
+function CreatePageWrapper() {
+  return (
+    <div className="min-h-screen">
+      <motion.header
+        className="border-b border-surface-800"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 group">
+            <motion.div
+              className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
+              whileHover={{ scale: 1.12, rotate: -6 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 20 }}
+            >
+              <RocketLaunch weight="fill" size={14} className="text-white" />
+            </motion.div>
+            <span className="font-display text-heading-md text-text-primary group-hover:text-accent-400 transition-colors">
+              LaunchKit
+            </span>
+          </Link>
+        </div>
+      </motion.header>
+      <CreatePage />
+    </div>
+  );
+}
+
 export default function App() {
   // `useLocation()` lets AnimatePresence diff routes by pathname, so
   // navigating between Home and Project Detail produces a clean
@@ -166,6 +234,8 @@ export default function App() {
       >
         <Routes location={location}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/trends" element={<TrendsPageWrapper />} />
+          <Route path="/create" element={<CreatePageWrapper />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
         </Routes>
       </motion.div>

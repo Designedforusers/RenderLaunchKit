@@ -329,8 +329,8 @@ function CategorySection({
   // read better at full width.
   const isWideLayout = category === 'visuals' || category === 'videos';
   const gridClassName = isWideLayout
-    ? 'grid gap-4 sm:grid-cols-2'
-    : 'grid gap-4';
+    ? 'grid gap-6 grid-cols-1 lg:grid-cols-2'
+    : 'grid gap-5';
 
   return (
     <div>
@@ -421,12 +421,19 @@ function GalleryEmptyState({ tone }: { tone: AssetCategory | 'all' }) {
   const message = messages[tone];
 
   return (
-    <div className="rounded-2xl border border-dashed border-surface-800 py-12 text-center">
-      <span className="mb-2 block text-2xl text-surface-700">~</span>
-      <p className="text-sm text-surface-300">{message.title}</p>
-      <p className="mx-auto mt-1 max-w-sm text-xs text-surface-500">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-2xl border border-dashed border-surface-800/60 bg-surface-900/20 py-14 text-center"
+    >
+      <div className="mx-auto mb-3 w-9 h-9 rounded-xl bg-surface-800/40 flex items-center justify-center">
+        <span className="text-text-muted text-body-lg">~</span>
+      </div>
+      <p className="text-body-sm text-text-secondary font-medium">{message.title}</p>
+      <p className="mx-auto mt-1.5 max-w-xs text-body-xs text-text-muted leading-relaxed">
         {message.body}
       </p>
-    </div>
+    </motion.div>
   );
 }
