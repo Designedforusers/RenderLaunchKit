@@ -49,6 +49,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [model, setModel] = useState<'claude-sonnet-4-6' | 'claude-opus-4-6' | 'claude-haiku-4-5-20251001'>('claude-sonnet-4-6');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,7 +100,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history }),
+          body: JSON.stringify({ messages: history, model }),
         }
       );
 
@@ -243,7 +244,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, messages, projectId]);
+  }, [input, streaming, messages, projectId, model]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -308,13 +309,32 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-800 transition-colors"
-                  aria-label="Close chat"
-                >
-                  <X weight="bold" size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Model selector */}
+                  <select
+                    value={model}
+                    onChange={(e) =>
+                      setModel(
+                        e.target.value as typeof model
+                      )
+                    }
+                    disabled={streaming}
+                    className="rounded-lg border border-surface-700 bg-surface-900/80 px-2.5 py-1.5 font-mono text-mono-sm text-text-secondary focus:outline-none focus:border-accent-500/50 transition-colors disabled:opacity-40 cursor-pointer appearance-none"
+                    aria-label="Select AI model"
+                    style={{ backgroundImage: 'none' }}
+                  >
+                    <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+                    <option value="claude-opus-4-6">Opus 4.6</option>
+                    <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+                  </select>
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-800 transition-colors"
+                    aria-label="Close chat"
+                  >
+                    <X weight="bold" size={16} />
+                  </button>
+                </div>
               </div>
 
               {/* Messages */}

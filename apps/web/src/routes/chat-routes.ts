@@ -60,6 +60,12 @@ import { env } from '../env.js';
 
 const chatRoutes = new Hono();
 
+const ALLOWED_MODELS = [
+  'claude-sonnet-4-6',
+  'claude-opus-4-6',
+  'claude-haiku-4-5-20251001',
+] as const;
+
 const ChatRequestSchema = z.object({
   messages: z.array(
     z.object({
@@ -67,6 +73,11 @@ const ChatRequestSchema = z.object({
       content: z.string().min(1),
     })
   ),
+  // Optional model override — defaults to the env ANTHROPIC_MODEL
+  // (claude-sonnet-4-6) when absent. The dashboard's model
+  // selector sends this field with every request so switching
+  // mid-conversation takes effect immediately.
+  model: z.enum(ALLOWED_MODELS).optional(),
 });
 
 // ── Tool definitions ─────────────────────────────────────────────
@@ -175,7 +186,7 @@ chatRoutes.post('/:projectId/chat', async (c) => {
   return streamSSE(c, async (stream) => {
     try {
       const response = anthropic.messages.stream({
-        model: env.ANTHROPIC_MODEL,
+        model: parsed.data.model ?? env.ANTHROPIC_MODEL,
         max_tokens: 4096,
         system: systemPrompt,
         messages: anthropicMessages,
@@ -250,7 +261,7 @@ chatRoutes.post('/:projectId/chat', async (c) => {
           ];
 
           const followUp = anthropic.messages.stream({
-            model: env.ANTHROPIC_MODEL,
+            model: parsed.data.model ?? env.ANTHROPIC_MODEL,
             max_tokens: 4096,
             system: systemPrompt,
             messages: followUpMessages,
