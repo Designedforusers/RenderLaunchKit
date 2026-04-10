@@ -15,6 +15,7 @@ import outreachApiRoutes from './routes/outreach-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
 import pikaRoutes from './routes/pika-routes.js';
+import chatRoutes from './routes/chat-routes.js';
 import { env } from './env.js';
 
 const app = new Hono();
@@ -128,6 +129,9 @@ app.route('/api/projects', projectCostRoutes);
 // matchers above so a `:projectId` path param lookup still
 // resolves to the right handler.
 app.route('/api/projects', pikaRoutes);
+// Agent chat — streaming SSE endpoint for the dashboard's chat UI.
+// Mounted after the auth middleware so the API key gate applies.
+app.route('/api/projects', chatRoutes);
 app.route('/api/assets', assetApiRoutes);
 app.route('/api/outreach', outreachApiRoutes);
 

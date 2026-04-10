@@ -10,6 +10,7 @@ import { GeneratedAssetCard } from './GeneratedAssetCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import { ProjectCostChip } from './ProjectCostChip.js';
 import { PikaMeetingCard } from './PikaMeetingCard.js';
+import { ChatPanel } from './ChatPanel.js';
 import { Tooltip } from './ui/index.js';
 import { AssetGallery } from './gallery/index.js';
 import {
@@ -427,6 +428,13 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             </div>
           )}
         </div>
+
+      {/* Floating chat panel — Bufo agent with tool calling.
+          Renders as a fixed-position slide-over from the right
+          edge, triggered by a floating action button in the
+          bottom-right corner. Positioned outside the grid so
+          it overlays the entire viewport. */}
+      <ChatPanel projectId={project.id} />
 
         {/* Sidebar — 1 column */}
         <div className="space-y-6">
