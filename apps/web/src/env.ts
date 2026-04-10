@@ -67,6 +67,15 @@ const envSchema = z.object({
   // ── Remotion render ────────────────────────────────────────────
   REMOTION_CONCURRENCY: z.string().default('50%'),
 
+  // ── Anthropic (chat endpoint) ───────────────────────────────────
+  // Used by the `/api/projects/:id/chat` streaming endpoint for
+  // the dashboard's agent chat UI. The web service calls
+  // `messages.create({ stream: true })` directly — no BullMQ
+  // queue, no worker hop. Optional so the web service boots fine
+  // without it; the chat route returns 503 at call time if missing.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+
   // ── Render Workflows (asset generation trigger) ────────────────
   // The `/api/assets/:id/regenerate` route triggers a
   // `generateAllAssetsForProject` task run on the Render Workflows
