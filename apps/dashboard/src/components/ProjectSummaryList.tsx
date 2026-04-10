@@ -29,50 +29,73 @@ export function ProjectSummaryList({
   }
 
   return (
-    <motion.div
-      className="grid gap-4 md:grid-cols-2"
-      initial="hidden"
-      animate="visible"
-      variants={{
-        visible: {
-          transition: { staggerChildren: 0.07, delayChildren: 0.04 },
-        },
-      }}
-    >
+    // Plain CSS grid wrapper — no motion on the grid container
+    // itself. Explicit `grid-cols-1 md:grid-cols-2` guarantees
+    // the two-column layout at every breakpoint from 768 px up.
+    // Cards get their entrance animation via their own explicit
+    // `initial`/`animate` props with an index-based stagger
+    // delay, not via parent → child variants inheritance. The
+    // simpler pattern avoids the framer-motion variants +
+    // `layout` prop interaction that was silently suppressing
+    // the entrance tween on initial mount.
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <AnimatePresence mode="popLayout">
-        {projects.map((project) => (
+        {projects.map((project, index) => (
           <MotionLink
             key={project.id}
             to={`/projects/${project.id}`}
-            className="card-hover group block"
-            layout
-            variants={{
-              hidden: { opacity: 0, y: 24, scale: 0.96, filter: 'blur(6px)' },
-              visible: {
-                opacity: 1,
-                y: 0,
-                scale: 1,
-                filter: 'blur(0px)',
-                transition: {
-                  type: 'spring',
-                  stiffness: 240,
-                  damping: 24,
-                },
-              },
+            className="card-hover group block relative"
+            // ── "Liquid emergence" entrance ──
+            //
+            // Three layered effects on a single spring, ~80 ms
+            // stagger between cards:
+            //
+            //   1. Blur release — blur(8px) → blur(0). Cards
+            //      come "into focus" rather than "into existence."
+            //      The Rauno / Arc / Framer pattern.
+            //   2. Scale bloom — 0.92 → 1. Subtle gain of
+            //      presence, no bounce overshoot (damping 26).
+            //   3. Opacity fade — 0 → 1 timed to the scale.
+            //
+            // Plus a one-shot accent-glow pulse via CSS
+            // animation (see the `animate-card-glow` span below)
+            // that fires ~400 ms after landing and fades over
+            // 600 ms. One glow per card, never repeats.
+            initial={{ opacity: 0, scale: 0.92, filter: 'blur(8px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            transition={{
+              type: 'spring',
+              stiffness: 200,
+              damping: 26,
+              mass: 1,
+              delay: 0.15 + index * 0.08,
             }}
             exit={{
               opacity: 0,
-              scale: 0.94,
+              scale: 0.96,
               filter: 'blur(4px)',
-              transition: { duration: 0.2 },
+              transition: { duration: 0.18 },
             }}
             whileHover={{
-              y: -4,
-              scale: 1.012,
-              transition: { type: 'spring', stiffness: 360, damping: 22 },
+              y: -3,
+              scale: 1.01,
+              transition: { type: 'spring', stiffness: 400, damping: 24 },
             }}
-            whileTap={{ scale: 0.99 }}
+            whileTap={{ scale: 0.995 }}
           >
+            {/* One-shot accent glow that pulses as each card
+                settles. Fires once via CSS `animation-fill-mode:
+                forwards` and never replays — the glow fades to
+                0 and the span becomes inert. The delay is
+                staggered per card so the glow cascade follows
+                the entrance cascade. */}
+            <span
+              className="pointer-events-none absolute inset-0 rounded-xl opacity-0 animate-card-glow"
+              style={{
+                boxShadow: '0 0 20px 2px var(--color-accent-500)',
+                animationDelay: `${String(0.55 + index * 0.08)}s`,
+              }}
+            />
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="font-display text-heading-lg text-text-primary group-hover:text-accent-400 transition-colors">
@@ -145,7 +168,7 @@ export function ProjectSummaryList({
           </MotionLink>
         ))}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 

@@ -249,6 +249,22 @@
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+/* ── Card entrance glow ──
+   One-shot accent pulse that fires as each project card settles
+   during the "liquid emergence" entrance animation. The glow fades
+   in from 0 opacity, peaks at 0.35, then fades to 0 — never
+   repeats. Each card's CSS `animation-delay` is staggered via
+   inline style so the glow cascade follows the framer-motion
+   entrance cascade. */
+@keyframes card-glow {
+  0%   { opacity: 0; }
+  40%  { opacity: 0.35; }
+  100% { opacity: 0; }
+}
+.animate-card-glow {
+  animation: card-glow 800ms ease-out forwards;
+}
+
 /* Reduced motion — kill every CSS keyframe animation that doesn't
    have a meaning-carrying purpose. Framer-motion components detect
    the same media query via `useReducedMotion()` and degrade
