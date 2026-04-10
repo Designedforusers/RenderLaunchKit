@@ -1,20 +1,12 @@
 import { Queue } from 'bullmq';
 import { eq, and } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import * as schema from '@launchkit/shared';
-import { GITHUB_API_BASE, JOB_NAMES, QUEUE_NAMES } from '@launchkit/shared';
+import { GITHUB_API_BASE, JOB_NAMES, QUEUE_NAMES, parseRedisUrl } from '@launchkit/shared';
+import { database } from './database.js';
 import { env } from './env.js';
 
-const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
-const db = drizzle(pool, { schema });
-const redisUrl = new URL(env.REDIS_URL);
 const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, {
-  connection: {
-    host: redisUrl.hostname,
-    port: parseInt(redisUrl.port || '6379', 10),
-    password: redisUrl.password || undefined,
-  },
+  connection: parseRedisUrl(env.REDIS_URL),
 });
 
 function githubHeaders(): Record<string, string> {
@@ -34,7 +26,7 @@ function githubHeaders(): Record<string, string> {
 export async function syncGitHubProjectActivity(): Promise<void> {
   console.log('[Cron:SyncGitHubProjectActivity] Checking for repo updates...');
 
-  const webhookProjects = await db.query.projects.findMany({
+  const webhookProjects = await database.query.projects.findMany({
     where: and(
       eq(schema.projects.webhookEnabled, true),
       eq(schema.projects.status, 'complete')
@@ -71,7 +63,7 @@ export async function syncGitHubProjectActivity(): Promise<void> {
       const latestSha = latestCommit.sha;
 
       if (!project.lastCommitSha) {
-        await db
+        await database
           .update(schema.projects)
           .set({ lastCommitSha: latestSha, updatedAt: new Date() })
           .where(eq(schema.projects.id, project.id));
@@ -84,7 +76,7 @@ export async function syncGitHubProjectActivity(): Promise<void> {
         );
 
         // Store webhook event for new commit
-        const [webhookEvent] = await db
+        const [webhookEvent] = await database
           .insert(schema.webhookEvents)
           .values({
             projectId: project.id,
@@ -130,7 +122,7 @@ export async function syncGitHubProjectActivity(): Promise<void> {
         );
 
         // Update last known commit
-        await db
+        await database
           .update(schema.projects)
           .set({ lastCommitSha: latestSha, updatedAt: new Date() })
           .where(eq(schema.projects.id, project.id));

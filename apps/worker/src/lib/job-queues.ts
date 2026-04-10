@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { QUEUE_NAMES } from '@launchkit/shared';
+import { QUEUE_NAMES, parseRedisUrl } from '@launchkit/shared';
 import { env } from '../env.js';
 
 /**
@@ -12,13 +12,7 @@ import { env } from '../env.js';
  * are separate processes that connect to the same Redis from different
  * Render services.
  */
-const redisUrl = new URL(env.REDIS_URL);
-
-export const redisConnection = {
-  host: redisUrl.hostname,
-  port: parseInt(redisUrl.port || '6379', 10),
-  password: redisUrl.password || undefined,
-};
+export const redisConnection = parseRedisUrl(env.REDIS_URL);
 
 // The generation queue was removed in Phase 10 — every asset
 // generation now runs on the Render Workflows service

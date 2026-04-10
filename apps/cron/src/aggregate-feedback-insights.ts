@@ -1,6 +1,4 @@
 import { eq, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import { z } from 'zod';
 import * as schema from '@launchkit/shared';
 import {
@@ -9,10 +7,7 @@ import {
   RepoAnalysisSchema,
   StrategyBriefSchema,
 } from '@launchkit/shared';
-import { env } from './env.js';
-
-const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
-const db = drizzle(pool, { schema });
+import { database } from './database.js';
 
 /**
  * Aggregate learning insights from user feedback on generated assets.
@@ -25,7 +20,7 @@ export async function aggregateFeedbackInsights(): Promise<void> {
   );
 
   // Get all complete projects with user feedback on assets
-  const completedProjects = await db.query.projects.findMany({
+  const completedProjects = await database.query.projects.findMany({
     where: eq(schema.projects.status, 'complete'),
     with: {
       assets: true,
@@ -207,13 +202,13 @@ async function upsertInsight(data: {
   insightType?: string;
 }): Promise<void> {
   // Check if a similar insight already exists
-  const existing = await db.query.strategyInsights.findFirst({
+  const existing = await database.query.strategyInsights.findFirst({
     where: eq(schema.strategyInsights.category, data.category),
   });
 
   if (existing && existing.insight.includes(data.insight.split(' ').slice(0, 5).join(' '))) {
     // Update existing insight
-    await db
+    await database
       .update(schema.strategyInsights)
       .set({
         insight: data.insight,
@@ -225,7 +220,7 @@ async function upsertInsight(data: {
       .where(eq(schema.strategyInsights.id, existing.id));
   } else {
     // Insert new insight
-    await db.insert(schema.strategyInsights).values({
+    await database.insert(schema.strategyInsights).values({
       category: data.category,
       insight: data.insight,
       confidence: data.confidence,
@@ -373,7 +368,7 @@ async function aggregateTrendVelocityVsSuccess(): Promise<number> {
     asset_quality_avg: z.coerce.number().nullable(),
   });
 
-  const results = await db.execute(sql`
+  const results = await database.execute(sql`
     SELECT
       cmr.project_id,
       p.repo_analysis ->> 'category' AS category,
@@ -482,7 +477,7 @@ async function clusterEditFeedback(): Promise<number> {
   // The raw SQL is parameterised — every value goes through the
   // template tag, no sql.raw.
   const sinceDays = FEEDBACK_WINDOW_DAYS;
-  const allRows = await db.execute(sql`
+  const allRows = await database.execute(sql`
     SELECT
       afe.id AS feedback_id,
       afe.asset_id,
@@ -533,7 +528,7 @@ async function clusterEditFeedback(): Promise<number> {
     // via pgvector cosine distance. Restricting the neighbor pool
     // to the same cell keeps cross-cell noise out of the clusters.
     const cellIds = cellRows.map((r) => r.feedbackId);
-    const neighborResults = await db.execute(sql`
+    const neighborResults = await database.execute(sql`
       WITH cell AS (
         SELECT id, edit_embedding
         FROM asset_feedback_events
@@ -713,7 +708,7 @@ async function clusterEditFeedback(): Promise<number> {
  */
 async function loadRecentFeedbackEvents(): Promise<FeedbackJoinRow[]> {
   const sinceDays = FEEDBACK_WINDOW_DAYS;
-  const results = await db.execute(sql`
+  const results = await database.execute(sql`
     SELECT
       afe.id AS feedback_id,
       afe.asset_id,
