@@ -81,8 +81,13 @@ const ChatRequestSchema = z.object({
 });
 
 // ── Tool definitions ─────────────────────────────────────────────
+//
+// Uses Anthropic.Messages.ToolUnion (not Anthropic.Tool) because
+// it includes both custom tools and server-managed tools like
+// web_search_20250305. ToolUnion is the type messages.stream()
+// actually accepts — no cast needed.
 
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: Anthropic.Messages.ToolUnion[] = [
   {
     name: 'generate_written_content',
     description:
@@ -133,43 +138,17 @@ const TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  // Server-managed web search — Claude handles search execution
+  // internally via the Anthropic API. No API key needed, results
+  // are injected into the response content blocks and Claude uses
+  // them to compose its answer. The agentic loop skips these
+  // because server tools produce 'server_tool_use' blocks, not
+  // 'tool_use' blocks, so they never hit executeToolCall.
   {
-    name: 'deep_search',
-    description:
-      'Deep semantic search via Exa. Use this for in-depth research: finding competitor analysis, technical blog posts, developer discussions, market reports, or niche content that a quick web search would miss. Returns full text snippets from matching pages. Prefer this over the built-in web_search when the user needs thorough research or specific technical content.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'A natural language search query. Exa uses semantic search so descriptive queries work better than keywords.',
-        },
-        num_results: {
-          type: 'number',
-          description:
-            'Number of results to return (1-10). Default 5.',
-        },
-      },
-      required: ['query'],
-    },
+    type: 'web_search_20250305',
+    name: 'web_search',
   },
 ];
-
-// Claude's native web search — a server-managed tool that
-// Anthropic runs on their side. No API key, no external service,
-// no custom handler needed. Claude autonomously decides when to
-// search and integrates results into its reasoning. We just
-// need to include it in the tools array for each request.
-//
-// The `as unknown as Anthropic.Tool` cast is necessary because
-// the SDK's type definitions may not include the server tool
-// type yet — but the API accepts it and returns search result
-// content blocks that our existing text streaming handles.
-const WEB_SEARCH_TOOL = {
-  type: 'web_search_20250305',
-  name: 'web_search',
-} as unknown as Anthropic.Tool;
 
 // ── Chat endpoint ────────────────────────────────────────────────
 
@@ -253,7 +232,7 @@ chatRoutes.post('/:projectId/chat', async (c) => {
           max_tokens: 4096,
           system: systemPrompt,
           messages: loopMessages,
-          tools: [...TOOLS, WEB_SEARCH_TOOL],
+          tools: TOOLS,
         });
 
         // Forward text deltas to SSE as they arrive.
@@ -267,6 +246,9 @@ chatRoutes.post('/:projectId/chat', async (c) => {
         const finalMessage = await response.finalMessage();
 
         // Collect tool_use blocks from the response.
+        // Server tool blocks (web_search) have type
+        // 'server_tool_use' and are handled by the API
+        // internally — they do not appear here.
         const toolUseBlocks = finalMessage.content.filter(
           (b): b is Anthropic.ContentBlock & { type: 'tool_use' } =>
             b.type === 'tool_use'
@@ -300,7 +282,7 @@ chatRoutes.post('/:projectId/chat', async (c) => {
             }),
           });
 
-          const result = await executeToolCall(
+          const result = executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
             projectId,
@@ -367,13 +349,13 @@ chatRoutes.post('/:projectId/chat', async (c) => {
 
 // ── Tool execution ───────────────────────────────────────────────
 
-async function executeToolCall(
+function executeToolCall(
   toolName: string,
   input: Record<string, unknown>,
-  projectId: string,
+  _projectId: string,
   project: typeof projects.$inferSelect,
   projectAssets: (typeof assetsTable.$inferSelect)[]
-): Promise<unknown> {
+): unknown {
   switch (toolName) {
     case 'get_project_info': {
       const info: Record<string, unknown> = {
@@ -439,71 +421,6 @@ async function executeToolCall(
       };
     }
 
-    case 'deep_search': {
-      const exaKey = env.EXA_API_KEY;
-      if (!exaKey) {
-        return {
-          error:
-            'Deep search (Exa) is not configured. Set EXA_API_KEY in your .env. Claude can still use the built-in web_search for quick lookups.',
-        };
-      }
-      const query = input['query'] as string;
-      const numResults =
-        typeof input['num_results'] === 'number'
-          ? Math.min(Math.max(input['num_results'], 1), 10)
-          : 5;
-      try {
-        const res = await fetch('https://api.exa.ai/search', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${exaKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query,
-            numResults,
-            type: 'auto',
-            contents: { text: { maxCharacters: 1500 } },
-          }),
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (!res.ok) {
-          const body = await res.text().catch(() => '<no body>');
-          return {
-            error: `Exa search failed (HTTP ${String(res.status)}): ${body.slice(0, 200)}`,
-          };
-        }
-        const data = (await res.json()) as {
-          results?: {
-            title?: string;
-            url?: string;
-            text?: string;
-            publishedDate?: string;
-          }[];
-        };
-        if (!data.results || data.results.length === 0) {
-          return {
-            summary: `No results found for "${query}". Try a different query.`,
-          };
-        }
-        const formatted = data.results
-          .map((r, i) => {
-            const parts = [`**${String(i + 1)}. ${r.title ?? 'Untitled'}**`];
-            if (r.url) parts.push(`URL: ${r.url}`);
-            if (r.publishedDate) parts.push(`Published: ${r.publishedDate}`);
-            if (r.text) parts.push(r.text);
-            return parts.join('\n');
-          })
-          .join('\n\n---\n\n');
-        return { summary: formatted };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          error: `Exa search failed: ${message}`,
-        };
-      }
-    }
-
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -524,7 +441,8 @@ function buildChatSystemPrompt(
       `\n- Generate marketing content (blog posts, tweets, LinkedIn posts, etc.)` +
       `\n- Help refine and iterate on existing assets` +
       `\n- Search the web for current information (competitor news, market trends, recent events)` +
-      `\n\nBe conversational, specific, and use real details from the project context. Keep responses focused and actionable. When generating content, make it publication-ready.`
+      `\n\nBe conversational, specific, and use real details from the project context. Keep responses focused and actionable. When generating content, make it publication-ready.` +
+      `\n\nFormatting rules: write plain text only. No markdown — no asterisks, no bold, no headings, no bullet lists. Write like you're texting a friend. Use line breaks to separate thoughts.`
   );
 
   // Add project context.
@@ -535,10 +453,10 @@ function buildChatSystemPrompt(
       'repo_analysis'
     );
     sections.push(
-      `**Project:** ${analysis.description}\n` +
-        `**Language:** ${analysis.language}\n` +
-        `**Tech stack:** ${analysis.techStack.join(', ')}\n` +
-        `**Stars:** ${String(analysis.stars)} | **Forks:** ${String(analysis.forks)}`
+      `Project: ${analysis.description}\n` +
+        `Language: ${analysis.language}\n` +
+        `Tech stack: ${analysis.techStack.join(', ')}\n` +
+        `Stars: ${String(analysis.stars)} / Forks: ${String(analysis.forks)}`
     );
   } catch {
     // No analysis yet.
@@ -551,9 +469,9 @@ function buildChatSystemPrompt(
       'strategy'
     );
     sections.push(
-      `**Positioning:** ${strategy.positioning}\n` +
-        `**Tone:** ${strategy.tone}\n` +
-        `**Key messages:**\n${strategy.keyMessages.map((m) => `- ${m}`).join('\n')}`
+      `Positioning: ${strategy.positioning}\n` +
+        `Tone: ${strategy.tone}\n` +
+        `Key messages:\n${strategy.keyMessages.map((m) => `${m}`).join('\n')}`
     );
   } catch {
     // No strategy yet.
