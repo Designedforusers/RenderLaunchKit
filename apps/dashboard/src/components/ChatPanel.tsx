@@ -5,6 +5,7 @@ import {
   PaperPlaneTilt,
   Robot,
   Spinner,
+  Trash,
   User,
   Wrench,
   X,
@@ -36,8 +37,41 @@ interface ChatMessage {
     name: string;
     input: unknown;
     result?: unknown;
+    isExecuting?: boolean;
   }[];
   isStreaming?: boolean;
+}
+
+const STORAGE_KEY_PREFIX = 'launchkit-chat-';
+
+function loadPersistedMessages(projectId: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${projectId}`);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Strip transient streaming state from restored messages.
+    return (parsed as ChatMessage[]).map((m) => ({
+      ...m,
+      isStreaming: false,
+      ...(m.toolCalls
+        ? { toolCalls: m.toolCalls.map((tc) => ({ ...tc, isExecuting: false })) }
+        : {}),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function persistMessages(projectId: string, msgs: ChatMessage[]): void {
+  try {
+    localStorage.setItem(
+      `${STORAGE_KEY_PREFIX}${projectId}`,
+      JSON.stringify(msgs)
+    );
+  } catch {
+    // Storage full or unavailable — silently drop.
+  }
 }
 
 interface ChatPanelProps {
@@ -46,12 +80,19 @@ interface ChatPanelProps {
 
 export function ChatPanel({ projectId }: ChatPanelProps) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    loadPersistedMessages(projectId)
+  );
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [model, setModel] = useState<'claude-sonnet-4-6' | 'claude-opus-4-6' | 'claude-haiku-4-5-20251001'>('claude-sonnet-4-6');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Persist messages to localStorage whenever they change.
+  useEffect(() => {
+    persistMessages(projectId, messages);
+  }, [projectId, messages]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -156,6 +197,24 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                   }
                   return updated;
                 });
+              } else if (event.status === 'executing' && event.id && event.name) {
+                // Tool progress — mark the tool call as actively executing.
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === 'assistant' && last.toolCalls) {
+                    const calls = last.toolCalls.map((tc) =>
+                      tc.id === event.id
+                        ? { ...tc, isExecuting: true }
+                        : tc
+                    );
+                    updated[updated.length - 1] = {
+                      ...last,
+                      toolCalls: calls,
+                    };
+                  }
+                  return updated;
+                });
               } else if (event.name && event.id && event.result === undefined && event.input !== undefined) {
                 // Tool call start.
                 setMessages((prev) => {
@@ -177,14 +236,14 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                   return updated;
                 });
               } else if (event.id && event.result !== undefined) {
-                // Tool result.
+                // Tool result — store result and clear executing state.
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant' && last.toolCalls) {
                     const calls = last.toolCalls.map((tc) =>
                       tc.id === event.id
-                        ? { ...tc, result: event.result }
+                        ? { ...tc, result: event.result, isExecuting: false }
                         : tc
                     );
                     updated[updated.length - 1] = {
@@ -245,6 +304,11 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       setStreaming(false);
     }
   }, [input, streaming, messages, projectId, model]);
+
+  const clearConversation = useCallback(() => {
+    setMessages([]);
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX}${projectId}`);
+  }, [projectId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -327,6 +391,15 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                     <option value="claude-opus-4-6">Opus 4.6</option>
                     <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
                   </select>
+                  <button
+                    onClick={clearConversation}
+                    disabled={streaming || messages.length === 0}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-red-400 hover:bg-surface-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    aria-label="Clear conversation"
+                    title="Clear conversation"
+                  >
+                    <Trash weight="bold" size={16} />
+                  </button>
                   <button
                     onClick={() => setOpen(false)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-800 transition-colors"
@@ -499,6 +572,7 @@ interface ToolCallCardProps {
     name: string;
     input: unknown;
     result?: unknown;
+    isExecuting?: boolean;
   };
 }
 
@@ -509,6 +583,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
     generate_written_content: 'Generate content',
     get_project_info: 'Read project info',
     list_project_assets: 'List assets',
+    search_web: 'Search the web',
   };
 
   return (
@@ -529,6 +604,10 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
         {toolCall.result !== undefined ? (
           <span className="ml-auto text-accent-400 text-mono-sm font-mono">
             done
+          </span>
+        ) : toolCall.isExecuting ? (
+          <span className="ml-auto text-amber-400 text-mono-sm font-mono">
+            Running...
           </span>
         ) : (
           <Spinner

@@ -133,6 +133,21 @@ const TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'search_web',
+    description:
+      'Search the web for current information about a topic. Use this when the user asks about recent events, competitor news, market trends, or anything that requires up-to-date information beyond the project context.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The search query',
+        },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 // ── Chat endpoint ────────────────────────────────────────────────
@@ -254,7 +269,17 @@ chatRoutes.post('/:projectId/chat', async (c) => {
             }),
           });
 
-          const result = executeToolCall(
+          // Notify the dashboard that this tool is actively executing.
+          void stream.writeSSE({
+            event: 'tool_progress',
+            data: JSON.stringify({
+              id: block.id,
+              name: block.name,
+              status: 'executing',
+            }),
+          });
+
+          const result = await executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
             projectId,
@@ -321,13 +346,13 @@ chatRoutes.post('/:projectId/chat', async (c) => {
 
 // ── Tool execution ───────────────────────────────────────────────
 
-function executeToolCall(
+async function executeToolCall(
   toolName: string,
   input: Record<string, unknown>,
   projectId: string,
   project: typeof projects.$inferSelect,
   projectAssets: (typeof assetsTable.$inferSelect)[]
-): unknown {
+): Promise<unknown> {
   switch (toolName) {
     case 'get_project_info': {
       const info: Record<string, unknown> = {
@@ -393,6 +418,41 @@ function executeToolCall(
       };
     }
 
+    case 'search_web': {
+      const query = input['query'] as string;
+      try {
+        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          return { error: 'Web search returned a non-OK response. Search is temporarily unavailable.' };
+        }
+        const data = (await res.json()) as {
+          Abstract?: string;
+          AbstractSource?: string;
+          AbstractURL?: string;
+          Heading?: string;
+          RelatedTopics?: { Text?: string; FirstURL?: string }[];
+        };
+        const results: string[] = [];
+        if (data.Abstract) {
+          results.push(`**${data.Heading ?? query}** (${data.AbstractSource ?? 'DuckDuckGo'})\n${data.Abstract}\n${data.AbstractURL ?? ''}`);
+        }
+        if (data.RelatedTopics) {
+          for (const topic of data.RelatedTopics.slice(0, 5)) {
+            if (topic.Text) {
+              results.push(`- ${topic.Text}${topic.FirstURL ? ` (${topic.FirstURL})` : ''}`);
+            }
+          }
+        }
+        if (results.length === 0) {
+          return { summary: `No instant answer results for "${query}". Try rephrasing the query or asking about a more specific topic.` };
+        }
+        return { summary: results.join('\n\n') };
+      } catch {
+        return { error: 'Web search is temporarily unavailable. Could not reach the search API.' };
+      }
+    }
+
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -412,6 +472,7 @@ function buildChatSystemPrompt(
       `\n- Answer questions about the project (repo analysis, research, strategy, assets)` +
       `\n- Generate marketing content (blog posts, tweets, LinkedIn posts, etc.)` +
       `\n- Help refine and iterate on existing assets` +
+      `\n- Search the web for current information (competitor news, market trends, recent events)` +
       `\n\nBe conversational, specific, and use real details from the project context. Keep responses focused and actionable. When generating content, make it publication-ready.`
   );
 
