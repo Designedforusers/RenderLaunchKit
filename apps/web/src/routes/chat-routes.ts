@@ -183,38 +183,68 @@ chatRoutes.post('/:projectId/chat', async (c) => {
     })
   );
 
+  const selectedModel = parsed.data.model ?? env.ANTHROPIC_MODEL;
+
   return streamSSE(c, async (stream) => {
     try {
-      const response = anthropic.messages.stream({
-        model: parsed.data.model ?? env.ANTHROPIC_MODEL,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: anthropicMessages,
-        tools: TOOLS,
-      });
+      // ── Agentic loop ──────────────────────────────────────
+      //
+      // Instead of nesting a second `messages.stream()` inside
+      // the first's tool_use handler (which caused the SSE
+      // stream to freeze after the follow-up), we run a LOOP:
+      //
+      //   1. Stream a response, forwarding text deltas to SSE
+      //   2. Await finalMessage to get the complete content
+      //   3. If the response contains tool_use blocks, execute
+      //      the tools, append tool results to the message
+      //      history, and LOOP BACK to step 1
+      //   4. If no tool_use blocks, we're done — send the
+      //      `done` event and close
+      //
+      // This handles multi-turn tool chains (Claude calls tool
+      // A, reads the result, decides to call tool B, etc.)
+      // without ever nesting streams. Each iteration is a
+      // clean stream → finalMessage → check → decide cycle.
+      //
+      // Max 5 iterations to prevent runaway tool chains.
 
-      // Forward streaming events to the dashboard as SSE.
-      // Each event is a JSON line the dashboard can parse.
-      response.on('text', (text) => {
-        void stream.writeSSE({
-          event: 'text_delta',
-          data: JSON.stringify({ text }),
+      const loopMessages: Anthropic.MessageParam[] = [...anthropicMessages];
+      const MAX_TOOL_ROUNDS = 5;
+
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const response = anthropic.messages.stream({
+          model: selectedModel,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: loopMessages,
+          tools: TOOLS,
         });
-      });
 
-      response.on('inputJson', (json, snapshot) => {
-        void stream.writeSSE({
-          event: 'tool_input',
-          data: JSON.stringify({ json: snapshot }),
+        // Forward text deltas to SSE as they arrive.
+        response.on('text', (text) => {
+          void stream.writeSSE({
+            event: 'text_delta',
+            data: JSON.stringify({ text }),
+          });
         });
-      });
 
-      // Wait for the full response to get tool use blocks.
-      const finalMessage = await response.finalMessage();
+        const finalMessage = await response.finalMessage();
 
-      // Process tool use blocks and send results.
-      for (const block of finalMessage.content) {
-        if (block.type === 'tool_use') {
+        // Collect tool_use blocks from the response.
+        const toolUseBlocks = finalMessage.content.filter(
+          (b): b is Anthropic.ContentBlock & { type: 'tool_use' } =>
+            b.type === 'tool_use'
+        );
+
+        // If no tool calls, we're done.
+        if (toolUseBlocks.length === 0) {
+          break;
+        }
+
+        // Execute each tool and build tool_result messages.
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+        for (const block of toolUseBlocks) {
           void stream.writeSSE({
             event: 'tool_call',
             data: JSON.stringify({
@@ -224,14 +254,24 @@ chatRoutes.post('/:projectId/chat', async (c) => {
             }),
           });
 
-          // Execute the tool and send the result.
-          const result = await executeToolCall(
+          const result = executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
             projectId,
             project,
             projectAssets
           );
+
+          // Truncate large results so the follow-up context
+          // window isn't overwhelmed (especially on Haiku).
+          const resultStr =
+            typeof result === 'string'
+              ? result
+              : JSON.stringify(result);
+          const truncated =
+            resultStr.length > 8000
+              ? `${resultStr.slice(0, 8000)}\n\n[...truncated, ${String(resultStr.length - 8000)} chars omitted]`
+              : resultStr;
 
           void stream.writeSSE({
             event: 'tool_result',
@@ -242,41 +282,26 @@ chatRoutes.post('/:projectId/chat', async (c) => {
             }),
           });
 
-          // Make a follow-up call with the tool result so Claude
-          // can synthesize a response. This is the multi-turn
-          // tool chain the user asked for.
-          const followUpMessages: Anthropic.MessageParam[] = [
-            ...anthropicMessages,
-            { role: 'assistant', content: finalMessage.content },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'tool_result',
-                  tool_use_id: block.id,
-                  content: typeof result === 'string' ? result : JSON.stringify(result),
-                },
-              ],
-            },
-          ];
-
-          const followUp = anthropic.messages.stream({
-            model: parsed.data.model ?? env.ANTHROPIC_MODEL,
-            max_tokens: 4096,
-            system: systemPrompt,
-            messages: followUpMessages,
-            tools: TOOLS,
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: truncated,
           });
-
-          followUp.on('text', (text) => {
-            void stream.writeSSE({
-              event: 'text_delta',
-              data: JSON.stringify({ text }),
-            });
-          });
-
-          await followUp.finalMessage();
         }
+
+        // Append the assistant's response + tool results to
+        // the message history for the next iteration.
+        loopMessages.push({
+          role: 'assistant',
+          content: finalMessage.content,
+        });
+        loopMessages.push({
+          role: 'user',
+          content: toolResults,
+        });
+
+        // Loop back — the next iteration streams Claude's
+        // response to the tool results.
       }
 
       void stream.writeSSE({
