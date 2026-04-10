@@ -134,21 +134,42 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'search_web',
+    name: 'deep_search',
     description:
-      'Search the web for current information about a topic. Use this when the user asks about recent events, competitor news, market trends, or anything that requires up-to-date information beyond the project context.',
+      'Deep semantic search via Exa. Use this for in-depth research: finding competitor analysis, technical blog posts, developer discussions, market reports, or niche content that a quick web search would miss. Returns full text snippets from matching pages. Prefer this over the built-in web_search when the user needs thorough research or specific technical content.',
     input_schema: {
       type: 'object' as const,
       properties: {
         query: {
           type: 'string',
-          description: 'The search query',
+          description:
+            'A natural language search query. Exa uses semantic search so descriptive queries work better than keywords.',
+        },
+        num_results: {
+          type: 'number',
+          description:
+            'Number of results to return (1-10). Default 5.',
         },
       },
       required: ['query'],
     },
   },
 ];
+
+// Claude's native web search — a server-managed tool that
+// Anthropic runs on their side. No API key, no external service,
+// no custom handler needed. Claude autonomously decides when to
+// search and integrates results into its reasoning. We just
+// need to include it in the tools array for each request.
+//
+// The `as unknown as Anthropic.Tool` cast is necessary because
+// the SDK's type definitions may not include the server tool
+// type yet — but the API accepts it and returns search result
+// content blocks that our existing text streaming handles.
+const WEB_SEARCH_TOOL = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+} as unknown as Anthropic.Tool;
 
 // ── Chat endpoint ────────────────────────────────────────────────
 
@@ -232,7 +253,7 @@ chatRoutes.post('/:projectId/chat', async (c) => {
           max_tokens: 4096,
           system: systemPrompt,
           messages: loopMessages,
-          tools: TOOLS,
+          tools: [...TOOLS, WEB_SEARCH_TOOL],
         });
 
         // Forward text deltas to SSE as they arrive.
@@ -418,38 +439,68 @@ async function executeToolCall(
       };
     }
 
-    case 'search_web': {
+    case 'deep_search': {
+      const exaKey = env.EXA_API_KEY;
+      if (!exaKey) {
+        return {
+          error:
+            'Deep search (Exa) is not configured. Set EXA_API_KEY in your .env. Claude can still use the built-in web_search for quick lookups.',
+        };
+      }
       const query = input['query'] as string;
+      const numResults =
+        typeof input['num_results'] === 'number'
+          ? Math.min(Math.max(input['num_results'], 1), 10)
+          : 5;
       try {
-        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-        const res = await fetch(url);
+        const res = await fetch('https://api.exa.ai/search', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${exaKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query,
+            numResults,
+            type: 'auto',
+            contents: { text: { maxCharacters: 1500 } },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
         if (!res.ok) {
-          return { error: 'Web search returned a non-OK response. Search is temporarily unavailable.' };
+          const body = await res.text().catch(() => '<no body>');
+          return {
+            error: `Exa search failed (HTTP ${String(res.status)}): ${body.slice(0, 200)}`,
+          };
         }
         const data = (await res.json()) as {
-          Abstract?: string;
-          AbstractSource?: string;
-          AbstractURL?: string;
-          Heading?: string;
-          RelatedTopics?: { Text?: string; FirstURL?: string }[];
+          results?: {
+            title?: string;
+            url?: string;
+            text?: string;
+            publishedDate?: string;
+          }[];
         };
-        const results: string[] = [];
-        if (data.Abstract) {
-          results.push(`**${data.Heading ?? query}** (${data.AbstractSource ?? 'DuckDuckGo'})\n${data.Abstract}\n${data.AbstractURL ?? ''}`);
+        if (!data.results || data.results.length === 0) {
+          return {
+            summary: `No results found for "${query}". Try a different query.`,
+          };
         }
-        if (data.RelatedTopics) {
-          for (const topic of data.RelatedTopics.slice(0, 5)) {
-            if (topic.Text) {
-              results.push(`- ${topic.Text}${topic.FirstURL ? ` (${topic.FirstURL})` : ''}`);
-            }
-          }
-        }
-        if (results.length === 0) {
-          return { summary: `No instant answer results for "${query}". Try rephrasing the query or asking about a more specific topic.` };
-        }
-        return { summary: results.join('\n\n') };
-      } catch {
-        return { error: 'Web search is temporarily unavailable. Could not reach the search API.' };
+        const formatted = data.results
+          .map((r, i) => {
+            const parts = [`**${String(i + 1)}. ${r.title ?? 'Untitled'}**`];
+            if (r.url) parts.push(`URL: ${r.url}`);
+            if (r.publishedDate) parts.push(`Published: ${r.publishedDate}`);
+            if (r.text) parts.push(r.text);
+            return parts.join('\n');
+          })
+          .join('\n\n---\n\n');
+        return { summary: formatted };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          error: `Exa search failed: ${message}`,
+        };
       }
     }
 
