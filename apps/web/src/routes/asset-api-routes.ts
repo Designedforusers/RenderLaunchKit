@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
@@ -24,6 +24,7 @@ import {
   getRenderedVideoFilename,
   renderLaunchVideoAsset,
 } from '../lib/remotion-render.js';
+import { parseUuidParam } from '../lib/param-validation.js';
 import { fileToWebStream } from '../lib/stream-utils.js';
 import {
   AssetFeedbackEventRequestSchema,
@@ -48,9 +49,14 @@ function isLaunchKitVideoProps(value: unknown): value is LaunchKitVideoProps {
   return LaunchKitVideoPropsSchema.safeParse(value).success;
 }
 
-function getRequestedVariant(value: string | undefined): 'visual' | 'narrated' {
-  return value === 'narrated' ? 'narrated' : 'visual';
-}
+const videoQuerySchema = z.object({
+  variant: z.enum(['visual', 'narrated']).optional(),
+  download: z.enum(['0', '1']).optional(),
+});
+
+const audioQuerySchema = z.object({
+  download: z.enum(['0', '1']).optional(),
+});
 
 function getParsedVoiceoverScriptFromAsset(
   metadata: Record<string, unknown> | null,
@@ -74,7 +80,8 @@ function getParsedVoiceoverScriptFromAsset(
 // ── GET /api/assets/:id — Get a single asset ──
 
 assetApiRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
 
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
@@ -108,8 +115,22 @@ assetApiRoutes.get('/:id', async (c) => {
 // ── GET /api/assets/:id/video.mp4 — Render/download a Remotion MP4 ──
 
 assetApiRoutes.get('/:id/video.mp4', async (c) => {
-  const id = c.req.param('id');
-  const variant = getRequestedVariant(c.req.query('variant'));
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
+
+  const queryParse = videoQuerySchema.safeParse({
+    variant: c.req.query('variant'),
+    download: c.req.query('download'),
+  });
+  if (!queryParse.success) {
+    return c.json(
+      { error: queryParse.error.issues[0]?.message ?? 'Invalid query parameters' },
+      400
+    );
+  }
+  const variant = queryParse.data.variant ?? 'visual';
+  const shouldDownload = queryParse.data.download === '1';
+
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
   });
@@ -144,18 +165,14 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       );
     }
 
-    const projectAssets = await database.query.assets.findMany({
-      where: eq(assets.projectId, asset.projectId),
+    const voiceoverAsset = await database.query.assets.findFirst({
+      where: and(
+        eq(assets.projectId, asset.projectId),
+        eq(assets.type, 'voiceover_script'),
+        ne(assets.status, 'failed')
+      ),
+      orderBy: [desc(assets.updatedAt)],
     });
-    const voiceoverAsset = [...projectAssets]
-      .filter(
-        (candidate) =>
-          candidate.type === 'voiceover_script' && candidate.status !== 'failed'
-      )
-      .sort(
-        (left, right) =>
-          right.updatedAt.getTime() - left.updatedAt.getTime()
-      )[0];
 
     if (!voiceoverAsset) {
       return c.json({ error: 'No usable voiceover script exists for this project' }, 409);
@@ -220,7 +237,6 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   // bounded regardless of file size. The Node-vs-WHATWG `ReadableStream`
   // type bridge lives in that helper so this route doesn't repeat the cast.
   const fileStat = await stat(rendered.outputPath);
-  const shouldDownload = c.req.query('download') === '1';
   const filename = getRenderedVideoFilename(asset.id, asset.version, variant);
 
   return new Response(fileToWebStream(rendered.outputPath), {
@@ -249,7 +265,20 @@ const audioMetadataSchema = z.object({
 });
 
 assetApiRoutes.get('/:id/audio.mp3', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
+
+  const queryParse = audioQuerySchema.safeParse({
+    download: c.req.query('download'),
+  });
+  if (!queryParse.success) {
+    return c.json(
+      { error: queryParse.error.issues[0]?.message ?? 'Invalid query parameters' },
+      400
+    );
+  }
+  const shouldDownload = queryParse.data.download === '1';
+
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
   });
@@ -297,7 +326,6 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
   // type bridge lives in `stream-utils.ts` so this route doesn't
   // need its own cast.
   const fileStat = await stat(audioPath);
-  const shouldDownload = c.req.query('download') === '1';
   const filename = `${asset.id}-v${asset.version}-${asset.type}.mp3`;
 
   return new Response(fileToWebStream(audioPath), {
@@ -392,7 +420,8 @@ async function writeFeedbackEvent(input: {
 // ── POST /api/assets/:id/approve — Approve an asset ──
 
 assetApiRoutes.post('/:id/approve', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
 
   const [updated] = await database
     .update(assets)
@@ -419,7 +448,8 @@ assetApiRoutes.post('/:id/approve', async (c) => {
 // ── POST /api/assets/:id/reject — Reject an asset ──
 
 assetApiRoutes.post('/:id/reject', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
 
   const [updated] = await database
     .update(assets)
@@ -447,7 +477,8 @@ const editAssetContentSchema = z.object({
 });
 
 assetApiRoutes.put('/:id/content', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
   const rawBody: unknown = await c.req.json();
   const parsed = editAssetContentSchema.safeParse(rawBody);
 
@@ -491,7 +522,8 @@ const regenerateAssetSchema = z.object({
 });
 
 assetApiRoutes.post('/:id/regenerate', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
   const rawBody: unknown = await c.req.json().catch(() => ({}));
   const bodyParse = regenerateAssetSchema.safeParse(rawBody);
   const body = bodyParse.success ? bodyParse.data : { instructions: undefined };
@@ -533,7 +565,7 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // and threads them through to the agent as separate prompt inputs,
   // so the original brief stays stable across regeneration cycles
   // while the per-run revision overlay changes.
-  await database
+  const [updated] = await database
     .update(assets)
     .set({
       status: 'queued',
@@ -543,7 +575,15 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
         : {}),
       updatedAt: new Date(),
     })
-    .where(eq(assets.id, id));
+    .where(and(eq(assets.id, id), eq(assets.version, asset.version)))
+    .returning();
+
+  if (!updated) {
+    return c.json(
+      { error: 'Asset was modified by another request; refresh and retry' },
+      409
+    );
+  }
 
   // Trigger the parent workflow task. It reads every queued asset
   // on the project (which is now just this one, because the other
@@ -557,12 +597,12 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // asset type / category to surface "this kind of asset gets
   // regenerated a lot."
   await writeFeedbackEvent({
-    assetId: asset.id,
+    assetId: updated.id,
     action: 'regenerated',
     editText: null,
   });
 
-  return c.json({ id: asset.id, status: 'queued', version: asset.version + 1 });
+  return c.json({ id: updated.id, status: 'queued', version: updated.version });
 });
 
 // ── POST /api/assets/:id/feedback — Unified feedback event log ──
@@ -581,11 +621,8 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
 // proxy to this implementation in a future cleanup pass.
 
 assetApiRoutes.post('/:id/feedback', async (c) => {
-  const id = c.req.param('id');
-  const idParse = z.string().uuid().safeParse(id);
-  if (!idParse.success) {
-    return c.json({ error: 'Asset id must be a valid UUID' }, 400);
-  }
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
 
   const rawBody: unknown = await c.req.json().catch(() => null);
   const bodyParse = AssetFeedbackEventRequestSchema.safeParse(rawBody);
@@ -599,7 +636,7 @@ assetApiRoutes.post('/:id/feedback', async (c) => {
   // Verify the asset exists before writing the event so we can
   // surface a 404 instead of a confusing FK violation.
   const asset = await database.query.assets.findFirst({
-    where: eq(assets.id, idParse.data),
+    where: eq(assets.id, id),
   });
   if (!asset) {
     return c.json({ error: 'Asset not found' }, 404);
@@ -612,7 +649,7 @@ assetApiRoutes.post('/:id/feedback', async (c) => {
     bodyParse.data.action === 'edited' ? bodyParse.data.editText : null;
 
   const result = await writeFeedbackEvent({
-    assetId: idParse.data,
+    assetId: id,
     action: bodyParse.data.action,
     editText,
   });

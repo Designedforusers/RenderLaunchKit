@@ -2,6 +2,7 @@ import { Queue } from 'bullmq';
 import {
   JOB_NAMES,
   QUEUE_NAMES,
+  parseRedisUrl,
   type EnrichDevInfluencersJobData,
 } from '@launchkit/shared';
 import { env } from './env.js';
@@ -48,13 +49,8 @@ export async function enrichDevInfluencers(): Promise<void> {
   // Open a transient Queue against the same Redis the worker reads
   // from. The cron exits immediately after main(), so we close the
   // queue inside this function rather than holding a singleton.
-  const redisUrl = new URL(env.REDIS_URL);
   const trendingQueue = new Queue(QUEUE_NAMES.TRENDING, {
-    connection: {
-      host: redisUrl.hostname,
-      port: parseInt(redisUrl.port || '6379', 10),
-      password: redisUrl.password || undefined,
-    },
+    connection: parseRedisUrl(env.REDIS_URL),
   });
 
   try {

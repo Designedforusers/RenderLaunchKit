@@ -10,6 +10,7 @@ import {
   projects,
 } from '@launchkit/shared';
 import { database } from '../lib/database.js';
+import { parseUuidParam } from '../lib/param-validation.js';
 import {
   enqueuePikaInvite,
   enqueuePikaLeave,
@@ -84,7 +85,8 @@ const NON_TERMINAL_STATUSES = [
 // ── POST /api/projects/:projectId/meetings ───────────────────────────
 
 pikaRoutes.post('/:projectId/meetings', async (c) => {
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (typeof projectId !== 'string') return projectId;
 
   // Parse the body against the Zod schema at the boundary. A
   // malformed POST (missing meetUrl, non-URL value, botName too
@@ -246,7 +248,8 @@ pikaRoutes.post('/:projectId/meetings', async (c) => {
 // ── GET /api/projects/:projectId/meetings ────────────────────────────
 
 pikaRoutes.get('/:projectId/meetings', async (c) => {
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (typeof projectId !== 'string') return projectId;
 
   const rows = await database
     .select()
@@ -270,8 +273,10 @@ pikaRoutes.get('/:projectId/meetings', async (c) => {
 // ── GET /api/projects/:projectId/meetings/:sessionRowId ──────────────
 
 pikaRoutes.get('/:projectId/meetings/:sessionRowId', async (c) => {
-  const projectId = c.req.param('projectId');
-  const sessionRowId = c.req.param('sessionRowId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (typeof projectId !== 'string') return projectId;
+  const sessionRowId = parseUuidParam(c, 'sessionRowId');
+  if (typeof sessionRowId !== 'string') return sessionRowId;
 
   const [row] = await database
     .select()
@@ -304,8 +309,10 @@ pikaRoutes.get('/:projectId/meetings/:sessionRowId', async (c) => {
 // ── POST /api/projects/:projectId/meetings/:sessionRowId/leave ───────
 
 pikaRoutes.post('/:projectId/meetings/:sessionRowId/leave', async (c) => {
-  const projectId = c.req.param('projectId');
-  const sessionRowId = c.req.param('sessionRowId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (typeof projectId !== 'string') return projectId;
+  const sessionRowId = parseUuidParam(c, 'sessionRowId');
+  if (typeof sessionRowId !== 'string') return sessionRowId;
 
   const [row] = await database
     .select()

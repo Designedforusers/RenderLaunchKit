@@ -16,6 +16,7 @@ import {
   encryptGithubToken,
   GithubTokenEncryptionDisabledError,
 } from '../lib/github-token-crypto.js';
+import { parseUuidParam } from '../lib/param-validation.js';
 
 const projectApiRoutes = new Hono();
 
@@ -28,7 +29,7 @@ const createProjectSchema = CreateProjectRequestSchema;
 // stricter expensive-route limit (10 req/min/IP) on top of the global
 // /api/* limit (100 req/min/IP).
 projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
-  const body: unknown = await c.req.json();
+  const body: unknown = await c.req.json().catch(() => ({}));
   const parsed = createProjectSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -171,7 +172,8 @@ projectApiRoutes.get('/', async (c) => {
 // ── GET /api/projects/:id — Get project detail ──
 
 projectApiRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
 
   const project = await database.query.projects.findFirst({
     where: eq(projects.id, id),
@@ -239,7 +241,8 @@ projectApiRoutes.get('/:id', async (c) => {
 // ── DELETE /api/projects/:id — Delete a project ──
 
 projectApiRoutes.delete('/:id', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
   const [deleted] = await database
     .delete(projects)
     .where(eq(projects.id, id))
@@ -259,7 +262,8 @@ const toggleWebhookSchema = z.object({
 });
 
 projectApiRoutes.patch('/:id/webhook', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c, 'id');
+  if (typeof id !== 'string') return id;
   const rawBody: unknown = await c.req.json();
   const parsedBody = toggleWebhookSchema.safeParse(rawBody);
 

@@ -1,12 +1,8 @@
 import { and, eq, lt } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
 import Redis from 'ioredis';
 import * as schema from '@launchkit/shared';
+import { database } from './database.js';
 import { env } from './env.js';
-
-const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
-const db = drizzle(pool, { schema });
 
 /**
  * Clean up stale data:
@@ -20,7 +16,7 @@ export async function cleanupStaleLaunchData(): Promise<void> {
   // Clean old failed jobs (> 30 days)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const deletedJobs = await db
+  const deletedJobs = await database
     .delete(schema.jobs)
     .where(
       and(
@@ -39,7 +35,7 @@ export async function cleanupStaleLaunchData(): Promise<void> {
   // Clean old webhook events (> 90 days)
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
-  const deletedEvents = await db
+  const deletedEvents = await database
     .delete(schema.webhookEvents)
     .where(lt(schema.webhookEvents.createdAt, ninetyDaysAgo))
     .returning({ id: schema.webhookEvents.id });

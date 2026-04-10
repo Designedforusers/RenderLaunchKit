@@ -12,6 +12,7 @@ import {
 } from '@launchkit/shared';
 import { z } from 'zod';
 import { database } from '../lib/database.js';
+import { parseUuidParam } from '../lib/param-validation.js';
 import { env } from '../env.js';
 
 /**
@@ -164,7 +165,8 @@ chatRoutes.post('/:projectId/chat', async (c) => {
     );
   }
 
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (typeof projectId !== 'string') return projectId;
 
   const rawBody: unknown = await c.req.json().catch(() => ({}));
   const parsed = ChatRequestSchema.safeParse(rawBody);
@@ -411,8 +413,8 @@ function executeToolCall(
       // For now, return a structured instruction that Claude can
       // use to generate inline. In a full implementation, this
       // would call the asset-generators package.
-      const contentType = input['content_type'] as string;
-      const instructions = input['instructions'] as string;
+      const contentType = typeof input['content_type'] === 'string' ? input['content_type'] : '';
+      const instructions = typeof input['instructions'] === 'string' ? input['instructions'] : '';
       return {
         status: 'generated_inline',
         content_type: contentType,

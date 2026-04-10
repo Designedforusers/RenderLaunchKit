@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { JOB_NAMES, QUEUE_NAMES } from '@launchkit/shared';
+import { JOB_NAMES, QUEUE_NAMES, parseRedisUrl } from '@launchkit/shared';
 import type { ReviewJobData } from '@launchkit/shared';
 import { env } from '../env.js';
 
@@ -20,13 +20,7 @@ import { env } from '../env.js';
  * them decoupled means a disconnect during a pub/sub reconnect loop
  * does not stall the review enqueue.
  */
-const redisUrl = new URL(env.REDIS_URL);
-
-const redisConnection = {
-  host: redisUrl.hostname,
-  port: parseInt(redisUrl.port || '6379', 10),
-  password: redisUrl.password || undefined,
-};
+const redisConnection = parseRedisUrl(env.REDIS_URL);
 
 const reviewQueue = new Queue(QUEUE_NAMES.REVIEW, { connection: redisConnection });
 
