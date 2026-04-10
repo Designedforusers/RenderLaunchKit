@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
@@ -144,18 +144,14 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       );
     }
 
-    const projectAssets = await database.query.assets.findMany({
-      where: eq(assets.projectId, asset.projectId),
+    const voiceoverAsset = await database.query.assets.findFirst({
+      where: and(
+        eq(assets.projectId, asset.projectId),
+        eq(assets.type, 'voiceover_script'),
+        ne(assets.status, 'failed')
+      ),
+      orderBy: [desc(assets.updatedAt)],
     });
-    const voiceoverAsset = [...projectAssets]
-      .filter(
-        (candidate) =>
-          candidate.type === 'voiceover_script' && candidate.status !== 'failed'
-      )
-      .sort(
-        (left, right) =>
-          right.updatedAt.getTime() - left.updatedAt.getTime()
-      )[0];
 
     if (!voiceoverAsset) {
       return c.json({ error: 'No usable voiceover script exists for this project' }, 409);
@@ -533,7 +529,7 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // and threads them through to the agent as separate prompt inputs,
   // so the original brief stays stable across regeneration cycles
   // while the per-run revision overlay changes.
-  await database
+  const [updated] = await database
     .update(assets)
     .set({
       status: 'queued',
@@ -543,7 +539,15 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
         : {}),
       updatedAt: new Date(),
     })
-    .where(eq(assets.id, id));
+    .where(and(eq(assets.id, id), eq(assets.version, asset.version)))
+    .returning();
+
+  if (!updated) {
+    return c.json(
+      { error: 'Asset was modified by another request; refresh and retry' },
+      409
+    );
+  }
 
   // Trigger the parent workflow task. It reads every queued asset
   // on the project (which is now just this one, because the other
@@ -557,12 +561,12 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // asset type / category to surface "this kind of asset gets
   // regenerated a lot."
   await writeFeedbackEvent({
-    assetId: asset.id,
+    assetId: updated.id,
     action: 'regenerated',
     editText: null,
   });
 
-  return c.json({ id: asset.id, status: 'queued', version: asset.version + 1 });
+  return c.json({ id: updated.id, status: 'queued', version: updated.version });
 });
 
 // ── POST /api/assets/:id/feedback — Unified feedback event log ──
