@@ -7,7 +7,7 @@ import {
   Link,
 } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Lightning } from '@phosphor-icons/react';
+import { RocketLaunch } from '@phosphor-icons/react';
 import { RepositoryUrlForm } from './components/RepositoryUrlForm.js';
 import { ProjectSummaryList } from './components/ProjectSummaryList.js';
 import { ProjectDetailView } from './components/ProjectDetailView.js';
@@ -64,7 +64,7 @@ function HomePage() {
               whileHover={{ scale: 1.08, rotate: -4 }}
               transition={{ type: 'spring', stiffness: 360, damping: 20 }}
             >
-              <Lightning weight="fill" size={18} className="text-white" />
+              <RocketLaunch weight="fill" size={18} className="text-white" />
               {/* Soft glow halo */}
               <span className="absolute inset-0 rounded-lg bg-accent-500/40 blur-md -z-10" />
             </motion.div>
@@ -135,7 +135,7 @@ function ProjectPage() {
               whileHover={{ scale: 1.12, rotate: -6 }}
               transition={{ type: 'spring', stiffness: 360, damping: 20 }}
             >
-              <Lightning weight="fill" size={14} className="text-white" />
+              <RocketLaunch weight="fill" size={14} className="text-white" />
             </motion.div>
             <span className="font-display text-heading-md text-text-primary group-hover:text-accent-400 transition-colors">
               LaunchKit
