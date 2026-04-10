@@ -67,6 +67,13 @@ const envSchema = z.object({
   // ── Remotion render ────────────────────────────────────────────
   REMOTION_CONCURRENCY: z.string().default('50%'),
 
+  // ── Exa (deep search for chat) ──────────────────────────────────
+  // Used by the chat endpoint's `deep_search` tool for semantic
+  // web research. Same key the worker uses for the trending-signals
+  // agent via the Exa MCP server. Optional — the chat degrades to
+  // Claude's native web_search when absent.
+  EXA_API_KEY: z.string().optional(),
+
   // ── Anthropic (chat endpoint) ───────────────────────────────────
   // Used by the `/api/projects/:id/chat` streaming endpoint for
   // the dashboard's agent chat UI. The web service calls
