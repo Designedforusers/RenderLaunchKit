@@ -92,3 +92,166 @@ jobs:
         # before the strict env parser fires; the test file sets
         # both via `??=`, so the CI env can be left empty.
         run: npm test
+
+  # End-to-end tests via Playwright.
+  #
+  # Gated on `needs: ci` so the unit/build chain has to pass
+  # before we spin up the expensive services (Postgres + Redis
+  # + MinIO + a live dev stack + a real Chromium browser). The
+  # @smoke tagged subset runs on every PR; the @full-pipeline
+  # spec only runs when the PR carries the `run-e2e-full`
+  # label, because that path makes real provider calls and
+  # costs real money per run.
+  #
+  # Secrets required (configured in the repo's GitHub Actions
+  # settings):
+  #
+  #   ANTHROPIC_API_KEY, VOYAGE_API_KEY, FAL_API_KEY,
+  #   ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID,
+  #   ELEVENLABS_VOICE_ID_ALT, ELEVENLABS_MODEL_ID,
+  #   WORLD_LABS_API_KEY, EXA_API_KEY
+  #
+  # The smoke suite only needs Anthropic + Voyage; the
+  # @full-pipeline spec needs all the above. Missing secrets
+  # degrade gracefully — the spec skips provider-specific
+  # assertions but still exercises the core pipeline shape.
+  e2e:
+    name: playwright e2e
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      # Point drizzle + web + workflows at the CI Postgres
+      # service. Matches the docker-compose local setup except
+      # the port — GitHub Actions service containers expose on
+      # 5432 (no host-port remapping needed).
+      DATABASE_URL: 'postgresql://launchkit:launchkit@localhost:5432/launchkit'
+      REDIS_URL: 'redis://localhost:6379'
+      MINIO_ENDPOINT_HOST: 'localhost:9000'
+      MINIO_ROOT_USER: 'launchkit'
+      MINIO_ROOT_PASSWORD: 'launchkit-dev-password'
+      MINIO_BUCKET: 'launchkit-renders'
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_ALT: ${{ secrets.ELEVENLABS_VOICE_ID_ALT }}
+      ELEVENLABS_MODEL_ID: ${{ secrets.ELEVENLABS_MODEL_ID }}
+      WORLD_LABS_API_KEY: ${{ secrets.WORLD_LABS_API_KEY }}
+      EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: launchkit
+          POSTGRES_USER: launchkit
+          POSTGRES_PASSWORD: launchkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U launchkit -d launchkit"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+        env:
+          MINIO_ROOT_USER: launchkit
+          MINIO_ROOT_PASSWORD: launchkit-dev-password
+        ports:
+          - 9000:9000
+          - 9001:9001
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run db:migrate
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start dev stack (background)
+        # The `&` suffix backgrounds the process; `wait-on`
+        # blocks until the dashboard + API are both responsive
+        # before handing off to Playwright. `nohup` ensures the
+        # background process survives even if the current shell
+        # exits.
+        run: |
+          nohup npm run dev > dev-stack.log 2>&1 &
+          echo $! > .dev-stack.pid
+          npx wait-on -t 120000 http://localhost:5173 http://localhost:3000
+        env:
+          NODE_ENV: development
+
+      - name: Run smoke e2e suite
+        run: npm run test:e2e:smoke
+
+      - name: Run full-pipeline suite
+        if: contains(github.event.pull_request.labels.*.name, 'run-e2e-full')
+        run: npm run test:e2e:full
+
+      - name: Stop dev stack
+        if: always()
+        run: |
+          if [ -f .dev-stack.pid ]; then
+            kill $(cat .dev-stack.pid) 2>/dev/null || true
+          fi
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 7
+
+      - name: Upload dev-stack logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-stack-logs
+          path: dev-stack.log
+          retention-days: 7
