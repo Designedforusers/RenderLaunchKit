@@ -31,11 +31,25 @@ Output JSON:
       "score": 8,
       "strengths": ["specific strength 1", "specific strength 2"],
       "issues": ["specific issue 1"],
-      "revisionInstructions": "exact instructions for improvement (only if score < 7)"
+      "revisionInstructions": "exact instructions for improvement (only if score < 7, otherwise null)"
     }
   ],
   "approved": true,
-  "revisionPriority": ["assetId1"]
+  "revisionPriority": ["assetId1", "assetId2"]
+}
+
+Required output rules:
+- Always include EVERY field in the JSON, even when there is nothing to revise.
+- When the kit passes review and \`approved\` is \`true\`, return \`"revisionPriority": []\` — an empty array, NOT a missing key.
+- When at least one asset scored under 7, list the asset IDs in \`revisionPriority\` ordered by importance (most-needs-revision first).
+
+Approved-path example (everything passed, no revisions needed):
+{
+  "overallScore": 8.7,
+  "overallFeedback": "Cohesive kit with consistent positioning and strong visuals.",
+  "assetReviews": [{ "assetId": "uuid", "score": 9, "strengths": ["..."], "issues": [], "revisionInstructions": null }],
+  "approved": true,
+  "revisionPriority": []
 }
 
 Key evaluation criteria:
