@@ -10,7 +10,7 @@ import type { Asset } from '../../lib/api.js';
  *   - **Audio** — things you listen to (or scripts that drive audio):
  *     voice commercials, podcast scripts, voiceover scripts
  *   - **Written** — publishable written content: blog posts, tweets, FAQs,
- *     tips, outreach drafts, changelog entries
+ *     tips, changelog entries
  *
  * This shape matches how a marketing lead would actually present the kit
  * to a stakeholder: "here are the visuals, here are the videos, here's
@@ -57,7 +57,6 @@ export const ASSET_CATEGORY_MAP: Record<AssetType, AssetCategory> = {
   faq: 'written',
   changelog_entry: 'written',
   tips: 'written',
-  outreach_draft: 'written',
 };
 
 /**
@@ -90,7 +89,7 @@ export const ASSET_CATEGORY_DESCRIPTIONS: Record<AssetCategory, string> = {
   visuals: 'OG images, social cards, and interactive 3D scenes',
   videos: 'Rendered product videos, storyboards, and teaser cards',
   audio: 'Voice commercials, podcasts, and voiceover scripts',
-  written: 'Blog posts, tweets, FAQs, and outreach drafts',
+  written: 'Blog posts, tweets, FAQs, and changelog entries',
 };
 
 /**

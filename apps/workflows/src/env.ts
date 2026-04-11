@@ -41,9 +41,9 @@ loadDotenv({
  *   - The four provider keys that back the asset-generation clients
  *     (`ANTHROPIC_API_KEY`, `FAL_API_KEY`, `ELEVENLABS_*`, `WORLD_LABS_*`).
  *   - Nothing else. The worker's trending-signals / commit-marketability /
- *     influencer-discovery / voyage-embeddings keys are dead weight on
- *     this service and would only confuse an operator reading the env
- *     page in the Render dashboard.
+ *     voyage-embeddings keys are dead weight on this service and would
+ *     only confuse an operator reading the env page in the Render
+ *     dashboard.
  */
 
 const envSchema = z.object({

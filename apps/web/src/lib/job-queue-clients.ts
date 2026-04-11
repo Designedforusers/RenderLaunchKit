@@ -31,10 +31,9 @@ export const analysisJobQueue = new Queue<JobData>(QUEUE_NAMES.ANALYSIS, {
 });
 
 // Phase 7: trending queue is shared between heterogeneous background
-// job types — the trending-signals cron, the dev-influencers
-// enrichment cron, and the new feedback-event embedding job. Each
-// processor validates its own job payload via Zod at the boundary
-// (see `processIngestTrendingSignals`, `processEnrichDevInfluencers`,
+// job types — the trending-signals cron and the feedback-event
+// embedding job. Each processor validates its own job payload via
+// Zod at the boundary (see `processIngestTrendingSignals`,
 // `processEmbedFeedbackEvent`), so the queue's payload type is
 // intentionally `unknown`. A typed `Queue<JobData>` would force
 // every consumer to carry a `projectId`, which the embed-feedback

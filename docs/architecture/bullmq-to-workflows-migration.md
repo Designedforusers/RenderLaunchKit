@@ -220,7 +220,6 @@ This is the part of the story that makes the decision *informed* rather than *ca
 - **Research queue** — Claude Agent SDK loop, ~30–60 seconds, fits on a Standard worker. BullMQ.
 - **Strategy queue** — single Anthropic call, ~10 seconds. BullMQ.
 - **Review queue** — creative director agent, ~30 seconds per kit. BullMQ.
-- **Outreach drafting queue** — Anthropic call per influencer, batched. BullMQ.
 - **Embedding queue** — Voyage API call per feedback event, ~2 seconds. BullMQ.
 - **Pika invite queue** — Python subprocess, ~90 seconds, on a dedicated dyno. BullMQ (specifically, on its own `launchkit-pika-worker` dyno for subprocess isolation).
 - **Pika poll/leave queue** — pure-TS HTTPS calls, sub-second. BullMQ on the shared worker.

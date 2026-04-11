@@ -14,11 +14,11 @@ import type { z } from 'zod';
  * Keeping the package provider-agnostic means:
  *
  *   1. **No scope creep on the worker side.** The worker's non-asset-gen
- *      agents (`launch-strategy-agent`, `outreach-draft-agent`,
- *      `commit-marketability-agent`, `launch-kit-review-agent`) keep
- *      using the worker-local `anthropic-claude-client.ts` unchanged.
- *      Moving that client into this package would force every one of
- *      those four consumers to take a dependency on
+ *      agents (`launch-strategy-agent`, `commit-marketability-agent`,
+ *      `launch-kit-review-agent`) keep using the worker-local
+ *      `anthropic-claude-client.ts` unchanged. Moving that client into
+ *      this package would force every one of those consumers to take
+ *      a dependency on
  *      `@launchkit/asset-generators`, which is semantically wrong — a
  *      launch strategy is not an "asset generator" the way a blog post
  *      or a product video is.

@@ -31,7 +31,7 @@ LaunchKit is an AI-powered go-to-market teammate. You give it a GitHub repo URL.
 1. **Analyzes** the repo — README, file tree, dependencies, recent commits, framework, language, license
 2. **Researches** the market autonomously — Claude Agent SDK runs `WebSearch` and `WebFetch` to find competitors, unique angles, and Hacker News discussions
 3. **Strategizes** an opinionated launch plan — picks the right channels, tone, and asset types for *this specific* product, informed by past-project insights via pgvector similarity search
-4. **Generates** the full kit on Render Workflows — blog post, twitter thread, OG image, social card, FAQ, voice commercial, podcast script, product video, 3D world scene, launch tips, outreach drafts
+4. **Generates** the full kit on Render Workflows — blog post, twitter thread, OG image, social card, FAQ, voice commercial, podcast script, product video, 3D world scene, launch tips
 5. **Reviews** everything as a creative director — scores each asset, requests revisions on rejected ones, ensures coherence across the whole kit
 6. **Adapts** from your feedback — approve/reject/edit/regenerate actions feed a self-learning loop that tunes future recommendations
 7. **Tracks every dollar** — every Anthropic call, fal.ai render, and ElevenLabs synthesis records its real cost to a per-event log; the dashboard surfaces the project total ("Generated for $0.47") and the per-asset breakdown
@@ -170,7 +170,7 @@ The Agent SDK gives us a few things that would otherwise be hundreds of lines of
 - **In-process MCP tool definitions** — `search_github` and `lookup_similar_projects` are still our code, but they're exposed to the agent as a `createSdkMcpServer({ name: 'launchkit', tools: [...] })`. The agent calls them with type-safe Zod-validated inputs.
 - **Streaming events** — `task_started`, `task_progress`, `tool_use_summary`, `result` events are forwarded to the dashboard via Redis pub/sub.
 
-Strategy and content agents (writer, strategist, art-director, video-director, creative-director, commit-marketability, outreach-draft) are *prompted* — single Claude call with rich context, no agentic loop. They use `@anthropic-ai/sdk` directly via the helpers in `apps/worker/src/lib/anthropic-claude-client.ts`. Mixing agentic and prompted patterns where each fits is the right call.
+Strategy and content agents (writer, strategist, art-director, video-director, creative-director, commit-marketability) are *prompted* — single Claude call with rich context, no agentic loop. They use `@anthropic-ai/sdk` directly via the helpers in `apps/worker/src/lib/anthropic-claude-client.ts`. Mixing agentic and prompted patterns where each fits is the right call.
 
 ---
 

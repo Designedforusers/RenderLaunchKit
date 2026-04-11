@@ -10,7 +10,7 @@ LaunchKit is an AI go-to-market teammate. You paste a GitHub repo URL and it
 analyzes the codebase, researches the market with the Claude Agent SDK,
 strategizes an opinionated launch plan, generates 5-15 heterogeneous marketing
 assets (blog post, twitter thread, OG image, voice commercial, product video,
-3D world scene, outreach drafts), reviews everything as a creative director,
+3D world scene, launch tips), reviews everything as a creative director,
 and tracks every dollar of real provider spend along the way.
 
 It is also a public Render showcase. The repo is written to be read as a

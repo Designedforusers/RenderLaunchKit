@@ -11,7 +11,6 @@ import { apiRateLimit } from './middleware/rate-limit.js';
 import projectApiRoutes from './routes/project-api-routes.js';
 import projectCostRoutes from './routes/project-cost-routes.js';
 import assetApiRoutes from './routes/asset-api-routes.js';
-import outreachApiRoutes from './routes/outreach-api-routes.js';
 import projectEventStreamRoutes from './routes/project-event-stream-routes.js';
 import githubWebhookRoutes from './routes/github-webhook-routes.js';
 import pikaRoutes from './routes/pika-routes.js';
@@ -155,7 +154,6 @@ app.route('/api/projects', pikaRoutes);
 // Mounted after the auth middleware so the API key gate applies.
 app.route('/api/projects', chatRoutes);
 app.route('/api/assets', assetApiRoutes);
-app.route('/api/outreach', outreachApiRoutes);
 app.route('/api/trends', trendsApiRoutes);
 app.route('/api/generate', generateRoutes);
 

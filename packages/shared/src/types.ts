@@ -26,8 +26,6 @@ export type {
   AssetStatus,
   CommitRunStatus,
   FeedbackAction,
-  OutreachChannel,
-  OutreachStatus,
   ProjectStatus,
   TrendSource,
 } from './enums.js';
@@ -91,20 +89,10 @@ export type {
   // trend signal
   TrendSignal,
   TrendSignalInsert,
-  // dev influencer
-  AudienceBreakdown,
-  DevInfluencer,
-  DevInfluencerInsert,
-  InfluencerPlatforms,
   // commit marketing run
   CommitMarketingRun,
   CommitMarketingRunInsert,
   TrendUsedSnapshot,
-  InfluencerRecommendedSnapshot,
-  // outreach draft
-  OutreachDraft,
-  OutreachDraftInsert,
-  OutreachStatusUpdate,
   // asset feedback event
   AssetFeedbackEvent,
   AssetFeedbackEventRequest,
@@ -115,9 +103,6 @@ export type {
   CostEventProvider,
   ProjectCostsByProvider,
   ProjectCostsResponse,
-  // ── Phase 5: influencer discovery pipeline ──
-  // influencer candidate (agent/matcher output, not a DB row)
-  InfluencerCandidate,
   // ── Pika video meeting integration ──
   // subprocess stdout / job payloads / DB row / HTTP boundary shapes
   PikaSessionStatus,

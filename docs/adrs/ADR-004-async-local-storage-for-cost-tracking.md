@@ -32,17 +32,16 @@ every client method under `packages/asset-generators/src/clients/`,
 every test stub that ever instantiates an agent, and every intermediate
 helper that forwards the call.
 
-Worse, the worker has four non-asset-gen agents
-(`launch-strategy-agent`, `outreach-draft-agent`,
-`commit-marketability-agent`, `launch-kit-review-agent` under
-`apps/worker/src/agents/`) that all call the same
-`createAnthropicLLMClient` factory as the asset-generation pipeline.
-Those four have no asset to charge against — they run during strategy
-synthesis, outreach drafting, commit marketing, and the
-creative-director review pass. Parameter-threading would force them to
-synthesise a dummy tracker, sprinkle null-checks through every client,
-or grow a parallel "untracked" code path that calls a different LLM
-client. Every option is worse than the alternative.
+Worse, the worker has three non-asset-gen agents
+(`launch-strategy-agent`, `commit-marketability-agent`,
+`launch-kit-review-agent` under `apps/worker/src/agents/`) that all
+call the same `createAnthropicLLMClient` factory as the asset-generation
+pipeline. Those three have no asset to charge against — they run during
+strategy synthesis, commit marketing, and the creative-director review
+pass. Parameter-threading would force them to synthesise a dummy tracker,
+sprinkle null-checks through every client, or grow a parallel "untracked"
+code path that calls a different LLM client. Every option is worse than
+the alternative.
 
 ## Decision
 
@@ -117,10 +116,10 @@ money, and the operator deserves to see them on the dashboard chip.
   client method, and every consumer — a ~20-file, ~50-signature change
   for a feature that lands in 2.
 - **Non-asset-gen callers stay silent.** The worker's
-  `launch-strategy-agent`, `outreach-draft-agent`,
-  `commit-marketability-agent`, and `launch-kit-review-agent` all import
-  the same `createAnthropicLLMClient` factory as the asset-generation
-  pipeline. Their calls run outside any `runWithCostTracker` scope, so
+  `launch-strategy-agent`, `commit-marketability-agent`, and
+  `launch-kit-review-agent` all import the same
+  `createAnthropicLLMClient` factory as the asset-generation pipeline.
+  Their calls run outside any `runWithCostTracker` scope, so
   `store.getStore() === undefined` and `recordCost` exits without
   appending. Zero noise in `asset_cost_events` from non-asset work,
   zero signature changes, zero conditional logic in the clients.

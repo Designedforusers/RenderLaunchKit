@@ -15,13 +15,10 @@
 // confusing because the seed succeeds against the wrong database.
 import 'dotenv/config';
 
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { sql } from 'drizzle-orm';
 import * as schema from './packages/shared/src/schema.js';
-import { DevInfluencerInsertSchema } from './packages/shared/src/schemas/dev-influencer.js';
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://launchkit:launchkit@localhost:5432/launchkit',
@@ -360,68 +357,6 @@ function makeTwitterThread(name: string): { content: string; metadata: any } {
 
 // ── Run seed ──
 
-async function loadAndInsertDevInfluencers(): Promise<number> {
-  // Phase 5: load the curated dev influencer JSON, validate every
-  // entry through `DevInfluencerInsertSchema` at the boundary, and
-  // insert via Drizzle. `topic_embedding` is intentionally left null —
-  // the worker enrichment cron computes it on its first weekly pass.
-  //
-  // The seed JSON's top-level `_comment` key (and any other key
-  // prefixed with underscore) is documentation for human reviewers
-  // and is ignored by the loader.
-  const seedPath = path.resolve(process.cwd(), 'seed/dev-influencers.json');
-  const raw = await readFile(seedPath, 'utf8');
-  const parsed: unknown = JSON.parse(raw);
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !('influencers' in parsed) ||
-    !Array.isArray((parsed as { influencers: unknown }).influencers)
-  ) {
-    throw new Error(
-      'seed/dev-influencers.json must be { "influencers": [...] }'
-    );
-  }
-  const rows = (parsed as { influencers: unknown[] }).influencers;
-
-  let inserted = 0;
-  let skipped = 0;
-  for (const row of rows) {
-    const validated = DevInfluencerInsertSchema.safeParse(row);
-    if (!validated.success) {
-      console.warn(
-        `  Skipping invalid influencer entry: ${validated.error.issues
-          .map((i) => `${i.path.join('.')}: ${i.message}`)
-          .join('; ')}`
-      );
-      skipped++;
-      continue;
-    }
-    try {
-      await db.insert(schema.devInfluencers).values({
-        handle: validated.data.handle,
-        platforms: validated.data.platforms,
-        categories: validated.data.categories,
-        bio: validated.data.bio ?? null,
-        recentTopics: validated.data.recentTopics ?? null,
-        audienceSize: validated.data.audienceSize,
-      });
-      inserted++;
-    } catch (err) {
-      // Duplicate handle is the most likely cause — log and continue.
-      console.warn(
-        `  Failed to insert influencer "${validated.data.handle}":`,
-        err instanceof Error ? err.message : String(err)
-      );
-      skipped++;
-    }
-  }
-  console.log(
-    `  Inserted ${String(inserted)} dev influencers (${String(skipped)} skipped)`
-  );
-  return inserted;
-}
-
 async function seed() {
   console.log('🌱 Seeding LaunchKit database...\n');
 
@@ -431,15 +366,7 @@ async function seed() {
   await db.delete(schema.jobs);
   await db.delete(schema.webhookEvents);
   await db.delete(schema.strategyInsights);
-  await db.delete(schema.devInfluencers);
   await db.delete(schema.projects);
-
-  // Insert dev influencers (Phase 5). Loaded from the curated JSON
-  // file at `seed/dev-influencers.json`. The enrichment cron will
-  // refresh bios + audience metrics + topic embeddings on its first
-  // run after deploy.
-  console.log('  Loading curated dev influencers from seed/dev-influencers.json...');
-  await loadAndInsertDevInfluencers();
 
   // Insert projects
   console.log(`  Inserting ${SEED_PROJECTS.length} projects...`);
@@ -543,7 +470,7 @@ async function seed() {
           // with a hex-format placeholder cache key so the streaming
           // route 404s on the missing file rather than 422-ing on
           // the schema mismatch. No bundled audio file.
-          content = `Alex: Welcome back to the launch loop. Today we're digging into ${seedProject.repoName}.\nSam: I've been waiting for this one. The pitch is 'AI go-to-market for developers shipping on Render', right?\nAlex: That's the headline. The reality is more interesting — it reads your repo, picks the marketing angle, and fans out fourteen artifacts in parallel.\nSam: Fourteen? What's actually in the kit?\nAlex: Blog post, twitter thread, LinkedIn post, Show HN draft, FAQ, OG image, social card, product video with voiceover, voice commercial, this podcast, launch tips, and personalized outreach drafts to dev influencers.\nSam: That's the whole launch checklist in one push.\nAlex: And every user edit feeds a self-learning loop that refines the next push. The cron clusters edits and writes the patterns back to strategy insights.\nSam: So the next launch is sharper than the last one.\nAlex: Without anyone tuning a prompt by hand. That's the whole point.\nSam: Where do people start?\nAlex: Paste a GitHub URL on the dashboard, install the webhook, push a commit. The first launch kit lands in about ninety seconds.`;
+          content = `Alex: Welcome back to the launch loop. Today we're digging into ${seedProject.repoName}.\nSam: I've been waiting for this one. The pitch is 'AI go-to-market for developers shipping on Render', right?\nAlex: That's the headline. The reality is more interesting — it reads your repo, picks the marketing angle, and fans out a dozen artifacts in parallel.\nSam: A dozen? What's actually in the kit?\nAlex: Blog post, twitter thread, LinkedIn post, Show HN draft, FAQ, OG image, social card, product video with voiceover, voice commercial, this podcast, and launch tips.\nSam: That's the whole launch checklist in one push.\nAlex: And every user edit feeds a self-learning loop that refines the next push. The cron clusters edits and writes the patterns back to strategy insights.\nSam: So the next launch is sharper than the last one.\nAlex: Without anyone tuning a prompt by hand. That's the whole point.\nSam: Where do people start?\nAlex: Paste a GitHub URL on the dashboard, install the webhook, push a commit. The first launch kit lands in about ninety seconds.`;
           metadata = {
             ...metadata,
             audioCacheKey: '0000000000000001',

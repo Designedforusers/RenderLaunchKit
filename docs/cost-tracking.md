@@ -14,7 +14,7 @@ A failure inside the cost-tracking pipeline — a DB transaction error in `persi
 
 This is enforced at four layers:
 
-1. **`recordCost` is a no-op outside a tracker scope** (`packages/asset-generators/src/cost-tracker.ts`). The worker's four non-asset-gen agents (`launch-strategy-agent`, `outreach-draft-agent`, `commit-marketability-agent`, `launch-kit-review-agent`) call the same Anthropic client as the asset-generation pipeline; their calls fall through to a `getStore() === undefined` branch and exit silently. No tracker, no record, no error.
+1. **`recordCost` is a no-op outside a tracker scope** (`packages/asset-generators/src/cost-tracker.ts`). The worker's three non-asset-gen agents (`launch-strategy-agent`, `commit-marketability-agent`, `launch-kit-review-agent`) call the same Anthropic client as the asset-generation pipeline; their calls fall through to a `getStore() === undefined` branch and exit silently. No tracker, no record, no error.
 
 2. **Pricing rate-table misses warn and return zero** (`packages/shared/src/pricing.ts`). An unknown model id in any compute helper logs a `[pricing] Unknown ... — cost will be 0` warning and returns `0`. The miss is the load-bearing signal that the rate table is stale; the dashboard chip undercounts by the missing row but the asset still generates.
 
@@ -78,7 +78,7 @@ I picked Option B. Three reasons:
 
 1. **Diff blast radius.** Option A would have rippled into ~20 files (the `LLMClient` interface, every agent factory, every test stub, every client method). Option B lands the diff in exactly the two places that matter — the dispatch-site wrap and the `recordCost` call at each upstream-call boundary.
 
-2. **Backward compatibility for non-asset-gen callers.** The worker's `launch-strategy-agent`, `outreach-draft-agent`, `commit-marketability-agent`, and `launch-kit-review-agent` all import the same `anthropic-claude-client.ts` as the asset-generation pipeline. Threading a `tracker` parameter would have forced those four agents to pass `null` (or a dummy tracker) for every call. With ALS, the absence of a tracker is the signal — `recordCost` is a no-op, no signature changes, no test updates.
+2. **Backward compatibility for non-asset-gen callers.** The worker's `launch-strategy-agent`, `commit-marketability-agent`, and `launch-kit-review-agent` all import the same `anthropic-claude-client.ts` as the asset-generation pipeline. Threading a `tracker` parameter would have forced those agents to pass `null` (or a dummy tracker) for every call. With ALS, the absence of a tracker is the signal — `recordCost` is a no-op, no signature changes, no test updates.
 
 3. **Test ergonomics.** ALS is scope-aware — `store.run(tracker, fn)` scopes the tracker to the awaited async chain of `fn`. Two concurrent dispatches see two independent trackers even though they share the module-scoped store. A test can call `runWithCostTracker(testTracker, async () => {...})` and inspect `testTracker.getEvents()` after the promise resolves, with no global state leakage between tests.
 

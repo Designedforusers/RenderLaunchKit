@@ -10,12 +10,12 @@ import {
 /**
  * GitHub trending signals via the public REST search endpoint.
  *
- * The tool name "influencers" is aspirational — in Phase 5 the
- * influencer-discovery agent will enrich these hits with follower
- * counts and bios. In Phase 3 we only need the weak signal of
- * "which repositories are trending under this GitHub topic right
- * now?" — the highest-star new repos under a topic are an
- * excellent proxy for where mindshare is moving in the category.
+ * The tool name "influencers" is a vestige of an earlier discovery
+ * subsystem that was removed before Phase 7 — today this tool feeds
+ * the trending-signals agent only. We need the weak signal of "which
+ * repositories are trending under this GitHub topic right now?" —
+ * the highest-star new repos under a topic are an excellent proxy
+ * for where mindshare is moving in the category.
  *
  * We call `GET /search/repositories?q=topic:<topic>+created:>N` so
  * the search scope is "new repos in this topic" rather than "all
@@ -23,9 +23,8 @@ import {
  * top `limit` results are the highest-stars repos created in the
  * last `lookbackDays` window.
  *
- * The repo owner's handle becomes the `SignalItem.author` so the
- * Phase 5 influencer discovery agent can pick this signal back up
- * and enrich the user record.
+ * The repo owner's handle becomes the `SignalItem.author` and feeds
+ * the clustering pass on the trending agent.
  */
 
 const GITHUB_SEARCH_ENDPOINT = 'https://api.github.com/search/repositories';

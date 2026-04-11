@@ -201,8 +201,8 @@ const MCP_SERVER_NAME = 'launchkit';
  * `Parameters<typeof runAgent>[0]['tools']` shape the SDK accepts.
  *
  * Every agent in the worker (`launch-research-agent.ts`,
- * `trending-signals-agent.ts`, `influencer-discovery-agent.ts`, …)
- * declares its tool surface via `tool('name', 'desc', ZodInputShape, handler)`
+ * `trending-signals-agent.ts`, …) declares its tool surface via
+ * `tool('name', 'desc', ZodInputShape, handler)`
  * calls. Each call returns an `SdkMcpToolDefinition` parameterised by
  * the specific Zod input shape, so the resulting array's element type
  * is a union of those parameterisations. The Agent SDK accepts the

@@ -14,7 +14,6 @@ import { buildProjectLaunchStrategy } from './processors/build-project-launch-st
 import { reviewGeneratedProjectAssets } from './processors/review-generated-assets.js';
 import { processCommitMarketingRun } from './processors/process-commit-marketing-run.js';
 import { processIngestTrendingSignals } from './processors/ingest-trending-signals.js';
-import { processEnrichDevInfluencers } from './processors/enrich-dev-influencers.js';
 import { processEmbedFeedbackEvent } from './processors/embed-feedback-event.js';
 // Note: `processPikaInvite` is NOT imported here. The invite
 // path spawns a Python subprocess for ~90 s per invocation and
@@ -134,24 +133,22 @@ const analysisWorker = new Worker(
 );
 
 // ── Trending Worker ──
-// Handles: ingest-trending-signals AND enrich-dev-influencers
-// (both scheduled by the cron service).
+// Handles: ingest-trending-signals (scheduled by the cron service) and
+// embed-feedback-event (enqueued from the web service after a
+// user-edit).
 //
-// Jobs on this queue are fire-and-forget from the cron's perspective.
-// Both job types share the queue because they're semantically the
-// same shape: scheduled background data refreshes that run independent
-// of user requests, with their own per-row error isolation. Each
-// processor validates its own job payload at the boundary.
+// Jobs on this queue are fire-and-forget from the producer's
+// perspective. Both job types share the queue because they're
+// semantically the same shape: scheduled background data refreshes
+// that run independent of user requests, with their own per-row error
+// isolation. Each processor validates its own job payload at the
+// boundary.
 
 const trendingWorker = new Worker(
   QUEUE_NAMES.TRENDING,
   async (job) => {
     if (job.name === JOB_NAMES.INGEST_TRENDING_SIGNALS) {
       await processIngestTrendingSignals(job);
-      return;
-    }
-    if (job.name === JOB_NAMES.ENRICH_DEV_INFLUENCERS) {
-      await processEnrichDevInfluencers(job);
       return;
     }
     if (job.name === JOB_NAMES.EMBED_FEEDBACK_EVENT) {
