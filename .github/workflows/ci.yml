@@ -167,19 +167,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      minio:
-        image: minio/minio:RELEASE.2025-01-20T14-49-07Z
-        env:
-          MINIO_ROOT_USER: launchkit
-          MINIO_ROOT_PASSWORD: launchkit-dev-password
-        ports:
-          - 9000:9000
-          - 9001:9001
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+      # MinIO is intentionally NOT declared as a service container.
+      # The `minio/minio` image has an ENTRYPOINT but no CMD: running
+      # it with no subcommand prints usage and exits. GitHub Actions
+      # service containers don't support a `command:` field, so there
+      # is no way to pass `server /data` through the `services:` block
+      # — the container dies at startup every time. Instead we start
+      # MinIO manually in a `Start MinIO` step below, mirroring the
+      # `command: server /data --console-address :9001` line in
+      # `docker-compose.yml` so local and CI are identical.
 
     steps:
       - name: Checkout
@@ -204,6 +200,40 @@ jobs:
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+
+      - name: Start MinIO
+        # MinIO's image has an ENTRYPOINT but no CMD, so the service
+        # block in `services:` above cannot start it — GitHub Actions
+        # service containers have no `command:` field. Start it by
+        # hand here, matching the `command: server /data
+        # --console-address :9001` line in `docker-compose.yml` so the
+        # local and CI setups are identical. Host-network port
+        # mapping means the dev stack still reaches MinIO via
+        # `localhost:9000` just like it would against a service
+        # container.
+        run: |
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -p 9001:9001 \
+            -e MINIO_ROOT_USER=launchkit \
+            -e MINIO_ROOT_PASSWORD=launchkit-dev-password \
+            minio/minio:RELEASE.2025-01-20T14-49-07Z \
+            server /data --console-address ":9001"
+          # Wait up to 60 s for MinIO to report healthy before the
+          # dev stack boots. Without this wait, the object-storage
+          # client's first `HeadBucket`/`CreateBucket` call would
+          # race the container startup.
+          for attempt in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              echo "MinIO is ready after ${attempt} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MinIO failed to report healthy after 60 s — dumping logs:"
+          docker logs minio
+          exit 1
 
       - name: Start dev stack (background)
         # The `&` suffix backgrounds the process; `wait-on`
