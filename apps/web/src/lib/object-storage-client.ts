@@ -2,7 +2,8 @@ import {
   createObjectStorageClient,
   type ObjectStorageClient,
 } from '@launchkit/asset-generators';
-import { composeMinioEndpoint, env } from '../env.js';
+import { composeMinioEndpoint } from '@launchkit/shared';
+import { env } from '../env.js';
 
 /**
  * Module-level lazy singleton MinIO client for the web service.
