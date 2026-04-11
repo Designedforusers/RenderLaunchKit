@@ -3,6 +3,7 @@ import type {
   RepoAnalysis,
   ResearchResult,
   StrategyBrief,
+  StrategyInsight,
 } from '@launchkit/shared';
 import type { LLMClient } from '../types.js';
 import type { FalMediaClient, FalImageModel } from '../clients/fal.js';
@@ -14,6 +15,20 @@ export interface ArtDirectorInput {
   assetType: 'og_image' | 'social_card';
   generationInstructions: string;
   imageModel?: FalImageModel;
+  /**
+   * Phase 7 Layer 3 edit patterns — one entry per cluster of
+   * semantically-similar user edits the cron has aggregated for
+   * this asset's project category. The art director filters the
+   * list to entries scoped to the current `assetType` (the cron
+   * encodes asset_type in the insight body as `(<asset_type>, ...)`)
+   * and renders them as a "Common Edits Reviewers Made" prompt
+   * block so Claude pre-empts the patterns when drafting the
+   * image generation prompt. Optional and defaults to an empty
+   * list — the dispatch site loads them via
+   * `getEditPatternsForCategory` and passes them through, but a
+   * unit test or a future caller is free to omit them.
+   */
+  editPatterns?: StrategyInsight[];
 }
 
 export interface MarketingImageResult {
@@ -59,6 +74,24 @@ export function makeGenerateMarketingImageAsset(
   return async function generateMarketingImageAsset(
     input: ArtDirectorInput
   ): Promise<MarketingImageResult> {
+    // Phase 7 Layer 3 edit patterns. The cron writes the asset_type
+    // into the insight text as `(<asset_type>, ...)`, so we filter to
+    // entries whose text mentions THIS asset type before rendering —
+    // an art director producing a `social_card` should not see edit
+    // patterns scoped to `og_image` even though both share the
+    // category. The block teaches Claude to apply the patterns
+    // proactively, not just acknowledge them.
+    const relevantEditPatterns =
+      input.editPatterns?.filter((p) =>
+        p.insight.includes(`(${input.assetType},`)
+      ) ?? [];
+    const editPatternsBlock =
+      relevantEditPatterns.length > 0
+        ? `\n\n**Common Edits Reviewers Made to Past ${input.assetType} Visuals:**\nThese are real edits human reviewers applied to past ${input.assetType} prompts in this category. Pre-empt them — design the image the way reviewers want it, not the way the previous generation drafted it.\n${relevantEditPatterns
+            .map((p) => `- ${p.insight}`)
+            .join('\n')}`
+        : '';
+
     const userPrompt = `Create an image prompt for a ${input.assetType === 'og_image' ? 'Open Graph image (1200x630)' : 'social media card'} for:
 
 **Product:** ${input.repoAnalysis.description || input.research.targetAudience}
@@ -67,7 +100,7 @@ export function makeGenerateMarketingImageAsset(
 **Positioning:** ${input.strategy.positioning}
 **Tone:** ${input.strategy.tone}
 
-**Asset Generation Instructions:** ${input.generationInstructions}
+**Asset Generation Instructions:** ${input.generationInstructions}${editPatternsBlock}
 
 Design an image that a developer would stop scrolling for.`;
 

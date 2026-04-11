@@ -133,11 +133,24 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
   // `edit_pattern` rows so the writer's "## Insights from Similar
   // Projects" block stays focused, while
   // `getEditPatternsForCategory` returns ONLY the cluster rows the
-  // weekly cron writes from `asset_feedback_events`. The writer
-  // agent renders the two in separate prompt blocks via
-  // `WriterInput.editPatterns` (filtered to entries that mention
-  // the current asset type before rendering — see `buildContext`
-  // in `packages/asset-generators/src/agents/written.ts`).
+  // weekly cron writes from `asset_feedback_events`. Every agent
+  // that takes a free-form generation prompt now reads both:
+  //
+  //   - The writer agent (`written.ts`) renders the two in separate
+  //     prompt blocks via `WriterInput.editPatterns`.
+  //   - The voice / podcast agents thread `editPatterns` through to
+  //     the same writer.
+  //   - The art director (`marketing-visual.ts`) and the video
+  //     director (`product-video.ts`) render edit patterns in their
+  //     own user prompts so the image / storyboard prompts pre-empt
+  //     repeated reviewer fixes too.
+  //
+  // Each consumer filters the list to entries scoped to its current
+  // asset type — the cron writes the asset_type into the insight
+  // body as `(<asset_type>, ...)` and every consumer matches on
+  // `(${assetType},`. A writer producing a `twitter_thread` never
+  // sees `blog_post` patterns; an art director producing a
+  // `social_card` never sees `og_image` patterns.
   //
   // Both calls swallow DB errors and return `[]` on failure, so a
   // missing strategy_insights row never blocks an asset generation.
@@ -252,6 +265,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           assetType,
           generationInstructions,
           imageModel,
+          editPatterns,
         });
         mediaUrl = result.url;
         metadata = {
@@ -278,6 +292,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           generationInstructions,
           videoModel,
           imageModel,
+          editPatterns,
         });
         mediaUrl = result.videoUrl;
         metadata = {
@@ -298,6 +313,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           strategy,
           generationInstructions,
           imageModel,
+          editPatterns,
         });
         content = JSON.stringify(result.storyboard, null, 2);
         metadata = {

@@ -9,6 +9,7 @@ import type {
   ResearchResult,
   StoryboardResult,
   StrategyBrief,
+  StrategyInsight,
 } from '@launchkit/shared';
 import { accentColorForTone } from '../helpers/strategy-style.js';
 import type { LLMClient } from '../types.js';
@@ -22,7 +23,30 @@ export interface VideoDirectorInput {
   generationInstructions: string;
   videoModel?: FalVideoModel;
   imageModel?: FalImageModel;
+  /**
+   * Phase 7 Layer 3 edit patterns — one entry per cluster of
+   * semantically-similar user edits the cron has aggregated for
+   * this asset's project category. The video director filters the
+   * list to entries scoped to the current asset type (the cron
+   * encodes asset_type in the insight body as `(<asset_type>, ...)`,
+   * so `(product_video,` for the product-video agent and
+   * `(video_storyboard,` for the storyboard agent) and renders them
+   * as a "Common Edits Reviewers Made" prompt block so Claude
+   * pre-empts the patterns when drafting the storyboard. Optional
+   * and defaults to an empty list.
+   */
+  editPatterns?: StrategyInsight[];
 }
+
+/**
+ * Internal type added to `planVideoPackage` so the storyboard and
+ * product-video factories can disambiguate which `(<asset_type>,`
+ * the edit-pattern filter should match. Both factories share the
+ * same plan helper, but the cron writes per-asset-type insight
+ * rows — the storyboard factory passes `'video_storyboard'` and
+ * the product-video factory passes `'product_video'`.
+ */
+type VideoPlanAssetType = 'product_video' | 'video_storyboard';
 
 export interface VideoStoryboardResult {
   storyboard: StoryboardResult;
@@ -118,11 +142,31 @@ function buildRemotionProps(input: {
 }
 
 function makePlanVideoPackage(deps: ProductVideoAgentDeps) {
-  return async function planVideoPackage(input: VideoDirectorInput): Promise<{
+  return async function planVideoPackage(
+    input: VideoDirectorInput,
+    assetType: VideoPlanAssetType
+  ): Promise<{
     storyboard: StoryboardResult;
     thumbnailUrl: string;
     remotionProps: LaunchKitVideoProps;
   }> {
+    // Phase 7 Layer 3 edit patterns. Filter to the entries scoped to
+    // the current asset type — the cron encodes asset_type in the
+    // insight body as `(<asset_type>, ...)`. The product-video and
+    // storyboard factories share this helper but the cron writes
+    // separate insight rows for each, so we filter on the caller's
+    // explicit asset type rather than guessing from the input shape.
+    const relevantEditPatterns =
+      input.editPatterns?.filter((p) =>
+        p.insight.includes(`(${assetType},`)
+      ) ?? [];
+    const editPatternsBlock =
+      relevantEditPatterns.length > 0
+        ? `\n\n**Common Edits Reviewers Made to Past ${assetType} Storyboards:**\nThese are real edits human reviewers applied to past ${assetType} storyboards in this category. Pre-empt them — design the shots and visual prompts the way reviewers want them, not the way the previous generation drafted them.\n${relevantEditPatterns
+            .map((p) => `- ${p.insight}`)
+            .join('\n')}`
+        : '';
+
     const userPrompt = `Create a short developer-product launch video plan for:
 
 **Product:** ${input.repoAnalysis.description || input.research.targetAudience}
@@ -131,7 +175,7 @@ function makePlanVideoPackage(deps: ProductVideoAgentDeps) {
 **Positioning:** ${input.strategy.positioning}
 **Tone:** ${input.strategy.tone}
 
-**Asset Generation Instructions:** ${input.generationInstructions}
+**Asset Generation Instructions:** ${input.generationInstructions}${editPatternsBlock}
 
 Return a concise storyboard for a polished launch video and write prompts for strong still visuals that can anchor each shot.`;
 
@@ -171,7 +215,7 @@ export function makeGenerateVideoStoryboardAsset(deps: ProductVideoAgentDeps) {
   return async function generateVideoStoryboardAsset(
     input: VideoDirectorInput
   ): Promise<VideoStoryboardResult> {
-    const plan = await planVideoPackage(input);
+    const plan = await planVideoPackage(input, 'video_storyboard');
 
     return {
       storyboard: plan.storyboard,
@@ -197,7 +241,7 @@ export function makeGenerateProductVideoAsset(deps: ProductVideoAgentDeps) {
   return async function generateProductVideoAsset(
     input: VideoDirectorInput
   ): Promise<ProductVideoResult> {
-    const plan = await planVideoPackage(input);
+    const plan = await planVideoPackage(input, 'product_video');
     let videoUrl = '';
     let renderer: 'fal' | 'remotion' = 'remotion';
 
