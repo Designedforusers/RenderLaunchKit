@@ -4,22 +4,25 @@ services:
     runtime: node
     plan: starter
     rootDir: .
-    # Chrome Headless Shell (used by Remotion for video rendering)
-    # needs shared libraries that are not present on the base Node
-    # image. Install them at build time so the first render request
-    # does not fail at runtime. `npx remotion browser ensure`
-    # pre-downloads the Chrome binary into node_modules so the first
-    # render avoids a cold-start download penalty.
-    buildCommand: >-
-      apt-get update &&
-      apt-get install -y --no-install-recommends
-        libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2
-        libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1
-        libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2
-        libcups2 &&
-      npm ci &&
-      npx remotion browser ensure &&
-      npm run build
+    # Plain npm build — no more Chrome headless-shell install. The
+    # web service no longer renders Remotion videos locally: the
+    # `/api/assets/:id/video.mp4` route dispatches to the
+    # `renderRemotionVideo` task on the Render Workflows service
+    # (`apps/workflows/src/tasks/render-remotion-video.ts`) and
+    # 302-redirects clients to the MinIO public URL the task
+    # persists on the asset row. The workflows service has its
+    # own `buildCommand` that installs Chrome libs and runs
+    # `npx remotion browser ensure`; that buildCommand is set on
+    # the manually-created workflows service in the Render
+    # dashboard because Render Workflows is not yet supported by
+    # the Blueprint.
+    #
+    # The `packages/video/**` path stays in the buildFilter
+    # because the dashboard bundle imports
+    # `LaunchKitVideoPropsSchema` from `@launchkit/video` (via the
+    # package's browser-safe top-level export) for client-side
+    # prop validation.
+    buildCommand: npm ci && npm run build
     preDeployCommand: npm run db:migrate
     startCommand: npm run start:web
     buildFilter:
