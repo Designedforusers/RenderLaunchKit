@@ -12,7 +12,7 @@ import { searchDevto } from '../tools/search-devto.js';
 import { searchHnAlgolia } from '../tools/search-hn-algolia.js';
 import { searchReddit } from '../tools/search-reddit.js';
 import { searchProductHunt } from '../tools/search-producthunt.js';
-import { searchGitHubInfluencers } from '../tools/search-github-influencers.js';
+import { searchGitHubTrendingRepos } from '../tools/search-github-trending-repos.js';
 import type { SignalItem } from '../tools/trending-signal-types.js';
 
 /**
@@ -296,7 +296,7 @@ export async function collectRawSignals(
     queries.producthuntTopic !== null
       ? searchProductHunt({ topic: queries.producthuntTopic })
       : Promise.resolve<SignalItem[]>([]),
-    searchGitHubInfluencers({ topic: queries.githubTopic }),
+    searchGitHubTrendingRepos({ topic: queries.githubTopic }),
   ]);
 
   const out: SignalItem[] = [];

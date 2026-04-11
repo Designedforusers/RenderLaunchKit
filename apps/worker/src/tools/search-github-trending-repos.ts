@@ -8,20 +8,19 @@ import {
 } from './trending-signal-types.js';
 
 /**
- * GitHub trending signals via the public REST search endpoint.
+ * GitHub topic trending-repo search — feeds `trending-signals-agent`.
  *
- * The tool name "influencers" is a vestige of an earlier discovery
- * subsystem that was removed before Phase 7 — today this tool feeds
- * the trending-signals agent only. We need the weak signal of "which
- * repositories are trending under this GitHub topic right now?" —
- * the highest-star new repos under a topic are an excellent proxy
- * for where mindshare is moving in the category.
+ * Returns the highest-star repositories created under a given GitHub
+ * topic in the last `lookbackDays` days. The trending-signals agent
+ * treats the result set as a weak signal for where mindshare is moving
+ * in the category: a topic that is spawning a lot of new, heavily
+ * starred repos right now is a topic that is worth surfacing in the
+ * launch strategy.
  *
- * We call `GET /search/repositories?q=topic:<topic>+created:>N` so
- * the search scope is "new repos in this topic" rather than "all
- * repos in this topic, forever." Sorted by stars descending so the
- * top `limit` results are the highest-stars repos created in the
- * last `lookbackDays` window.
+ * Uses `GET /search/repositories?q=topic:<topic>+created:>N` so the
+ * search scope is "new repos in this topic" rather than "the evergreen
+ * top 10 of this topic, forever." Sorted by stars descending, capped
+ * at `limit` results.
  *
  * The repo owner's handle becomes the `SignalItem.author` and feeds
  * the clustering pass on the trending agent.
@@ -58,7 +57,7 @@ const GitHubSearchResponseSchema = z.object({
   items: z.array(GitHubRepoHitSchema),
 });
 
-export interface GitHubInfluencerSearchInput {
+export interface GitHubTrendingReposSearchInput {
   /**
    * GitHub topic slug (e.g. `react`, `rust`, `typescript`). Matches
    * the `topic:` qualifier on GitHub search.
@@ -74,8 +73,8 @@ export interface GitHubInfluencerSearchInput {
   lookbackDays?: number;
 }
 
-export async function searchGitHubInfluencers(
-  input: GitHubInfluencerSearchInput
+export async function searchGitHubTrendingRepos(
+  input: GitHubTrendingReposSearchInput
 ): Promise<SignalItem[]> {
   const topic = input.topic.trim();
   if (topic.length === 0) return [];
@@ -125,7 +124,7 @@ export async function searchGitHubInfluencers(
   } catch (err) {
     clearTimeout(timer);
     console.warn(
-      '[searchGitHubInfluencers] network error:',
+      '[searchGitHubTrendingRepos] network error:',
       err instanceof Error ? err.message : String(err)
     );
     return [];
@@ -134,7 +133,7 @@ export async function searchGitHubInfluencers(
 
   if (!response.ok) {
     console.warn(
-      `[searchGitHubInfluencers] ${String(response.status)} ${response.statusText}`
+      `[searchGitHubTrendingRepos] ${String(response.status)} ${response.statusText}`
     );
     return [];
   }
@@ -143,7 +142,7 @@ export async function searchGitHubInfluencers(
   const parsed = GitHubSearchResponseSchema.safeParse(rawJson);
   if (!parsed.success) {
     console.warn(
-      '[searchGitHubInfluencers] response did not match expected shape'
+      '[searchGitHubTrendingRepos] response did not match expected shape'
     );
     return [];
   }
