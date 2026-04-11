@@ -47,12 +47,6 @@ export const JOB_NAMES = {
   CREATIVE_REVIEW: 'creative-review',
   FILTER_WEBHOOK: 'filter-webhook',
   INGEST_TRENDING_SIGNALS: 'ingest-trending-signals',
-  // Phase 5: background batch enrichment of dev_influencer rows.
-  // Cron enqueues one job per 6h cadence; the worker reads N stale
-  // rows, refreshes their bios + audience metrics + topic embeddings,
-  // and writes them back. Same enqueue/execute split as the trending
-  // signals ingest above.
-  ENRICH_DEV_INFLUENCERS: 'enrich-dev-influencers',
   // Phase 7: Background Voyage embedding of asset feedback edit text.
   // The user-facing route writes the asset_feedback_events row
   // immediately and enqueues this job; the worker picks it up, embeds
@@ -159,28 +153,19 @@ export const JOB_TIMEOUTS = {
   // Render Workflows task definitions (`apps/workflows/src/tasks/`)
   // as `timeoutSeconds` options, one per compute-profile bucket.
   [JOB_NAMES.CREATIVE_REVIEW]: 60_000,
-  // Phase 6 commit-marketing-run pipeline. The legacy webhook
-  // processor finished in 5-10s; the new processor adds: Voyage diff
-  // embed (~500ms), trend matcher pgvector query (~50ms), commit-
-  // marketability `generateJSON` call (~3-5s), influencer-discovery
-  // agent run with N enrichment tool calls (~10-20s), and parallel
-  // outreach-draft `generateJSON` calls (~3-5s each). Realistic
-  // worst case ~30-45s. Bumped from the legacy 30s to 90s to give
-  // ~2x headroom over the worst case without hiding real hangs.
-  [JOB_NAMES.FILTER_WEBHOOK]: 90_000,
+  // Phase 6 commit-marketing-run pipeline. The webhook processor
+  // re-runs the trend matcher (Voyage diff embed ~500ms + pgvector
+  // query ~50ms) and the commit-marketability `generateJSON` call
+  // (~3-5s) before flipping affected assets back to `queued` and
+  // firing the workflow trigger. Realistic worst case ~10s; the 60s
+  // ceiling gives ~6x headroom over the worst case without hiding
+  // real hangs.
+  [JOB_NAMES.FILTER_WEBHOOK]: 60_000,
   // Trending-signal ingest runs the agentic fan-out (Grok + Exa +
   // 5 free APIs + clustering) for a single category. ~30s of tool
   // calls + ~15s of clustering in steady state; the 120s ceiling
   // leaves headroom for Claude retries on a transient upstream.
   [JOB_NAMES.INGEST_TRENDING_SIGNALS]: 120_000,
-  // Phase 5 dev_influencers enrichment runs N keyless API lookups
-  // (GitHub + dev.to + HN, ~200ms each) for the 50 stalest rows,
-  // plus an optional weekly X API enrichment pass for any row whose
-  // last_x_enriched_at is stale. Worst case at 50 × 4 platforms ×
-  // 200ms = ~40s, plus the Voyage embed loop (~50 × 500ms = 25s),
-  // plus per-row update round trips. The 180s ceiling covers it
-  // with headroom.
-  [JOB_NAMES.ENRICH_DEV_INFLUENCERS]: 180_000,
   // Phase 7 feedback event embedding. Single Voyage call (~500ms) +
   // one raw SQL UPDATE (~10ms). 30s ceiling has plenty of headroom
   // for transient Voyage latency without hiding real hangs.

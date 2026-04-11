@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import {
   GitHubWebhookPayloadSchema,
@@ -7,17 +7,9 @@ import {
   StrategyBriefSchema,
   type AssetType,
   type FilterWebhookJobData,
-  type InfluencerCandidate,
-  type InfluencerRecommendedSnapshot,
-  type OutreachDraftInsert,
   type TrendUsedSnapshot,
 } from '@launchkit/shared';
 import { evaluateCommitMarketability } from '../agents/commit-marketability-agent.js';
-import { runInfluencerDiscoveryAgent } from '../agents/influencer-discovery-agent.js';
-import {
-  generateOutreachDrafts,
-  hasContactableChannel,
-} from '../agents/outreach-draft-agent.js';
 import { database as db } from '../lib/database.js';
 import { checkCommitDuplication } from '../lib/duplication-guard.js';
 import { findRelevantTrendsForCommit } from '../lib/trend-matcher.js';
@@ -32,9 +24,8 @@ import { env } from '../env.js';
 /**
  * Phase 6 — Commit marketing run pipeline.
  *
- * REPLACES the legacy `process-webhook-regeneration.ts`. This processor
- * is the orchestrator that wires every Phase 2-5 primitive into a live
- * commit-driven pipeline. When a GitHub webhook fires:
+ * Replaces the legacy `process-webhook-regeneration.ts`. When a GitHub
+ * webhook fires for a project that has already shipped a launch kit:
  *
  *   1. Voyage-embed the commit context (message + changed file paths
  *      from the GitHub payload) and persist to
@@ -44,29 +35,17 @@ import { env } from '../env.js';
  *      cosine similarity ≥ 0.85 — the webhook event row stays for
  *      audit but no commit_marketing_runs row is created.
  *   3. Find the top 5 relevant trends for the project's category via
- *      the new `trend-matcher.ts` helper.
- *   4. Call the renamed `commit-marketability-agent` with the trends
- *      in scope. The agent decides whether the commit is worth
- *      regenerating content for.
- *   5. Create the `commit_marketing_runs` row with status='pending'.
- *      This is the parent FK Phase 5 was deliberately blocked on.
- *   6. Run Phase 5's influencer-discovery agent for the project's
- *      category and the commit's topics.
- *   7. Filter influencers via `hasContactableChannel`. Batch-SELECT
- *      `dev_influencers` for all matching handles in ONE query, build
- *      a `Map<handle, id>`, and INSERT new rows on the fly for
- *      handles the discovery agent surfaced that aren't yet persisted.
- *   8. Call Phase 5's `generateOutreachDrafts` per (top influencer × top
- *      asset) pair. The agent returns `PendingOutreachDraft[]`. Map each
- *      pending draft's `influencerHandle` through the Map to the real
- *      `influencerId`, build full `OutreachDraftInsert[]`, batch INSERT
- *      with the now-real `commitMarketingRunId`.
- *   9. Re-version + queue per-asset regeneration (preserves the legacy
+ *      the `trend-matcher.ts` helper.
+ *   4. Call the `commit-marketability-agent` with the trends in scope.
+ *      The agent decides whether the commit is worth regenerating
+ *      content for.
+ *   5. CREATE the `commit_marketing_runs` row with status='pending'.
+ *   6. Re-version + queue per-asset regeneration (preserves the legacy
  *      behaviour exactly: same idempotency key shape, same generation
  *      job payload).
- *  10. Update the `commit_marketing_runs` row with status='generating',
- *      the trends/influencers snapshots, and the asset id list.
- *  11. Update project status, webhook event flags, post progress.
+ *   7. Update the `commit_marketing_runs` row with status='generating',
+ *      the trends snapshot, and the asset id list.
+ *   8. Update project status, webhook event flags, post progress.
  *
  * Pure orchestration — every helper is independently testable; this
  * file is procedural by design.
@@ -75,7 +54,6 @@ import { env } from '../env.js';
 // ── Constants ─────────────────────────────────────────────────────
 
 const TREND_MATCHER_LIMIT = 5;
-const INFLUENCER_DISCOVERY_LIMIT = 5;
 const DIFF_PATH_CAP = 30;
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -164,78 +142,6 @@ async function computeAndStoreDiffEmbedding(
   `);
 
   return embedding;
-}
-
-/**
- * Build the commit-touched topics array the influencer discovery agent
- * uses for its candidate fit check. Combines the commit message words
- * with the matched trend topics so the agent has both signals.
- */
-function buildCommitTopics(
-  commitMessage: string,
-  trends: ReadonlyArray<{ topic: string }>
-): string[] {
-  const messageTopics = commitMessage
-    .split(/\s+/)
-    .map((w) => w.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase())
-    .filter((w) => w.length >= 4);
-  const trendTopics = trends.map((t) => t.topic.toLowerCase());
-  const combined = [...new Set([...trendTopics, ...messageTopics])];
-  return combined.slice(0, 12);
-}
-
-/**
- * Look up the persisted `dev_influencers` rows for a batch of candidate
- * handles. For handles that aren't in the table yet, INSERT a new row
- * on the fly (with the candidate's data, leaving `topic_embedding` null
- * for the next cron pass to compute) and return the new row's id.
- *
- * Returns a `Map<handle, id>` covering every input candidate.
- */
-async function resolveInfluencerHandlesToIds(
-  candidates: ReadonlyArray<InfluencerCandidate>
-): Promise<Map<string, string>> {
-  const handles = candidates.map((c) => c.handle);
-  if (handles.length === 0) {
-    return new Map();
-  }
-
-  const existingRows = await db.query.devInfluencers.findMany({
-    where: inArray(schema.devInfluencers.handle, handles),
-    columns: { id: true, handle: true },
-  });
-
-  const handleToId = new Map<string, string>();
-  for (const row of existingRows) {
-    handleToId.set(row.handle, row.id);
-  }
-
-  // Insert any candidates whose handle isn't already persisted.
-  // Single batch insert keeps the round-trip count down.
-  const newRows = candidates.filter(
-    (candidate) => !handleToId.has(candidate.handle)
-  );
-  if (newRows.length > 0) {
-    const inserted = await db
-      .insert(schema.devInfluencers)
-      .values(
-        newRows.map((candidate) => ({
-          handle: candidate.handle,
-          platforms: candidate.platforms,
-          categories: candidate.categories,
-          bio: candidate.bio,
-          recentTopics: candidate.recentTopics,
-          audienceSize: candidate.audienceSize,
-        }))
-      )
-      .returning({ id: schema.devInfluencers.id, handle: schema.devInfluencers.handle });
-
-    for (const row of inserted) {
-      handleToId.set(row.handle, row.id);
-    }
-  }
-
-  return handleToId;
 }
 
 /**
@@ -418,7 +324,6 @@ export async function processCommitMarketingRun(
   }
 
   // Step 8: CREATE the commit_marketing_runs row with status='pending'.
-  // This is the parent FK Phase 5 was deliberately blocked on.
   const trendsUsed: TrendUsedSnapshot[] = matchedTrends.map((t) => ({
     trendSignalId: t.id,
     topic: t.topic,
@@ -455,103 +360,7 @@ export async function processCommitMarketingRun(
     );
   }
 
-  // Step 9: Run influencer discovery for the commit. Soft-fails to []
-  // on any internal error so a flaky enrichment tool doesn't sink the
-  // whole pipeline.
-  const commitTopics = buildCommitTopics(commitMessage, matchedTrends);
-  let influencerCandidates: InfluencerCandidate[] = [];
-  try {
-    influencerCandidates = await runInfluencerDiscoveryAgent({
-      category: repoAnalysis.category,
-      topics: commitTopics,
-      limit: INFLUENCER_DISCOVERY_LIMIT,
-      projectId,
-    });
-  } catch (err) {
-    console.warn(
-      '[process-commit-marketing-run] influencer discovery failed —',
-      err instanceof Error ? err.message : String(err)
-    );
-  }
-
-  // Filter to influencers with at least one viable contact channel.
-  const contactableCandidates = influencerCandidates.filter((candidate) =>
-    hasContactableChannel(candidate)
-  );
-
-  // Step 10: Resolve handles to dev_influencers ids (inserting new
-  // rows on the fly for previously-unseen handles).
-  const handleToId =
-    contactableCandidates.length > 0
-      ? await resolveInfluencerHandlesToIds(contactableCandidates)
-      : new Map<string, string>();
-
-  // Build the influencers_recommended snapshot from the resolved
-  // candidates so the dashboard can render the run faithfully later.
-  const influencersRecommended: InfluencerRecommendedSnapshot[] =
-    contactableCandidates.flatMap((candidate) => {
-      const id = handleToId.get(candidate.handle);
-      if (id === undefined) return [];
-      return [
-        {
-          influencerId: id,
-          handle: candidate.handle,
-          audienceSize: candidate.audienceSize,
-          matchScore: candidate.matchScore,
-        },
-      ];
-    });
-
-  // Step 11: Generate outreach drafts. We pair each contactable
-  // influencer with the highest-priority asset of their best matching
-  // type — for the demo path, that's the first asset whose type is
-  // in `decision.assetTypes`. The asset is the "anchor" the outreach
-  // copy points at.
-  const anchorAsset = project.assets.find((a) =>
-    decision.assetTypes.includes(a.type)
-  );
-  const outreachDraftRows: OutreachDraftInsert[] = [];
-  if (anchorAsset !== undefined) {
-    for (const candidate of contactableCandidates) {
-      const influencerId = handleToId.get(candidate.handle);
-      if (influencerId === undefined) continue;
-      try {
-        const pending = await generateOutreachDrafts({
-          influencer: candidate,
-          asset: {
-            id: anchorAsset.id,
-            type: anchorAsset.type,
-            content: anchorAsset.content ?? '',
-            metadata: anchorAsset.metadata,
-          },
-          repoAnalysis,
-          strategy,
-        });
-        for (const draft of pending) {
-          outreachDraftRows.push({
-            commitMarketingRunId: commitRun.id,
-            influencerId,
-            assetId: draft.assetId,
-            channel: draft.channel,
-            draftText: draft.draftText,
-            status: 'drafted',
-          });
-        }
-      } catch (err) {
-        console.warn(
-          `[process-commit-marketing-run] outreach generation failed for ${candidate.handle} —`,
-          err instanceof Error ? err.message : String(err)
-        );
-      }
-    }
-  }
-
-  // Step 12: Batch insert the outreach drafts. Single round trip.
-  if (outreachDraftRows.length > 0) {
-    await db.insert(schema.outreachDrafts).values(outreachDraftRows);
-  }
-
-  // Step 13: Asset regeneration fan-out. Flip every asset the
+  // Step 9: Asset regeneration fan-out. Flip every asset the
   // commit-marketability decision picked back to `status='queued'`,
   // then trigger a workflow run; the parent task picks them up on
   // its next iteration and dispatches via the five child tasks.
@@ -658,13 +467,12 @@ export async function processCommitMarketingRun(
     await triggerWorkflowGeneration(projectId);
   }
 
-  // Step 14: Finalize the commit_marketing_runs row with the snapshots
-  // + asset id list, and update project / webhook flags.
+  // Step 10: Finalize the commit_marketing_runs row with the
+  // asset id list, and update project / webhook flags.
   await db
     .update(schema.commitMarketingRuns)
     .set({
       status: 'generating',
-      influencersRecommended,
       assetIds: assetsToRegenerate.map((a) => a.id),
       updatedAt: new Date(),
     })
@@ -687,6 +495,6 @@ export async function processCommitMarketingRun(
   await projectProgressPublisher.statusUpdate(
     projectId,
     'generating',
-    `Webhook-triggered refresh queued for ${String(assetsToRegenerate.length)} assets, ${String(outreachDraftRows.length)} outreach drafts written.`
+    `Webhook-triggered refresh queued for ${String(assetsToRegenerate.length)} assets.`
   );
 }

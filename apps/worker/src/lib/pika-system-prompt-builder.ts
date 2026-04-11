@@ -341,8 +341,6 @@ function formatAssetSummary(asset: PikaSystemPromptAsset): string | null {
       return 'Podcast script';
     case 'per_commit_teaser':
       return 'Commit teaser video';
-    case 'outreach_draft':
-      return 'Influencer outreach draft';
     case 'world_scene': {
       const worldLabsBlob =
         typeof metadata['worldLabs'] === 'object' &&

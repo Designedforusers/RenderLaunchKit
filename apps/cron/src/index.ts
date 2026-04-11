@@ -2,7 +2,6 @@ import { syncGitHubProjectActivity } from './sync-github-project-activity.js';
 import { aggregateFeedbackInsights } from './aggregate-feedback-insights.js';
 import { cleanupStaleLaunchData } from './cleanup-stale-launch-data.js';
 import { ingestTrendingSignals } from './ingest-trending-signals.js';
-import { enrichDevInfluencers } from './enrich-dev-influencers.js';
 import { env } from './env.js';
 
 async function main() {
@@ -28,17 +27,10 @@ async function main() {
     //    the cron does not wait for completion.
     await ingestTrendingSignals();
 
-    // 3. Enqueue a dev_influencers enrichment batch (Phase 5).
-    //    Same enqueue/execute split as the trending ingest above —
-    //    the cron only fires the job, the worker reads up to 50
-    //    stale rows from `dev_influencers` and refreshes their
-    //    bios + audience metrics + topic embeddings.
-    await enrichDevInfluencers();
-
-    // 4. Aggregate learning insights
+    // 3. Aggregate learning insights
     await aggregateFeedbackInsights();
 
-    // 5. Clean up stale data
+    // 4. Clean up stale data
     await cleanupStaleLaunchData();
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);

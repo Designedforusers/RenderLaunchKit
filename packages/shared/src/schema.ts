@@ -73,8 +73,6 @@ export const assetTypeEnum = pgEnum('asset_type', [
   'voice_commercial',
   // 2-3 minute multi-voice dialogue + ElevenLabs multi-voice render
   'podcast_script',
-  // Per-influencer personalised DM draft (one row per recommended dev)
-  'outreach_draft',
   // 15-second Remotion card video summarising one commit's marketing kit
   'per_commit_teaser',
   // ── World Labs (Marble) 3D scene of the product in a real-world
@@ -94,24 +92,6 @@ export const trendSourceEnum = pgEnum('trend_source', [
   'exa',
   'producthunt',
   'github',
-]);
-
-// ── Channel an outreach draft is targeted for. The user picks the
-//    actual sending surface; LaunchKit only generates the draft.
-export const outreachChannelEnum = pgEnum('outreach_channel', [
-  'twitter_dm',
-  'email',
-  'comment',
-]);
-
-// ── Lifecycle of an outreach draft. `drafted` → `copied` (user
-//    clicked Copy) → `sent` (user marked it sent) → `responded`
-//    (a future iteration that listens for replies).
-export const outreachStatusEnum = pgEnum('outreach_status', [
-  'drafted',
-  'copied',
-  'sent',
-  'responded',
 ]);
 
 // ── Lifecycle of a single commit-triggered marketing run. `pending`
@@ -415,57 +395,12 @@ export const trendSignals = pgTable(
   ]
 );
 
-// ── Dev influencer database ──
-//
-// Curated + auto-enriched list of dev influencers. Seeded from a
-// hand-picked starter set (`seed/dev-influencers.json`) and grown
-// daily by the `enrich-dev-influencers.ts` cron. The
-// `topic_embedding` column powers the influencer matcher
-// ("for this commit's category and topics, find the top-N
-// dev voices whose recent topics overlap").
-export const devInfluencers = pgTable(
-  'dev_influencers',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    handle: varchar('handle', { length: 100 }).notNull(),
-    // Per-platform handles + URLs as a jsonb blob:
-    // { twitter: '@handle', github: 'username', devto: 'username', ... }
-    platforms: jsonb('platforms').notNull(),
-    // Project-category overlap (text[] so a single influencer can
-    // cover multiple categories — most do).
-    categories: text('categories').array().notNull(),
-    bio: text('bio'),
-    // Recent post topics, refreshed by the enrichment cron.
-    recentTopics: jsonb('recent_topics'),
-    audienceSize: integer('audience_size').default(0).notNull(),
-    // Per-platform audience data (Twitter followers, GitHub repos,
-    // dev.to post count, HN karma). Separate from `audienceSize`,
-    // which is the scalar max-across-platforms used by the matcher's
-    // ORDER BY. Typed at the Zod layer as `AudienceBreakdownSchema`.
-    audienceBreakdown: jsonb('audience_breakdown'),
-    topicEmbedding: vector('topic_embedding'),
-    lastEnrichedAt: timestamp('last_enriched_at'),
-    // Timestamp of the last paid X-enrichment run for this influencer.
-    // Separate from `lastEnrichedAt` (which covers the free-API
-    // refresh) because the paid X tool is rate- and cost-limited and
-    // runs on its own cadence.
-    lastXEnrichedAt: timestamp('last_x_enriched_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex('dev_influencers_handle_idx').on(table.handle),
-    index('dev_influencers_audience_size_idx').on(table.audienceSize),
-  ]
-);
-
 // ── Per-commit marketing run ──
 //
 // One row per "user pushed a commit, LaunchKit produced a kit"
 // event. Links the source webhook event, the trends used as
-// context, the influencers recommended, and the asset IDs the
-// fan-out generated. Powers the continuous launch feed dashboard
-// view at `/projects/:id/feed`.
+// context, and the asset IDs the fan-out generated. Powers the
+// continuous launch feed dashboard view at `/projects/:id/feed`.
 export const commitMarketingRuns = pgTable(
   'commit_marketing_runs',
   {
@@ -478,11 +413,10 @@ export const commitMarketingRuns = pgTable(
       .notNull(),
     commitSha: varchar('commit_sha', { length: 40 }).notNull(),
     commitMessage: text('commit_message'),
-    // Snapshot of the trends + influencers + assets at fan-out time.
-    // Stored as jsonb so the dashboard can render the full picture
-    // for a past run without joining four tables.
+    // Snapshot of the trends used at fan-out time. Stored as jsonb so
+    // the dashboard can render the full picture for a past run
+    // without joining a second table.
     trendsUsed: jsonb('trends_used'),
-    influencersRecommended: jsonb('influencers_recommended'),
     // Snapshot of asset IDs at fan-out time. Intentionally a native
     // `UUID[]` column rather than a join table — the dashboard reads
     // a commit run as a single immutable record of "what we generated
@@ -501,40 +435,6 @@ export const commitMarketingRuns = pgTable(
     ),
     index('commit_marketing_runs_status_idx').on(table.status),
     index('commit_marketing_runs_created_at_idx').on(table.createdAt),
-  ]
-);
-
-// ── Outreach drafts ──
-//
-// Personalised DMs / emails / comments produced by the
-// `outreach-draft-agent`. One row per (commit_marketing_run ×
-// influencer × channel). The user copies, marks sent, and
-// (eventually) the system listens for responses.
-export const outreachDrafts = pgTable(
-  'outreach_drafts',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    commitMarketingRunId: uuid('commit_marketing_run_id')
-      .references(() => commitMarketingRuns.id, { onDelete: 'cascade' })
-      .notNull(),
-    influencerId: uuid('influencer_id')
-      .references(() => devInfluencers.id, { onDelete: 'cascade' })
-      .notNull(),
-    // Optional reference to the asset the draft is built around (a
-    // blog post that should be DM'd to the influencer, for example).
-    assetId: uuid('asset_id').references(() => assets.id, {
-      onDelete: 'set null',
-    }),
-    channel: outreachChannelEnum('channel').notNull(),
-    draftText: text('draft_text').notNull(),
-    status: outreachStatusEnum('status').default('drafted').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    index('outreach_drafts_commit_run_id_idx').on(table.commitMarketingRunId),
-    index('outreach_drafts_influencer_id_idx').on(table.influencerId),
-    index('outreach_drafts_status_idx').on(table.status),
   ]
 );
 
@@ -777,7 +677,7 @@ export const webhookEventsRelations = relations(
 
 export const commitMarketingRunsRelations = relations(
   commitMarketingRuns,
-  ({ one, many }) => ({
+  ({ one }) => ({
     project: one(projects, {
       fields: [commitMarketingRuns.projectId],
       references: [projects.id],
@@ -786,28 +686,8 @@ export const commitMarketingRunsRelations = relations(
       fields: [commitMarketingRuns.webhookEventId],
       references: [webhookEvents.id],
     }),
-    outreachDrafts: many(outreachDrafts),
   })
 );
-
-export const outreachDraftsRelations = relations(outreachDrafts, ({ one }) => ({
-  commitMarketingRun: one(commitMarketingRuns, {
-    fields: [outreachDrafts.commitMarketingRunId],
-    references: [commitMarketingRuns.id],
-  }),
-  influencer: one(devInfluencers, {
-    fields: [outreachDrafts.influencerId],
-    references: [devInfluencers.id],
-  }),
-  asset: one(assets, {
-    fields: [outreachDrafts.assetId],
-    references: [assets.id],
-  }),
-}));
-
-export const devInfluencersRelations = relations(devInfluencers, ({ many }) => ({
-  outreachDrafts: many(outreachDrafts),
-}));
 
 export const assetFeedbackEventsRelations = relations(
   assetFeedbackEvents,

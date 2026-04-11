@@ -31,8 +31,7 @@ import { env } from '../env.js';
  *
  * Soft-fails when `VOYAGE_API_KEY` is unset: logs once at info level
  * and returns cleanly so the BullMQ job is marked complete instead of
- * retrying forever against a permanently-missing credential. Same
- * posture as the existing `enrich-dev-influencers` processor.
+ * retrying forever against a permanently-missing credential.
  *
  * Idempotent: re-enqueueing the same `feedbackEventId` is safe. The
  * worker re-fetches the row, recomputes the embedding from the
@@ -45,8 +44,7 @@ export async function processEmbedFeedbackEvent(
   job: Job<unknown>
 ): Promise<{ embedded: boolean; reason?: string }> {
   // Boundary validation — the BullMQ payload is `unknown` because the
-  // queue is loosely typed. Same idiom as `processEnrichDevInfluencers`
-  // and `processIngestTrendingSignals`.
+  // queue is loosely typed. Same idiom as `processIngestTrendingSignals`.
   const parsed = EmbedFeedbackEventJobDataSchema.safeParse(job.data);
   if (!parsed.success) {
     throw new Error(
@@ -114,8 +112,7 @@ export async function processEmbedFeedbackEvent(
 
   // Raw SQL UPDATE because Drizzle's typed builder cannot serialise
   // `number[]` into a pgvector literal. Same pattern as
-  // `apps/worker/src/tools/project-insight-memory.ts:109-136` and
-  // `apps/worker/src/processors/enrich-dev-influencers.ts`.
+  // `apps/worker/src/tools/project-insight-memory.ts:109-136`.
   // Every value is parameterised through the `sql` template tag —
   // no `sql.raw`, no string concatenation into SQL.
   const vectorStr = `[${embedding.join(',')}]`;

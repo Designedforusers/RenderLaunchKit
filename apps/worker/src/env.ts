@@ -158,16 +158,6 @@ const envSchema = z.object({
     .positive()
     .default(7 * 24),
 
-  // ── X API enrichment (Phase 5, optional + gated) ─────────────
-  // Optional Bearer token for the paid X (Twitter) v2 API. The Phase 5
-  // `enrich-x-user` tool short-circuits to `null` when this is unset
-  // — every other enrichment path (GitHub, dev.to, HN) uses keyless
-  // public endpoints, so the discovery loop still produces results
-  // without burning paid quota. The companion cron cadence knob
-  // (`X_API_ENRICHMENT_INTERVAL_HOURS`) lives on the cron env module,
-  // not here — only the cron needs to read it.
-  X_API_BEARER_TOKEN: z.string().optional(),
-
   // ── ElevenLabs (Phase 4 audio synthesis) ──────────────────────
   // Drives the eager voice-commercial and multi-speaker podcast
   // generation in the worker. All four fields are optional at the

@@ -87,10 +87,10 @@ let cachedRedis: Redis | null | undefined;
 
 /**
  * Shared accessor for the lazily-constructed ioredis client. Exported
- * so neighboring tool modules (Phase 5 influencer enrichment) can
- * reuse the same connection instead of instantiating a second one —
- * see the "Why the Redis client is lazy" note above for why we keep
- * the connection count pinned to one per worker process.
+ * so neighboring tool modules can reuse the same connection instead
+ * of instantiating a second one — see the "Why the Redis client is
+ * lazy" note above for why we keep the connection count pinned to
+ * one per worker process.
  */
 export function getRedis(): Redis | null {
   if (cachedRedis !== undefined) return cachedRedis;

@@ -189,10 +189,10 @@ environments where the workflow service has not been provisioned yet.
   service" documents this as an intentional tradeoff: each backend service
   owns its own process-lifecycle infra per the existing monorepo convention,
   and moving `anthropic-claude-client.ts` into `packages/asset-generators/`
-  would force the worker's four non-asset-gen agents
-  (`launch-strategy-agent`, `outreach-draft-agent`,
-  `commit-marketability-agent`, `launch-kit-review-agent`) to depend on the
-  asset-generators package, which is semantically wrong.
+  would force the worker's three non-asset-gen agents
+  (`launch-strategy-agent`, `commit-marketability-agent`,
+  `launch-kit-review-agent`) to depend on the asset-generators package,
+  which is semantically wrong.
 - **Duplicated trigger helpers.** The two `trigger-workflow-generation.ts`
   files (71 + 82 lines, one per service) are also deliberate copies. Same
   rationale in CLAUDE.md: each service constructs its lazy SDK client from
