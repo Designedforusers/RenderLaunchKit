@@ -38,16 +38,15 @@ test('@full-pipeline paste URL → analyze → strategize → generate → revie
   // so without this cleanup a second run of this spec would
   // silently fast-forward to the already-completed project and
   // skip the actual pipeline execution this test exists to
-  // verify.
+  // verify. `GET /api/projects` returns a bare array, not a
+  // `{ projects: [...] }` envelope — match that shape.
   const existingProjectsResponse = await request.get(
     'http://localhost:3000/api/projects'
   );
   if (existingProjectsResponse.ok()) {
-    const existing: { projects?: Array<{ id: string; repoUrl: string }> } =
+    const existing: Array<{ id: string; repoUrl: string }> =
       await existingProjectsResponse.json();
-    const stale = (existing.projects ?? []).filter(
-      (p) => p.repoUrl === TEST_REPO
-    );
+    const stale = existing.filter((p) => p.repoUrl === TEST_REPO);
     for (const project of stale) {
       await request.delete(`http://localhost:3000/api/projects/${project.id}`);
     }
@@ -83,15 +82,28 @@ test('@full-pipeline paste URL → analyze → strategize → generate → revie
   // discrete `data-status` attribute on the badge — resilient
   // across the motion.span re-key animations and copy tweaks.
   //
-  // Timeout budget: 15 minutes. nanoid is a small repo so
+  // React Router transitions are not instant — `waitForURL`
+  // resolves as soon as the URL changes, but the old `HomePage`
+  // project list can still be in the DOM for a few frames while
+  // the new `ProjectDetailView` mounts. Scoping to
+  // `[data-testid="project-detail-view"]` guarantees we read the
+  // badge on the detail page, not a stale one on the project
+  // list. Then scoping further to `[data-testid="project-header"]`
+  // isolates the project-level status badge from the per-asset
+  // `LaunchStatusBadge` instances inside each `GeneratedAssetCard`
+  // (otherwise strict-mode matches all N+1 badges once the grid
+  // renders).
+  //
+  // Timeout budget: 15 minutes. slugify is a small repo so
   // analyze + research + strategize lands in 1-2 minutes when
   // all providers are configured, and generate + review lands
   // in 5-10 minutes under normal load. 15 minutes leaves
   // headroom for provider rate limits or slow paths.
-  const statusBadge = page
-    .locator('[data-testid="launch-status-badge"]')
-    .first();
-  await expect(statusBadge).toBeVisible({ timeout: 30_000 });
+  const detailView = page.locator('[data-testid="project-detail-view"]');
+  await expect(detailView).toBeVisible({ timeout: 30_000 });
+  const statusBadge = detailView.locator(
+    '[data-testid="project-header"] [data-testid="launch-status-badge"]'
+  );
 
   // Log the initial badge status for diagnostics. The pipeline
   // moves through `pending → analyzing → researching →
@@ -127,8 +139,10 @@ test('@full-pipeline paste URL → analyze → strategize → generate → revie
   // now via the stable `data-asset-card` hook. We do not pin
   // to a specific count because the asset fan-out varies with
   // provider availability (fal.ai down → skips image/video,
-  // ElevenLabs down → skips audio, etc.).
-  const assetCards = page.locator('[data-asset-card]');
+  // ElevenLabs down → skips audio, etc.). Scope to the detail
+  // view for the same reason as the status badge — avoid any
+  // cards that might be rendered elsewhere on the tree.
+  const assetCards = detailView.locator('[data-asset-card]');
   await expect(assetCards.first()).toBeVisible({ timeout: 30_000 });
 
   const cardCount = await assetCards.count();

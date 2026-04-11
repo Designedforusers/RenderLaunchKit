@@ -60,7 +60,10 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
     project.strategy?.assetsToGenerate.length ?? project.assets.length + 3;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div
+      className="max-w-6xl mx-auto px-6 py-8"
+      data-testid="project-detail-view"
+    >
       {/* Header */}
       <motion.div
         className="flex items-start justify-between mb-8"
@@ -86,7 +89,10 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             </motion.svg>
             All Projects
           </Link>
-          <div className="flex items-center gap-4">
+          <div
+            className="flex items-center gap-4"
+            data-testid="project-header"
+          >
             <motion.h1
               className="font-display text-display-md text-text-primary"
               initial={{ opacity: 0, x: -6 }}
