@@ -91,6 +91,20 @@ function getRenderClient(): Render {
   return renderClient;
 }
 
+/**
+ * Test-only seam for unit tests that need to replace the lazy
+ * singleton `Render` SDK client with a stub. Intentional escape
+ * hatch — production code should never call this. Exported with
+ * an underscore prefix and a doc comment so the "why is this
+ * exported" question has an answer at the site.
+ *
+ * Pass `null` to reset the cached client on test teardown so the
+ * next test that constructs the real client sees a fresh env.
+ */
+export function _setRenderClientForTests(fake: Render | null): void {
+  renderClient = fake;
+}
+
 export async function triggerRemotionRender(
   input: TriggerRemotionRenderInput
 ): Promise<TriggerRemotionRenderResult> {

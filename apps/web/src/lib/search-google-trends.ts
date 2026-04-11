@@ -111,8 +111,17 @@ export async function searchGoogleTrends(
 }
 
 // ── Parsers ──────────────────────────────────────────────────────
+//
+// The three pure helpers below (`parseInterestOverTime`,
+// `parseRelatedQueries`, `withTimeout`) are exported so unit tests
+// can cover them directly without having to stub the dynamic
+// `import('google-trends-api')` call in `searchGoogleTrends`. They
+// are deliberately prefixed as "internal" in the doc comments but
+// not underscored — they are legitimate pure functions that happen
+// to be tested at a finer granularity than the top-level
+// `searchGoogleTrends` entry point.
 
-function parseInterestOverTime(
+export function parseInterestOverTime(
   result: PromiseSettledResult<string>
 ): InterestPoint[] {
   if (result.status === 'rejected') {
@@ -132,7 +141,7 @@ function parseInterestOverTime(
   }
 }
 
-function parseRelatedQueries(
+export function parseRelatedQueries(
   result: PromiseSettledResult<string>
 ): { risingQueries: RelatedQuery[]; topQueries: RelatedQuery[] } {
   const empty = { risingQueries: [], topQueries: [] };
@@ -166,7 +175,10 @@ function parseRelatedQueries(
  * warnings on Node 18+ when the timeout rejects into an already-
  * resolved race.
  */
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(

@@ -47,6 +47,15 @@ function getRenderClient(): Render {
   return renderClient;
 }
 
+/**
+ * Test-only seam. See the matching hook in
+ * `trigger-remotion-render.ts` for the rationale. Pass `null` to
+ * reset the cached client on test teardown.
+ */
+export function _setRenderClientForTests(fake: Render | null): void {
+  renderClient = fake;
+}
+
 export async function triggerWorkflowGeneration(
   projectId: string
 ): Promise<void> {

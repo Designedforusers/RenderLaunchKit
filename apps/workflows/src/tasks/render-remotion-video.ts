@@ -85,7 +85,18 @@ import {
 // pool warm for the (rare) second render in the same task
 // instance.
 let rendererInstance: RemotionRenderer | null = null;
-function getRenderer(): RemotionRenderer {
+
+/**
+ * Produces the renderer used by `renderRemotionVideo`. Indirection
+ * through a factory function exists so unit tests can replace the
+ * real Chrome-launching renderer with a fake via
+ * `_setRendererFactoryForTests`. Production callers never override
+ * this — the default builds one pro-dyno-tuned `createRemotionRenderer`
+ * and caches it module-wide.
+ */
+type RendererFactory = () => RemotionRenderer;
+
+const defaultRendererFactory: RendererFactory = () => {
   rendererInstance ??= createRemotionRenderer({
     // Render's pro dyno exposes `/tmp` as the only writable
     // path that survives the task run. The renderer creates
@@ -95,6 +106,34 @@ function getRenderer(): RemotionRenderer {
     concurrency: env.REMOTION_CONCURRENCY,
   });
   return rendererInstance;
+};
+
+let rendererFactory: RendererFactory = defaultRendererFactory;
+
+function getRenderer(): RemotionRenderer {
+  return rendererFactory();
+}
+
+/**
+ * Test-only seam. Replaces the renderer factory so unit tests can
+ * pass a fake that returns a stub `RemotionRenderer` instead of
+ * launching real Chrome via `createRemotionRenderer`. Pass `null`
+ * to restore the production factory on test teardown.
+ *
+ * The real `createRemotionRenderer` cannot be unit-tested because
+ * its `bundle()` call needs a real webpack + React compile, its
+ * `openBrowser('chrome')` call needs a real Chrome binary, and its
+ * `renderMedia()` call needs both. The entire task body other than
+ * the renderer is plain database, config, and MinIO upload code
+ * that IS unit-testable — hence this seam.
+ */
+export function _setRendererFactoryForTests(
+  fake: RendererFactory | null
+): void {
+  rendererFactory = fake ?? defaultRendererFactory;
+  if (fake === null) {
+    rendererInstance = null;
+  }
 }
 
 function parseCompositionInput(

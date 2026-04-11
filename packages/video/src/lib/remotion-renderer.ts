@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +17,7 @@ import type {
   VerticalVideoProps,
   VoiceCommercialProps,
 } from '../types.js';
+import { buildRenderBasename } from './filename-helpers.js';
 
 /**
  * Self-contained Remotion renderer extracted from the web service
@@ -164,20 +164,33 @@ export interface RemotionRenderer {
 }
 
 /**
- * Pure string helper. Not part of the renderer factory because it
- * has no state — it's a stable filename the web service sends in
- * `Content-Disposition` headers on video responses so browsers
- * download the file with a sensible name.
+ * Re-exported pure filename helpers. The canonical definitions live
+ * in `./filename-helpers.ts` so the browser-safe top-level
+ * `@launchkit/video` export can surface them without dragging
+ * `@remotion/bundler` and `@remotion/renderer` into the dashboard
+ * bundle. Kept re-exported here so existing import sites
+ * (`@launchkit/video/renderer`) keep working unchanged.
  */
-export function getRenderedVideoFilename(
-  assetId: string,
-  version: number,
-  variant: 'visual' | 'narrated' = 'visual'
-): string {
-  return `launchkit-${assetId}-v${version}${
-    variant === 'narrated' ? '-narrated' : ''
-  }.mp4`;
-}
+export {
+  getRenderedVideoFilename,
+  buildRenderBasename,
+} from './filename-helpers.js';
+
+// Static assertion that the `CompositionId` literal union in
+// `filename-helpers.ts` stays in lockstep with `RemotionCompositionId`.
+// Any addition to the discriminated union in this file must also
+// appear in `filename-helpers.ts` or TypeScript will fail this check
+// at compile time — preventing silent drift between the two.
+import type { CompositionId } from './filename-helpers.js';
+type _AssertCompositionIdMatch = RemotionCompositionId extends CompositionId
+  ? CompositionId extends RemotionCompositionId
+    ? true
+    : never
+  : never;
+// Pure type-level assertion — the value is the compile-time witness.
+// `_` prefix matches ESLint's `argsIgnorePattern: '^_'` so unused is OK.
+const _compositionIdAssert: _AssertCompositionIdMatch = true;
+void _compositionIdAssert;
 
 // ── Factory ──────────────────────────────────────────────────────
 
@@ -282,29 +295,6 @@ export function createRemotionRenderer(
     });
 
     return bundlePromise;
-  }
-
-  function buildRenderBasename(input: {
-    assetId: string;
-    version: number;
-    variant: 'visual' | 'narrated';
-    compositionId: RemotionCompositionId;
-    cacheSeed?: string;
-  }): string {
-    const suffix = input.cacheSeed
-      ? `-${createHash('sha1').update(input.cacheSeed).digest('hex').slice(0, 12)}`
-      : '';
-
-    // The product video composition predates Phase 4 and its
-    // cache filenames are stable, so we keep the legacy layout
-    // for it. New compositions embed the composition id in the
-    // basename so renders for the same asset id never collide
-    // across compositions.
-    if (input.compositionId === 'LaunchKitProductVideo') {
-      return `${input.assetId}-v${input.version}-${input.variant}${suffix}`;
-    }
-
-    return `${input.assetId}-${input.compositionId}-v${input.version}-${input.variant}${suffix}`;
   }
 
   function buildOutputLocation(basename: string): string {

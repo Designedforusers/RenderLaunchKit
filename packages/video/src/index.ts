@@ -8,6 +8,14 @@
 // import `createRequire` from `node:module`, which breaks the
 // Rollup build. Backend consumers (`apps/web`, `apps/workflows`)
 // import from `@launchkit/video/renderer` explicitly.
+//
+// `getRenderedVideoFilename` and `buildRenderBasename` live in
+// `./lib/filename-helpers.ts` and are re-exported by the `/renderer`
+// subpath only. They import `node:crypto` for sha1 hashing, which
+// Vite cannot cleanly polyfill for the browser, so the top-level
+// export here intentionally does NOT surface them. Tests import
+// them directly from `./lib/filename-helpers.js` in the compiled
+// output.
 export * from './LaunchKitVideo.js';
 export * from './PodcastWaveform.js';
 export * from './VerticalVideo.js';
