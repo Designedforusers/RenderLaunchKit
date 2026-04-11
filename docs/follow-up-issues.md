@@ -3,40 +3,6 @@
 Issues surfaced by the final architecture audit that are outside the
 scope of the current testing + polish pass but worth tracking.
 
-## Dead code: `apps/worker/src/lib/influencer-matcher.ts`
-
-The module exports `findInfluencersForCommit` and
-`MatchedInfluencerRowSchema`. Neither is referenced by any production
-code path — `apps/worker/src/processors/process-commit-marketing-run.ts`
-uses `runInfluencerDiscoveryAgent` from
-`apps/worker/src/agents/influencer-discovery-agent.ts` instead. The
-matcher module has a module-load smoke test at
-`tests/influencer-matcher.test.mjs`, and `trend-matcher.ts` +
-`duplication-guard.ts` reference it in doc comments as "the canonical
-embedding-based matcher pattern" — but no caller actually invokes
-`findInfluencersForCommit` at runtime.
-
-The module is an artifact of an earlier embedding-based matcher
-design that was superseded by the agent-based discovery path in
-Phase 5. The replacement made the matcher's call site redundant,
-but the file was never deleted.
-
-**Follow-up options (in order of effort):**
-
-1. **Delete it.** `influencer-matcher.ts` + the matching test file +
-   any comment references in sibling files. The trend-matcher.ts
-   pattern reference can stay — the shape is the same, the
-   reference is pedagogical.
-2. **Rewire it into the commit-marketing run** as a pre-agent filter
-   that narrows the influencer candidate set via pgvector cosine
-   similarity before the LLM discovery agent runs, reducing
-   agent-call latency on commit-marketing jobs.
-3. **Move it under `tests/fixtures/`** as an exemplar of the raw-SQL
-   pgvector pattern for future contributors to reference.
-
-No action in this session. Captured here so the next audit doesn't
-flag it again without context.
-
 ## Duplicated `composeMinioEndpoint` across env modules
 
 `apps/web/src/env.ts` and `apps/workflows/src/env.ts` both carry an

@@ -26,12 +26,13 @@ import { database as db } from './database.js';
  * catch the canonical "same commit fired twice" and "same feature
  * shipped over two days" cases.
  *
- * Same parameterised SQL idiom as `apps/worker/src/lib/influencer-matcher.ts`:
- * raw SQL via Drizzle's `sql` template tag, vector cast through a
- * `[v1,v2,...]::vector` literal, `<=>` cosine-distance ORDER BY,
- * `1 - distance` similarity in the SELECT, Zod row validation at the
- * boundary so the `db.execute(sql)` `unknown[]` rows never leak typed
- * properties through an `any`-style cast. NO `sql.raw`.
+ * Same parameterised SQL idiom as `apps/worker/src/lib/trend-matcher.ts`
+ * and `apps/worker/src/tools/project-insight-memory.ts`: raw SQL via
+ * Drizzle's `sql` template tag, vector cast through a `[v1,v2,...]::vector`
+ * literal, `<=>` cosine-distance ORDER BY, `1 - distance` similarity in
+ * the SELECT, Zod row validation at the boundary so the `db.execute(sql)`
+ * `unknown[]` rows never leak typed properties through an `any`-style
+ * cast. NO `sql.raw`.
  */
 
 // ── Boundary-validation schema for the raw SQL row ────────────────
@@ -39,7 +40,7 @@ import { database as db } from './database.js';
 // `db.execute(sql`...`)` returns `unknown[]` rows because the query
 // is hand-written and bypasses Drizzle's typed query builder. We
 // Zod-parse every row before reading any field — same approach as
-// `MatchedInfluencerRowSchema` in `influencer-matcher.ts:42-52`.
+// `MatchedTrendRowSchema` in `trend-matcher.ts`.
 
 const SimilarRunRowSchema = z.object({
   commit_marketing_run_id: z.string().uuid(),
