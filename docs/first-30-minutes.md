@@ -51,13 +51,14 @@ you're good.
   from 60/hr to 5000/hr during `analyze`.
 
 **Leave blank for now:** `FAL_API_KEY`, `ELEVENLABS_*`, `WORLD_LABS_API_KEY`,
-`GROK_API_KEY`, `EXA_API_KEY`, `RENDER_API_KEY`, `RENDER_WORKFLOW_SLUG`,
-`PIKA_API_KEY`. Each one gates a specific asset type or feature; the worker
-skips that branch gracefully rather than crashing. You can exercise the
-pipeline end-to-end with just Anthropic + Voyage. The workflows service
-(`apps/workflows`) still runs in-process via `npm run dev:workflows` (which
-shells out to `render workflows dev`) — you do not need a real Render
-deployment to see the fan-out.
+`EXA_API_KEY`, `RENDER_API_KEY`, `RENDER_WORKFLOW_SLUG`, `PIKA_API_KEY`.
+Each one gates a specific asset type or feature; the worker skips that
+branch gracefully rather than crashing. You can exercise the pipeline
+end-to-end with just Anthropic + Voyage. The workflows service
+(`apps/workflows`) runs locally in a separate terminal via
+`npm run dev:workflows` (which shells out to `render workflows dev` and
+exposes the task server on `http://localhost:8120`) — you do not need a
+real Render deployment to see the fan-out.
 
 ## Minutes 5-15 — Run the full pipeline
 

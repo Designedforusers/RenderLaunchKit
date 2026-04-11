@@ -10,7 +10,7 @@
 
 This repo is a working multi-service AI app and a teaching artifact for several patterns that come up when you ship real production AI infrastructure. If you read it cover to cover you'll see, in working code:
 
-- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one parent task via run chaining. A sixth `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads finished bytes to MinIO — so the web service never runs Chrome and never holds a client connection open for a 10-minute render. A 10-minute video render never blocks a 20-second blog post because they land on different hardware. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
+- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one `generateAllAssetsForProject` parent task via run chaining. A separate `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads finished bytes to MinIO — so the web service never runs Chrome and never holds a client connection open for a 10-minute render. A 10-minute video render never blocks a 20-second blog post because they land on different hardware. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
 - **Provider-agnostic AI pipeline architecture.** A `packages/asset-generators/` factory takes injected provider clients (`LLMClient`, fal.ai, ElevenLabs, World Labs) so the agents are completely decoupled from Anthropic vs. Bedrock vs. Vertex. Same factory binding works for the worker and the workflows service.
 - **AsyncLocalStorage for cross-cutting concerns without parameter pollution.** [Cost tracking](docs/cost-tracking.md) threads through every upstream API call without touching a single agent signature, by reading the active `CostTracker` from `node:async_hooks` at the call boundary. The intermediate ~20 files are completely unaware that cost tracking exists.
 - **Strict TypeScript without escape hatches.** `strict: true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`, and `noImplicitOverride` are all on. Two `as unknown as` casts in the entire repo, both centralised in helpers and documented. Zero `any`. Zero non-null assertions in source. ESLint runs with `--max-warnings=0` and the type-aware preset at `error` severity.
@@ -115,7 +115,7 @@ Seven of the eight come from the Blueprint. The eighth (`launchkit-workflows`) i
 
 **Three planes, one Blueprint.** The topology above lands naturally in three groups:
 
-- **Control plane** — `launchkit-web` + `launchkit-dashboard` (the React SPA served from the web dyno). HTTP, SSE, GitHub webhooks, user clicks. Sub-second latency budget. Never holds a long-running request.
+- **Control plane** — `launchkit-web`, which serves both the Hono API and the compiled Vite React SPA (from `apps/dashboard/`) on the same dyno. HTTP, SSE, GitHub webhooks, user clicks. Sub-second latency budget. Never holds a long-running request.
 - **Orchestration plane** — `launchkit-worker`, `launchkit-pika-worker`, and `launchkit-cron`. BullMQ-driven background work. Analysis / research / strategize / review / trending / Pika control / self-learning aggregation. Mid-length jobs (30s to 5 minutes), all small-to-medium compute.
 - **Compute plane** — `launchkit-workflows` + `launchkit-minio`. The per-asset generation fan-out and the rendered-video storage. Heterogeneous compute (starter text tasks through pro video / 3D renders), persistent object storage, partial-failure semantics.
 
@@ -247,7 +247,7 @@ Render Workflows is in public beta and the Blueprint syntax doesn't yet support 
    npm ci && npx remotion browser ensure && npm run build
    ```
    Start command: `npm run start:workflows`. Plan: `pro` (the `renderRemotionVideo` task needs 2 CPU / 4 GB for Chrome + Remotion's in-memory work).
-4. In the env vars page, link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add `ANTHROPIC_API_KEY`, `FAL_API_KEY`, `WORLD_LABS_API_KEY`, and the ElevenLabs trio (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`). Then copy the MinIO credentials from the `launchkit-minio` service's env page into three new vars on the workflows service: `MINIO_ENDPOINT_HOST` (the `launchkit-minio` public hostname, e.g. `launchkit-minio-xyz.onrender.com`), `MINIO_ROOT_USER`, and `MINIO_ROOT_PASSWORD`. The workflows service uses them to write video bytes to the bucket; the Blueprint cannot auto-sync these because the workflow service is not defined in `render.yaml`.
+4. In the env vars page, link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add `ANTHROPIC_API_KEY`, `FAL_API_KEY`, `WORLD_LABS_API_KEY`, and the ElevenLabs set (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_ID_ALT`, `ELEVENLABS_MODEL_ID`). The second voice id is the alternate speaker the multi-voice podcast asset uses — omit it and the podcast agent falls back to the primary voice on both speakers. Then copy the MinIO credentials from the `launchkit-minio` service's env page into three new vars on the workflows service: `MINIO_ENDPOINT_HOST` (the `launchkit-minio` public hostname, e.g. `launchkit-minio-xyz.onrender.com`), `MINIO_ROOT_USER`, and `MINIO_ROOT_PASSWORD`. The workflows service uses them to write video bytes to the bucket; the Blueprint cannot auto-sync these because the workflow service is not defined in `render.yaml`.
 5. Click **Deploy**. Wait until the Tasks tab shows seven registered tasks (`generateAllAssetsForProject`, `generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`, `renderRemotionVideo`).
 
 ### Step 3 — Wire the worker and web to the workflow
@@ -329,14 +329,11 @@ To exercise the workflow service locally, run `render workflows dev -- npm run d
 
 ```
 renderlaunchkit/
-├── render.yaml                       # Blueprint — provisions 5 of 6 services
+├── render.yaml                       # Blueprint — provisions 7 of 8 services
 ├── docker-compose.yml                # Local Postgres + Redis
 ├── package.json                      # Workspace root
 ├── seed.ts                           # Demo data
 ├── migrations/                       # Hand-written SQL migrations
-├── docs/
-│   └── cost-tracking.md              # Long-form cost tracking explainer
-│
 ├── docs/
 │   ├── adrs/                         # 5 architectural decision records (ADR-001 through 005)
 │   ├── architecture/                 # 2 long-form rationale essays
