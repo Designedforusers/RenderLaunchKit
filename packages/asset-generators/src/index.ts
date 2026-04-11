@@ -217,6 +217,13 @@ export {
 } from './clients/world-labs.js';
 
 export {
+  createObjectStorageClient,
+  type ObjectStorageClient,
+  type ObjectStorageConfig,
+  type UploadVideoResult,
+} from './clients/object-storage.js';
+
+export {
   FluxImageSchema,
   FluxImageResponseSchema,
   NanoBananaImageSchema,
