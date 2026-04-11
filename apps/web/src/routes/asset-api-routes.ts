@@ -18,11 +18,12 @@ import {
   audioBufferToDataUri,
   buildNarratedCacheSeed,
   buildNarratedVideoProps,
+  mapNarrationToHeaderValue,
 } from '../lib/narration.js';
+import type { NarrationAudioSourceHeader } from '../lib/narration.js';
 import { enqueueEmbedFeedbackEvent } from '../lib/job-queue-clients.js';
 import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
 import { triggerRemotionRender } from '../lib/trigger-remotion-render.js';
-import { getWebObjectStorageClient } from '../lib/object-storage-client.js';
 import { fileToWebStream } from '../lib/stream-utils.js';
 import {
   AssetFeedbackEventRequestSchema,
@@ -182,17 +183,24 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   }
 
   // Narrated variant: synthesize the voiceover on the web service
-  // (I/O-bound ElevenLabs call, cheap on a starter dyno), upload
-  // the MP3 to MinIO so `inputProps.audioSrc` can be a ~200-byte
-  // URL instead of a multi-MB data URI, and inline the resulting
-  // URL into the Remotion props the workflow task will render.
-  // Visual variant skips this branch and ships the base props
-  // directly.
+  // (I/O-bound ElevenLabs call, cheap on a starter dyno). The
+  // synthesis function owns a three-tier cache (local disk →
+  // MinIO → ElevenLabs API), so by the time it returns the audio
+  // is already in every durable location we have and the route
+  // just needs to decide what shape to pass through to the
+  // workflow task. Visual variant skips this branch.
   let taskInputProps: LaunchKitVideoProps = remotionProps;
   let cacheSeed: string | undefined;
   let narrationCache = 'n/a';
-  let narrationAudioSourceHeader: 'minio' | 'data-uri' | 'minio-failed' | 'n/a' =
-    'n/a';
+  // The `X-Narration-Audio-Src` response header lets operators
+  // debugging cost drift or missing renders distinguish a
+  // deploy-surviving MinIO read hit (`minio-read-hit`) from a
+  // cold ElevenLabs call that uploaded successfully (`minio`),
+  // a cold ElevenLabs call where the MinIO upload threw
+  // (`minio-failed`), or a MinIO-less fallback to a data URI
+  // (`data-uri`). The mapping itself lives in
+  // `mapNarrationToHeaderValue`.
+  let narrationAudioSourceHeader: NarrationAudioSourceHeader = 'n/a';
 
   if (variant === 'narrated') {
     const config = getElevenLabsConfig();
@@ -245,44 +253,21 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       cacheKey: buildElevenLabsCacheKey(narrationSeed),
       text: parsedVoiceover.plainText,
     });
-    narrationCache = narration.cached ? 'hit' : 'miss';
 
-    // Hoist the audio bytes out of the task payload whenever MinIO
-    // is reachable. Passing a ~3-5 MB data URI inline through the
-    // Workflows SDK worked but was uncomfortably close to the
-    // payload cap; a ~200-byte public URL is the honest shape.
-    //
-    // The upload is best-effort: if MinIO is unreachable (local
-    // dev without the container, temporary network partition, IAM
-    // issues), we fall back to the data URI path so the render
-    // still succeeds. The `X-Narration-Audio-Src` response header
-    // surfaces which path ran so operators debugging a bad render
-    // can pivot quickly between "MinIO uploaded then task rendered"
-    // and "data URI inlined into task payload".
-    let narrationAudioSrc: string;
-    let narrationAudioSource: 'minio' | 'data-uri' | 'minio-failed';
-    const storageClient = getWebObjectStorageClient();
-    if (storageClient !== null) {
-      try {
-        const uploaded = await storageClient.uploadAudio(
-          `audio/${asset.id}-${narrationSeed}.mp3`,
-          narration.audioBuffer
-        );
-        narrationAudioSrc = uploaded.url;
-        narrationAudioSource = 'minio';
-      } catch (err) {
-        console.warn(
-          '[asset-api-routes] MinIO audio upload failed, falling back to data URI',
-          err
-        );
-        narrationAudioSrc = audioBufferToDataUri(narration.audioBuffer);
-        narrationAudioSource = 'minio-failed';
-      }
-    } else {
-      narrationAudioSrc = audioBufferToDataUri(narration.audioBuffer);
-      narrationAudioSource = 'data-uri';
-    }
-    narrationAudioSourceHeader = narrationAudioSource;
+    // `X-Narration-Cache` stays tri-state for backward compat: the
+    // dashboard reads 'hit' | 'miss' | 'n/a'. Tier-1 and tier-2
+    // both count as a hit because neither spent ElevenLabs credit.
+    narrationCache = narration.cacheSource === 'api' ? 'miss' : 'hit';
+
+    // Pick the audioSrc shape for the workflow task payload. When
+    // synthesis returned a MinIO URL we pass it through — a
+    // ~200-byte string instead of a ~3-5 MB data URI — otherwise
+    // we fall back to inlining the buffer. Both shapes are
+    // accepted by Remotion's `<Audio src={...}>` unchanged.
+    const narrationAudioSrc =
+      narration.minioUrl ?? audioBufferToDataUri(narration.audioBuffer);
+
+    narrationAudioSourceHeader = mapNarrationToHeaderValue(narration);
 
     taskInputProps = buildNarratedVideoProps({
       baseProps: remotionProps,

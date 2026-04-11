@@ -2,8 +2,10 @@ import {
   S3Client,
   HeadBucketCommand,
   CreateBucketCommand,
-  PutObjectCommand,
+  GetObjectCommand,
   NoSuchBucket,
+  NoSuchKey,
+  PutObjectCommand,
 } from '@aws-sdk/client-s3';
 
 /**
@@ -103,6 +105,30 @@ export interface ObjectStorageClient {
     bytes: Buffer,
     contentType?: string
   ): Promise<UploadResult>;
+
+  /**
+   * Download an object by key. Returns the raw bytes as a Buffer, or
+   * `null` when the object does not exist (whether because the key is
+   * absent or the bucket itself has not been created yet). Any other
+   * S3 error — permissions, network, malformed response — propagates
+   * to the caller unchanged.
+   *
+   * Used by the web service's narrated-video handler as the "warm"
+   * cache tier between a local-disk hot cache (lost on every deploy)
+   * and the ElevenLabs TTS API (the expensive cold path). The three
+   * failure modes that count as "miss" are folded into a single
+   * `null` return so the caller's tier-fallthrough branches stay
+   * boring: any null → fall through to synthesis, anything else →
+   * throw.
+   *
+   * Deliberately does NOT call `ensureBucket` — GETs should fail fast
+   * on a missing bucket and be classified as a miss by the caller. A
+   * `HeadBucket` check on every cache lookup would defeat the whole
+   * "warm-tier latency" story this tier is supposed to deliver. The
+   * write path (`uploadVideo`/`uploadAudio`) handles bucket creation
+   * on the other side.
+   */
+  getObject(key: string): Promise<Buffer | null>;
 
   /**
    * Resolve a storage key to its public URL without hitting the
@@ -230,9 +256,68 @@ export function createObjectStorageClient(
     return uploadWithContentType(key, bytes, contentType);
   }
 
+  async function getObject(key: string): Promise<Buffer | null> {
+    try {
+      const response = await s3.send(
+        new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+        })
+      );
+
+      if (response.Body === undefined) {
+        // S3 spec requires a body on a successful GET. If we ever see
+        // a success without one we'd rather treat it as a miss and
+        // let the caller re-fetch than silently return an empty
+        // Buffer that corrupts downstream decoders.
+        return null;
+      }
+
+      // `transformToByteArray` drains the entire stream into a single
+      // Uint8Array in one awaited call. For the objects this client
+      // reads (MP3 up to ~5 MB, small JSON alignment files) the
+      // memory cost is a rounding error and avoids the footguns of
+      // manual stream concatenation. `Buffer.from(Uint8Array)` is a
+      // zero-copy view when the underlying ArrayBuffer is already
+      // page-aligned, which is the case for the AWS SDK's response.
+      const bytes = await response.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (err: unknown) {
+      // Two flavors of "miss" both fold into `null`:
+      //
+      // 1. `NoSuchKey` — object doesn't exist under an existing bucket.
+      //    This is the steady-state cache-miss path; every cold lookup
+      //    on a content-addressable key that hasn't been written yet
+      //    ends up here.
+      //
+      // 2. `NoSuchBucket` — the bucket itself doesn't exist. This
+      //    happens exactly once per fresh deploy, before the first
+      //    successful write has called `ensureBucket`. If we
+      //    re-threw here, the first narrated-video request on a
+      //    brand-new MinIO instance would 500 instead of degrading
+      //    to a synthesize-and-upload path. That's a bad cold-start
+      //    story for no benefit — the subsequent write creates the
+      //    bucket and every later read finds it.
+      //
+      // Anything else (auth failures, connection errors, 5xx) means
+      // something is actually broken and the caller deserves to see
+      // it, so we re-throw.
+      const isMissing =
+        err instanceof NoSuchKey ||
+        err instanceof NoSuchBucket ||
+        (err !== null &&
+          typeof err === 'object' &&
+          'name' in err &&
+          (err.name === 'NoSuchKey' || err.name === 'NoSuchBucket'));
+      if (isMissing) return null;
+      throw err;
+    }
+  }
+
   return {
     uploadVideo,
     uploadAudio,
+    getObject,
     getPublicUrl,
   };
 }
