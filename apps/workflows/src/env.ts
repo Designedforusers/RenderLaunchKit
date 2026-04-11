@@ -98,6 +98,16 @@ const envSchema = z.object({
   MINIO_ROOT_USER: z.string().optional(),
   MINIO_ROOT_PASSWORD: z.string().optional(),
   MINIO_BUCKET: z.string().default('launchkit-renders'),
+
+  // ── Remotion rendering ─────────────────────────────────────────
+  // Concurrency passed through to `@remotion/renderer`'s
+  // `renderMedia` by the `renderRemotionVideo` task. Accepts any
+  // value the library accepts — a CPU-core count (`4`), or a
+  // percentage string (`'50%'`). Defaults to `'50%'` to match the
+  // web service's env module default; the workflows task uses the
+  // pro plan (2 CPU / 4 GB) so 50% keeps one core free for the
+  // Chrome puppeteer process.
+  REMOTION_CONCURRENCY: z.string().default('50%'),
 });
 
 export type WorkflowsEnv = z.infer<typeof envSchema>;

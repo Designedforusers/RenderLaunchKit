@@ -22,7 +22,8 @@ import './tasks/generate-video-asset.js';
 import './tasks/generate-audio-asset.js';
 import './tasks/generate-world-scene.js';
 import './tasks/generate-all-assets-for-project.js';
+import './tasks/render-remotion-video.js';
 
 console.log(
-  '[Workflows] Task registration entrypoint loaded — six tasks registered'
+  '[Workflows] Task registration entrypoint loaded — seven tasks registered'
 );

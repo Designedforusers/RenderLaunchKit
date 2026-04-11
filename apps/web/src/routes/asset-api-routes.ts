@@ -5,12 +5,13 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, desc, eq, ne } from 'drizzle-orm';
+import { LaunchKitVideoPropsSchema } from '@launchkit/video';
+import type { LaunchKitVideoProps } from '@launchkit/video';
 import {
-  LaunchKitVideoPropsSchema,
   createRemotionRenderer,
   getRenderedVideoFilename,
-} from '@launchkit/video';
-import type { LaunchKitVideoProps, RemotionRenderer } from '@launchkit/video';
+} from '@launchkit/video/renderer';
+import type { RemotionRenderer } from '@launchkit/video/renderer';
 import { database } from '../lib/database.js';
 import {
   buildElevenLabsCacheKey,

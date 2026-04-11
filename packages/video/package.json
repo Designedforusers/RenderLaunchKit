@@ -8,7 +8,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./root": "./dist/Root.js",
-    "./types": "./dist/types.js"
+    "./types": "./dist/types.js",
+    "./renderer": "./dist/lib/remotion-renderer.js"
   },
   "scripts": {
     "build": "tsc",
