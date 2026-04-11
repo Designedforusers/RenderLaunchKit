@@ -34,6 +34,20 @@ export const CreativeReviewSchema = z.object({
   overallFeedback: z.string(),
   assetReviews: z.array(AssetReviewSchema),
   approved: z.boolean(),
-  revisionPriority: z.array(z.string()),
+  // `.optional().default([])` for the same reason
+  // `revisionInstructions` is `.nullish()` above: when the kit
+  // passes review and nothing needs revising, Claude naturally
+  // omits the field rather than returning an empty array. A
+  // strict `z.array(z.string())` then blows up the review job
+  // mid-pipeline and the project sits stuck in `reviewing`
+  // forever. `.optional().default([])` lets Claude omit the
+  // field, transforms the parsed value to `[]`, and keeps the
+  // inferred TypeScript type as `string[]` (not `string[] |
+  // undefined`) so the downstream `.length` access in
+  // `review-generated-assets.ts` stays clean. Choosing
+  // `.default([])` over `.nullish()` here is deliberate — we
+  // want the value transformed at the parse boundary, not
+  // propagated as optional through every consumer.
+  revisionPriority: z.array(z.string()).optional().default([]),
 });
 export type CreativeReview = z.infer<typeof CreativeReviewSchema>;
