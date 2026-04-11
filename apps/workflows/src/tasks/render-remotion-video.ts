@@ -136,7 +136,7 @@ export function _setRendererFactoryForTests(
   }
 }
 
-function parseCompositionInput(
+export function parseCompositionInput(
   compositionId: RenderRemotionVideoInput['compositionId'],
   inputProps: unknown
 ): RemotionRenderInput {
@@ -350,7 +350,9 @@ export const renderRemotionVideo = task<
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -363,7 +365,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * care about real byte counts filter on `cached === true` at the
  * top level anyway.
  */
-function readRenderedVideoSizeBytes(metadata: unknown): number {
+export function readRenderedVideoSizeBytes(metadata: unknown): number {
   if (!isRecord(metadata)) return 0;
   const raw = metadata['renderedVideoSizeBytes'];
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return 0;
