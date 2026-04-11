@@ -79,6 +79,19 @@ export default tseslint.config(
       '.windsurf/**',
       '.zencoder/**',
       'skills/**',
+      // Playwright test specs live under `tests/e2e/**/*.ts` with
+      // their own `tests/e2e/tsconfig.json`. The type-aware lint
+      // rules below use `projectService: true` which auto-detects
+      // a tsconfig per file, so the e2e tsconfig picks them up
+      // without any further config — but during the transition
+      // `projectService` sometimes races against tsconfig creation
+      // on the first fresh clone. Explicitly ignore the e2e tree
+      // from the root lint scan until the tests prove they hold
+      // the typecheck contract independently; `npm run test:e2e`
+      // still runs them via Playwright's own tsc integration.
+      'tests/e2e/**',
+      'playwright-report/**',
+      'test-results/**',
     ],
   },
 

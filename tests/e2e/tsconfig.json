@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "types": ["@playwright/test", "node"],
+    "skipLibCheck": true,
+    "isolatedModules": false
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["../../node_modules"]
+}
