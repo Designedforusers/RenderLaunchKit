@@ -144,10 +144,15 @@ export const renderRemotionVideo = task<
   ): Promise<RenderRemotionVideoResult> {
     const parsed = RenderRemotionVideoInputSchema.parse(input);
 
-    // 1. Short-circuit on an existing rendered URL. A concurrent
-    //    caller may have populated the row between the web route's
-    //    own cache check and this task start — if so, return the
-    //    cached result without burning a render.
+    // 1. Short-circuit on an existing rendered URL — but ONLY for
+    //    the visual variant. The `assets.rendered_video_url` cache
+    //    column tracks one slot per asset, so mixing variants would
+    //    let a stale narrated URL serve a subsequent visual request
+    //    (or vice versa). Visual is the default, deterministic,
+    //    and safe to cache; narrated is user-initiated with a
+    //    voiceover-specific cacheSeed and renders fresh every time
+    //    so the audio data URI stays current against the latest
+    //    ElevenLabs synthesis.
     const [existing] = await db
       .select({
         renderedVideoUrl: assets.renderedVideoUrl,
@@ -168,6 +173,7 @@ export const renderRemotionVideo = task<
     const cacheIsStale = existing.version !== parsed.version;
 
     if (
+      parsed.variant === 'visual' &&
       !cacheIsStale &&
       existing.renderedVideoUrl !== null &&
       existing.renderedVideoKey !== null
@@ -228,16 +234,26 @@ export const renderRemotionVideo = task<
     const bytes = await readFile(outputPath);
     const uploaded = await storage.uploadVideo(key, bytes, 'video/mp4');
 
-    // 4. Persist URL + key on the asset row so subsequent callers
-    //    hit the cache-hit branch above without re-rendering.
-    await db
-      .update(assets)
-      .set({
-        renderedVideoUrl: uploaded.url,
-        renderedVideoKey: uploaded.key,
-        updatedAt: new Date(),
-      })
-      .where(eq(assets.id, parsed.assetId));
+    // 4. Persist the URL + key on the asset row — but ONLY for the
+    //    visual variant. Writing a narrated URL to the cache column
+    //    would poison every subsequent visual request, because the
+    //    web handler reads `assets.rendered_video_url` and redirects
+    //    to whatever is stored there regardless of the original
+    //    variant. Keeping the cache column as "visual video cache"
+    //    is the simplest invariant that preserves correctness: a
+    //    future contributor who wants narrated caching can add a
+    //    sibling `rendered_narrated_video_url` column without
+    //    touching the read path's branching logic.
+    if (parsed.variant === 'visual') {
+      await db
+        .update(assets)
+        .set({
+          renderedVideoUrl: uploaded.url,
+          renderedVideoKey: uploaded.key,
+          updatedAt: new Date(),
+        })
+        .where(eq(assets.id, parsed.assetId));
+    }
 
     return {
       url: uploaded.url,

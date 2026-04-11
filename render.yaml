@@ -360,8 +360,12 @@ services:
     name: launchkit-minio
     runtime: image
     plan: starter
+    # Pinned to a specific RELEASE tag rather than `:latest` so a
+    # future breaking MinIO release cannot silently trash the
+    # on-disk format during a routine redeploy. Bumping this is a
+    # conscious operator decision, not an auto-upgrade.
     image:
-      url: docker.io/minio/minio:latest
+      url: docker.io/minio/minio:RELEASE.2025-04-08T15-41-24Z
     dockerCommand: minio server /data --address :$PORT --console-address :9090
     autoDeploy: false
     healthCheckPath: /minio/health/live

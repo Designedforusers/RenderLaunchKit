@@ -126,10 +126,19 @@ export async function triggerRemotionRender(
   }
 
   // The SDK surfaces `results` as `unknown[]` — the task returns a
-  // single object at slot 0. Parse through Zod at the boundary so
-  // the caller gets a typed payload and a drift between our task
-  // return type and the caller's expectations surfaces as a
-  // runtime error here, not as a silent wrong redirect downstream.
+  // single object at slot 0. Guard the length check explicitly so
+  // a `canceled` or `paused` run that somehow slips past the status
+  // check above surfaces as a clear "empty results" error instead
+  // of a confusing Zod parse failure on `undefined`. Parse the
+  // first slot through Zod at the boundary so the caller gets a
+  // typed payload and a drift between our task return type and
+  // the caller's expectations surfaces as a runtime error here,
+  // not as a silent wrong redirect downstream.
+  if (details.results.length === 0) {
+    throw new Error(
+      `triggerRemotionRender: task run ${details.id} returned no results (status=${details.status})`
+    );
+  }
   const firstResult = details.results[0];
   const parsed = RenderRemotionVideoResultSchema.safeParse(firstResult);
   if (!parsed.success) {
