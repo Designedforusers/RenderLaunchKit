@@ -5,6 +5,14 @@ import { api } from '../lib/api.js';
 
 interface RepositoryUrlFormProps {
   onProjectCreated: (id: string) => void;
+  /**
+   * Optional initial value for the URL input. The marketing landing
+   * page at `/` forwards whatever the user typed in its hero form
+   * as a `?repo=` query param; the app page reads the param and
+   * passes it here so the real form pre-fills without the user
+   * having to retype their GitHub URL.
+   */
+  initialUrl?: string;
 }
 
 // Loose check that catches the most common typos before we round-trip
@@ -15,8 +23,16 @@ const REPO_URL_RE = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+\/?$/i;
 
 type SubmissionState = 'idle' | 'submitting' | 'success' | 'error';
 
-export function RepositoryUrlForm({ onProjectCreated }: RepositoryUrlFormProps) {
-  const [url, setUrl] = useState('');
+export function RepositoryUrlForm({
+  onProjectCreated,
+  initialUrl,
+}: RepositoryUrlFormProps) {
+  // `initialUrl` is treated as a one-shot seed — `useState(initialUrl
+  // ?? '')` captures the landing-page prefill on first mount without
+  // trapping the user inside whatever they originally typed. A
+  // subsequent route change with a different `?repo=` query still
+  // lands on a remount of this component, so the seed still applies.
+  const [url, setUrl] = useState(initialUrl ?? '');
   const [token, setToken] = useState('');
   const [showTokenField, setShowTokenField] = useState(false);
   const [state, setState] = useState<SubmissionState>('idle');

@@ -4,6 +4,7 @@ import {
   useNavigate,
   useParams,
   useLocation,
+  useSearchParams,
   Link,
 } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -20,6 +21,12 @@ function HomePage() {
   const navigate = useNavigate();
   const { projects, loading, refresh } = useProjectListData();
   const shouldReduceMotion = useReducedMotion();
+  // Pre-fill the repository form from a `?repo=` query param so the
+  // marketing landing page at `/` can forward whatever the user
+  // typed in its hero input. Read once — any subsequent edit the
+  // user makes lives in the form's local state.
+  const [searchParams] = useSearchParams();
+  const initialRepoUrl = searchParams.get('repo') ?? undefined;
 
   const handleProjectCreated = (id: string) => {
     void navigate(`/projects/${id}`);
@@ -95,7 +102,10 @@ function HomePage() {
         transition={{ delay: 0.25, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-6xl mx-auto px-6 py-12">
-          <RepositoryUrlForm onProjectCreated={handleProjectCreated} />
+          <RepositoryUrlForm
+            onProjectCreated={handleProjectCreated}
+            {...(initialRepoUrl !== undefined ? { initialUrl: initialRepoUrl } : {})}
+          />
         </div>
       </motion.section>
 
@@ -140,7 +150,7 @@ function ProjectPage() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/app" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
@@ -170,7 +180,7 @@ function TrendsPageWrapper() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/app" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
@@ -199,7 +209,7 @@ function CreatePageWrapper() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/app" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
