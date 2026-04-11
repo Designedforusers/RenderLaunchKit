@@ -113,6 +113,22 @@ const envSchema = z.object({
   RENDER_API_KEY: z.string().optional(),
   RENDER_WORKFLOW_SLUG: z.string().optional(),
   RENDER_USE_LOCAL_DEV: z.enum(['true', 'false']).optional(),
+
+  // ── MinIO object storage (read-only) ───────────────────────────
+  // The `/api/assets/:id/video.mp4` route reads the stored
+  // `rendered_video_url` column on the asset row and 302-redirects
+  // clients to it. The web service never WRITES to MinIO — that
+  // happens on the workflows service — so it only needs the public
+  // hostname and the bucket name for composing fallback redirect
+  // URLs on legacy asset rows that stored the storage key without
+  // the full URL. MINIO_ENDPOINT_HOST is a bare hostname injected
+  // by `render.yaml` via `fromService.property: host`; the helper
+  // that composes URLs prepends `https://` at read time. Both are
+  // optional so the service boots locally without MinIO; the video
+  // route returns 404 when a redirect is requested and the column
+  // is empty.
+  MINIO_ENDPOINT_HOST: z.string().optional(),
+  MINIO_BUCKET: z.string().default('launchkit-renders'),
 });
 
 export type WebEnv = z.infer<typeof envSchema>;

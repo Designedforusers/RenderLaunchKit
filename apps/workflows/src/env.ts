@@ -81,6 +81,23 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(5),
+
+  // ── MinIO object storage ───────────────────────────────────────
+  // The `renderRemotionVideo` task uploads finished MP4 bytes to a
+  // MinIO bucket on the `launchkit-minio` service. MINIO_ENDPOINT_HOST
+  // is a bare hostname (no scheme, no port) injected via render.yaml's
+  // `fromService.property: host`; the client composes the full
+  // `https://<host>` URL at construction time. MINIO_ROOT_USER and
+  // MINIO_ROOT_PASSWORD are set manually on the workflows service
+  // in the Render dashboard (Render Workflows is not in the Blueprint
+  // so the Blueprint's auto-sync from `launchkit-minio` does not
+  // reach this service). All four are optional so local dev boots
+  // without MinIO; the task throws a structured error at upload time
+  // if any required field is missing.
+  MINIO_ENDPOINT_HOST: z.string().optional(),
+  MINIO_ROOT_USER: z.string().optional(),
+  MINIO_ROOT_PASSWORD: z.string().optional(),
+  MINIO_BUCKET: z.string().default('launchkit-renders'),
 });
 
 export type WorkflowsEnv = z.infer<typeof envSchema>;
