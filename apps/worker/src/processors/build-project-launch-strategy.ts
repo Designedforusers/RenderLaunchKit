@@ -61,6 +61,15 @@ export async function buildProjectLaunchStrategy(data: JobData): Promise<void> {
   // Insert the queued asset records. We don't read the returned
   // rows here — the worker fan-out re-queries by `projectId` —
   // so the result is intentionally discarded.
+  //
+  // NOTE: this processor intentionally does NOT kick off the Render
+  // Workflows parent task. The trigger lives one level up in the
+  // analysis job handler at `apps/worker/src/index.ts` (the STRATEGIZE
+  // branch calls `triggerWorkflowGeneration(projectId)` immediately
+  // after this processor returns). The side-effect stays in the
+  // handler so the processor remains pure and unit-testable. See also
+  // CLAUDE.md § "Workflows service" for the three documented trigger
+  // call sites.
   await db.insert(schema.assets).values(assetRecords);
 
   // Update project with strategy

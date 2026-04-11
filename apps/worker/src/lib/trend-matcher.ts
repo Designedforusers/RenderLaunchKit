@@ -10,7 +10,8 @@ import { database as db } from './database.js';
  * Voyage, and runs a pgvector cosine-similarity query against
  * `trend_signals.embedding` filtered by category and a recency window.
  *
- * Mirrors `apps/worker/src/lib/influencer-matcher.ts` line-for-line:
+ * Mirrors the canonical pgvector pattern in
+ * `apps/worker/src/tools/project-insight-memory.ts` line-for-line:
  * raw SQL via Drizzle's `sql` template (every value parameterised,
  * no `sql.raw`), `<=>` cosine-distance ORDER BY, `1 - distance`
  * similarity in the SELECT, Zod row validation at the boundary so
@@ -28,8 +29,8 @@ import { database as db } from './database.js';
 // `db.execute(sql`...`)` returns `unknown[]` rows because the query is
 // hand-written and bypasses Drizzle's typed query builder. We Zod-parse
 // every row before mapping to the typed return shape — same approach
-// as `MatchedInfluencerRowSchema` at
-// `apps/worker/src/lib/influencer-matcher.ts:42-52`.
+// as `SimilarProjectRowSchema` in
+// `apps/worker/src/tools/project-insight-memory.ts`.
 
 const MatchedTrendRowSchema = z.object({
   id: z.string().uuid(),
@@ -83,10 +84,9 @@ export interface FindTrendsInput {
  * weighting by velocity score).
  *
  * Voyage configuration errors propagate via `VoyageEmbeddingError`
- * rather than being swallowed — same posture as `findInfluencersForCommit`
- * in `influencer-matcher.ts:96-108` and `findSimilarProjects` in
- * `project-insight-memory.ts:67-76`. A silent empty result would mask
- * a missing API key in production.
+ * rather than being swallowed — same posture as `findSimilarProjects`
+ * in `apps/worker/src/tools/project-insight-memory.ts`. A silent
+ * empty result would mask a missing API key in production.
  */
 export async function findRelevantTrendsForCommit(
   input: FindTrendsInput

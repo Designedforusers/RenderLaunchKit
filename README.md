@@ -233,7 +233,7 @@ LaunchKit deploys from a Render Blueprint plus one manual workflow service. Tota
 
 ### Step 2 — Create the workflow service (one-time manual step)
 
-Render Workflows is in public beta and the Blueprint syntax doesn't yet support workflow services, so this one service is created via the dashboard.
+> **Important — this step is mandatory, not optional.** Render Workflows is in public beta and `render.yaml` Blueprint syntax doesn't yet support workflow services, so the eighth service is created via the dashboard. Skip this step and the Blueprint will go green, the web UI will accept a GitHub URL, and every asset will then sit at `status='queued'` forever because nothing is listening on the workflows side. You must complete steps 2 and 3 before the pipeline will generate anything.
 
 1. Dashboard → **New +** → **Workflow**
 2. Connect the same fork. Pick the same region the Blueprint used (private network access depends on co-region).
