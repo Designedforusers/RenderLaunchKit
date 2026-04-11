@@ -16,7 +16,7 @@ import {
 } from '@launchkit/video/renderer';
 import { createObjectStorageClient } from '@launchkit/asset-generators';
 import { database as db } from '../lib/database.js';
-import { env } from '../env.js';
+import { composeMinioEndpoint, env } from '../env.js';
 import {
   RenderRemotionVideoInputSchema,
   type RenderRemotionVideoInput,
@@ -233,8 +233,14 @@ export const renderRemotionVideo = task<
     //    from the typed workflows env module; missing fields
     //    throw a structured error so the failure is obvious to
     //    the operator debugging in Render logs.
+    //
+    //    `composeMinioEndpoint` branches on the host shape: local
+    //    dev (`localhost:9000` via docker-compose) uses plain HTTP,
+    //    Render-hosted MinIO uses HTTPS on 443. Keeps the URL
+    //    scheme out of every call site.
+    const endpoint = composeMinioEndpoint(env.MINIO_ENDPOINT_HOST);
     if (
-      env.MINIO_ENDPOINT_HOST === undefined ||
+      endpoint === null ||
       env.MINIO_ROOT_USER === undefined ||
       env.MINIO_ROOT_PASSWORD === undefined
     ) {
@@ -244,7 +250,7 @@ export const renderRemotionVideo = task<
     }
 
     const storage = createObjectStorageClient({
-      endpoint: `https://${env.MINIO_ENDPOINT_HOST}`,
+      endpoint,
       bucket: env.MINIO_BUCKET,
       accessKeyId: env.MINIO_ROOT_USER,
       secretAccessKey: env.MINIO_ROOT_PASSWORD,

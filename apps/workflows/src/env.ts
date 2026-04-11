@@ -131,6 +131,25 @@ function parseEnv(): WorkflowsEnv {
 }
 
 /**
+ * Compose a full MinIO endpoint URL from the bare `MINIO_ENDPOINT_HOST`
+ * value. See the matching helper in `apps/web/src/env.ts` for the
+ * scheme-detection rationale — `http://` for local dev (detected via
+ * `localhost`, `127.0.0.1`, or a `:` port marker), `https://` for
+ * Render-hosted services.
+ *
+ * Returns `null` when the host is missing so callers can branch to a
+ * structured error at the use site.
+ */
+export function composeMinioEndpoint(host: string | undefined): string | null {
+  if (host === undefined || host.length === 0) return null;
+  const isLocal =
+    host.startsWith('localhost') ||
+    host.startsWith('127.0.0.1') ||
+    host.includes(':');
+  return isLocal ? `http://${host}` : `https://${host}`;
+}
+
+/**
  * Lazy proxy over the parsed env. See `apps/worker/src/env.ts` for
  * the rationale and the symbol-guard explanation.
  */
