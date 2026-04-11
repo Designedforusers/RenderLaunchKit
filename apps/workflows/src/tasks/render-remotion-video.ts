@@ -212,6 +212,7 @@ export const renderRemotionVideo = task<
         renderedVideoUrl: assets.renderedVideoUrl,
         renderedVideoKey: assets.renderedVideoKey,
         version: assets.version,
+        metadata: assets.metadata,
       })
       .from(assets)
       .where(eq(assets.id, parsed.assetId));
@@ -236,18 +237,20 @@ export const renderRemotionVideo = task<
       // the object exists in MinIO. We do not round-trip a
       // HeadObject here because the task boots on a fresh Render
       // instance every call and the overhead would dominate the
-      // fast path. `sizeBytes` is reported as `0` on cache hits;
-      // callers that care about real byte counts should filter
-      // on `cached === true` before summing. Persisting the
-      // actual byte count on the asset row so cache hits can
-      // return the real value is a follow-up — the schema has
-      // no column for it today and this path has no consumer
-      // that reads it.
+      // fast path.
+      //
+      // Read the previously-persisted `renderedVideoSizeBytes`
+      // from the asset's `metadata` jsonb blob. The write side
+      // below stores it alongside the rendered URL, so a cache
+      // hit returns the honest byte count instead of 0. Legacy
+      // rows without the metadata key fall back to 0 — the
+      // returned shape stays stable.
+      const cachedSizeBytes = readRenderedVideoSizeBytes(existing.metadata);
       return {
         url: existing.renderedVideoUrl,
         key: existing.renderedVideoKey,
         cached: true,
-        sizeBytes: 0,
+        sizeBytes: cachedSizeBytes,
       };
     }
 
@@ -311,11 +314,26 @@ export const renderRemotionVideo = task<
     //    sibling `rendered_narrated_video_url` column without
     //    touching the read path's branching logic.
     if (parsed.variant === 'visual') {
+      // Merge the rendered size into the existing `metadata` jsonb
+      // blob via a read-modify-write. No schema migration needed
+      // because the column already exists; the new key simply
+      // nests alongside any asset-specific metadata the generator
+      // already wrote. A follow-up `HeadObject` cache hit reads
+      // the same key back via `readRenderedVideoSizeBytes`.
+      const existingMetadata = isRecord(existing.metadata)
+        ? existing.metadata
+        : {};
+      const nextMetadata = {
+        ...existingMetadata,
+        renderedVideoSizeBytes: uploaded.sizeBytes,
+      };
+
       await db
         .update(assets)
         .set({
           renderedVideoUrl: uploaded.url,
           renderedVideoKey: uploaded.key,
+          metadata: nextMetadata,
           updatedAt: new Date(),
         })
         .where(eq(assets.id, parsed.assetId));
@@ -329,3 +347,25 @@ export const renderRemotionVideo = task<
     };
   }
 );
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Pull the `renderedVideoSizeBytes` key out of an asset's `metadata`
+ * jsonb blob. Defaults to `0` when the row predates the size-persist
+ * feature, when the key is missing, or when the value is not a
+ * non-negative integer. The tolerant fallback keeps the cache-hit
+ * return shape stable across legacy and current rows — callers that
+ * care about real byte counts filter on `cached === true` at the
+ * top level anyway.
+ */
+function readRenderedVideoSizeBytes(metadata: unknown): number {
+  if (!isRecord(metadata)) return 0;
+  const raw = metadata['renderedVideoSizeBytes'];
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return 0;
+  return raw;
+}
