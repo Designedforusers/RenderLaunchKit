@@ -192,6 +192,21 @@ export type InterestPoint = z.infer<typeof InterestPointSchema>;
 export type RelatedQuery = z.infer<typeof RelatedQuerySchema>;
 export type ExaResult = z.infer<typeof ExaResultSchema>;
 
+// ── Discover (broad trending topics) ─────────────────────────────
+
+const DiscoverItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  publishedDate: z.string().nullable(),
+});
+
+const DiscoverResponseSchema = z.object({
+  items: z.array(DiscoverItemSchema),
+});
+
+export type DiscoverItem = z.infer<typeof DiscoverItemSchema>;
+
 export const api = {
   // Projects
   listProjects: () =>
@@ -322,6 +337,9 @@ export const api = {
       TrendSearchResponseSchema,
       `/trends/search?q=${encodeURIComponent(query)}`
     ),
+
+  discoverTrends: () =>
+    request(DiscoverResponseSchema, '/trends/discover'),
 
   // ── Direct generation ────────────────────────────────────────────
 
