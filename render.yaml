@@ -96,21 +96,40 @@ services:
         sync: false
       - key: RENDER_WORKFLOW_SLUG
         sync: false
-      # MinIO object storage. The `/api/assets/:id/video.mp4`
-      # route reads `assets.rendered_video_url` and 302-redirects
-      # clients to the MinIO public URL when present. The url is
-      # populated by the `renderRemotionVideo` workflows task
-      # after it uploads the MP4 bytes, so the web service never
-      # needs S3 write access itself — MINIO_ROOT_USER /
-      # MINIO_ROOT_PASSWORD are scoped to the workflows service
-      # only (set via the dashboard on the manually-created
-      # workflow service). The web service only needs the public
-      # hostname to compose redirect targets. See ADR-002.
+      # MinIO object storage. The web service touches MinIO in two
+      # places:
+      #
+      #   1. `/api/assets/:id/video.mp4` READS `rendered_video_url`
+      #      from the asset row and 302-redirects clients to the
+      #      stored public URL.
+      #   2. The narrated-video variant UPLOADS the synthesized
+      #      ElevenLabs MP3 to `audio/<assetId>-<seed>.mp3` and
+      #      passes the resulting public URL into `audioSrc` on
+      #      the Remotion props. This keeps the Workflows task
+      #      payload down to ~200 bytes instead of the ~3-5 MB
+      #      data URI the earlier design inlined.
+      #
+      # Write path (#2) needs the root credentials, so they are
+      # wired via `fromService` against `launchkit-minio` the same
+      # way the workflows service reads them. The workflows service
+      # itself is created manually in the dashboard because Render
+      # Workflows is not yet in the Blueprint syntax — see ADR-002
+      # and CLAUDE.md § "Workflows service".
       - key: MINIO_ENDPOINT_HOST
         fromService:
           name: launchkit-minio
           type: web
           property: host
+      - key: MINIO_ROOT_USER
+        fromService:
+          name: launchkit-minio
+          type: web
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_ROOT_PASSWORD
+        fromService:
+          name: launchkit-minio
+          type: web
+          envVarKey: MINIO_ROOT_PASSWORD
       - key: MINIO_BUCKET
         value: launchkit-renders
 

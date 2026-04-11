@@ -114,20 +114,28 @@ const envSchema = z.object({
   RENDER_WORKFLOW_SLUG: z.string().optional(),
   RENDER_USE_LOCAL_DEV: z.enum(['true', 'false']).optional(),
 
-  // ── MinIO object storage (read-only) ───────────────────────────
-  // The `/api/assets/:id/video.mp4` route reads the stored
-  // `rendered_video_url` column on the asset row and 302-redirects
-  // clients to it. The web service never WRITES to MinIO — that
-  // happens on the workflows service — so it only needs the public
-  // hostname and the bucket name for composing fallback redirect
-  // URLs on legacy asset rows that stored the storage key without
-  // the full URL. MINIO_ENDPOINT_HOST is a bare hostname injected
-  // by `render.yaml` via `fromService.property: host`; the helper
-  // that composes URLs prepends `https://` at read time. Both are
-  // optional so the service boots locally without MinIO; the video
-  // route returns 404 when a redirect is requested and the column
-  // is empty.
+  // ── MinIO object storage ───────────────────────────────────────
+  // The web service touches MinIO in two places:
+  //   1. `/api/assets/:id/video.mp4` READS the stored
+  //      `rendered_video_url` column on the asset row and
+  //      302-redirects clients to it (no credentials needed —
+  //      the object is public-read).
+  //   2. The narrated-video variant UPLOADS the synthesized
+  //      ElevenLabs MP3 to `audio/<assetId>-<seed>.mp3` and
+  //      passes the resulting public URL into `audioSrc` on the
+  //      Remotion props instead of embedding a multi-MB data URI.
+  //      This write path needs `MINIO_ROOT_USER` and
+  //      `MINIO_ROOT_PASSWORD`, wired via `fromService` in
+  //      `render.yaml` from the `launchkit-minio` service's
+  //      auto-generated credentials.
+  // All three fields are optional so the service boots locally
+  // without MinIO; the narrated variant falls back to the data
+  // URI path at call time if the credentials are missing, and
+  // the video route returns 404 when a cache-hit redirect is
+  // requested and the column is empty.
   MINIO_ENDPOINT_HOST: z.string().optional(),
+  MINIO_ROOT_USER: z.string().optional(),
+  MINIO_ROOT_PASSWORD: z.string().optional(),
   MINIO_BUCKET: z.string().default('launchkit-renders'),
 });
 

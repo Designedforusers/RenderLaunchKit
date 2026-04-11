@@ -62,7 +62,7 @@ export interface ObjectStorageConfig {
   publicUrl?: string;
 }
 
-export interface UploadVideoResult {
+export interface UploadResult {
   /** Storage key (path-like identifier inside the bucket). */
   key: string;
   /** Public URL clients can GET the uploaded object from. */
@@ -71,9 +71,15 @@ export interface UploadVideoResult {
   sizeBytes: number;
 }
 
+/**
+ * @deprecated Use `UploadResult` instead. Retained as a named
+ * re-export for backward compatibility with existing call sites.
+ */
+export type UploadVideoResult = UploadResult;
+
 export interface ObjectStorageClient {
   /**
-   * Upload an MP4 video buffer to `videos/<key>` in the bucket and
+   * Upload an MP4 video buffer to the given `key` in the bucket and
    * return the key + public URL. Creates the bucket on first call
    * if it does not exist (idempotent via `HeadBucket` check).
    */
@@ -81,7 +87,22 @@ export interface ObjectStorageClient {
     key: string,
     bytes: Buffer,
     contentType?: string
-  ): Promise<UploadVideoResult>;
+  ): Promise<UploadResult>;
+
+  /**
+   * Upload an audio buffer (default content-type `audio/mpeg`) to
+   * the given `key` in the bucket. Used by the web service's
+   * narrated-video handler to hoist the ElevenLabs MP3 out of the
+   * Remotion task payload and pass a MinIO URL through `audioSrc`
+   * instead of a multi-MB inline data URI. Same happy-path semantics
+   * as `uploadVideo`: idempotent bucket creation, public-read ACL,
+   * returns key + URL + size.
+   */
+  uploadAudio(
+    key: string,
+    bytes: Buffer,
+    contentType?: string
+  ): Promise<UploadResult>;
 
   /**
    * Resolve a storage key to its public URL without hitting the
@@ -163,11 +184,11 @@ export function createObjectStorageClient(
     return `${publicUrl}/${config.bucket}/${safeKey}`;
   }
 
-  async function uploadVideo(
+  async function uploadWithContentType(
     key: string,
     bytes: Buffer,
-    contentType = 'video/mp4'
-  ): Promise<UploadVideoResult> {
+    contentType: string
+  ): Promise<UploadResult> {
     await ensureBucket();
 
     await s3.send(
@@ -178,9 +199,10 @@ export function createObjectStorageClient(
         ContentType: contentType,
         // `public-read` ACL means the web service can 302-redirect
         // browsers directly to the object URL without signing. The
-        // rendered video is the user-facing output, not private
-        // data — no signing needed. A future private-bucket mode
-        // would swap this for a `getSignedUrl` call at read time.
+        // rendered video (and the narrated audio it references) is
+        // the user-facing output, not private data — no signing
+        // needed. A future private-bucket mode would swap this for
+        // a `getSignedUrl` call at read time.
         ACL: 'public-read',
       })
     );
@@ -192,8 +214,25 @@ export function createObjectStorageClient(
     };
   }
 
+  async function uploadVideo(
+    key: string,
+    bytes: Buffer,
+    contentType = 'video/mp4'
+  ): Promise<UploadResult> {
+    return uploadWithContentType(key, bytes, contentType);
+  }
+
+  async function uploadAudio(
+    key: string,
+    bytes: Buffer,
+    contentType = 'audio/mpeg'
+  ): Promise<UploadResult> {
+    return uploadWithContentType(key, bytes, contentType);
+  }
+
   return {
     uploadVideo,
+    uploadAudio,
     getPublicUrl,
   };
 }
