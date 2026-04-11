@@ -37,6 +37,18 @@ import {
 
 const assetApiRoutes = new Hono();
 
+// Resolve paths relative to the monorepo root, not `process.cwd()`.
+// `tsx watch` and `node dist/` both set cwd inside `apps/web/`,
+// so anchoring paths off `import.meta.url` keeps the cache lookups
+// consistent across dev and prod without per-request re-computation.
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..'
+);
+
 /**
  * Type guard for the Remotion video composition props pulled from
  * `assets.metadata.remotionProps`. Backed by the Zod schema in
@@ -277,12 +289,8 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
     );
   }
 
-  const repoRoot = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '..', '..', '..', '..'
-  );
   const audioPath = path.resolve(
-    repoRoot,
+    REPO_ROOT,
     '.cache/elevenlabs-rendered',
     `${parsed.data.audioCacheKey}.mp3`
   );
