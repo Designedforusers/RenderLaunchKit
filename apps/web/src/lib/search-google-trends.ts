@@ -74,16 +74,17 @@ export async function searchGoogleTrends(
 ): Promise<GoogleTrendsResult> {
   if (keyword.trim().length === 0) return EMPTY_RESULT;
 
-  // google-trends-api is a CJS module. When imported via ESM dynamic
-  // import, the actual API lives on `.default` (the CJS `module.exports`
-  // object). The top-level namespace has no usable methods.
-  let googleTrends: {
-    interestOverTime: (opts: { keyword: string; geo: string; startTime: Date }) => Promise<string>;
-    relatedQueries: (opts: { keyword: string; geo: string }) => Promise<string>;
-  };
+  // google-trends-api ships as CJS with `module.exports = { ... }`.
+  // The local type declaration in `apps/web/src/google-trends-api.d.ts`
+  // uses `export =` so dynamic import surfaces the API on `.default`
+  // with its full typed shape — no boundary cast needed. If the
+  // package fails to load (missing dep, network hiccup at cold
+  // start), return the empty result so the aggregation path in
+  // `trends-api-routes.ts` still returns Exa + local signals.
+  let googleTrends;
   try {
     const mod = await import('google-trends-api');
-    googleTrends = (mod.default ?? mod) as typeof googleTrends;
+    googleTrends = mod.default;
   } catch {
     console.warn('[GoogleTrends] Failed to import google-trends-api');
     return EMPTY_RESULT;
@@ -91,19 +92,16 @@ export async function searchGoogleTrends(
 
   const [interestRaw, relatedRaw] = await Promise.allSettled([
     // Interest over time — last 12 months
-    Promise.race([
+    withTimeout(
       googleTrends.interestOverTime({
         keyword,
         geo,
         startTime: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
       }),
-      rejectAfter(REQUEST_TIMEOUT_MS),
-    ]),
+      REQUEST_TIMEOUT_MS
+    ),
     // Related queries — rising and top
-    Promise.race([
-      googleTrends.relatedQueries({ keyword, geo }),
-      rejectAfter(REQUEST_TIMEOUT_MS),
-    ]),
+    withTimeout(googleTrends.relatedQueries({ keyword, geo }), REQUEST_TIMEOUT_MS),
   ]);
 
   const interestOverTime = parseInterestOverTime(interestRaw);
@@ -160,8 +158,25 @@ function parseRelatedQueries(
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function rejectAfter(ms: number): Promise<never> {
-  return new Promise((_resolve, reject) =>
-    setTimeout(() => reject(new Error(`Timeout after ${String(ms)}ms`)), ms)
-  );
+/**
+ * Race a promise against a timeout, clearing the timer when the
+ * inner promise settles so Node doesn't hold a stale `setTimeout`
+ * open in the event loop until it fires into a settled race. The
+ * bare `setTimeout` version leaks spurious `UnhandledPromiseRejection`
+ * warnings on Node 18+ when the timeout rejects into an already-
+ * resolved race.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Timeout after ${String(ms)}ms`)),
+      ms
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
