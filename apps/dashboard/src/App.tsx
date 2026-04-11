@@ -13,6 +13,7 @@ import { ProjectSummaryList } from './components/ProjectSummaryList.js';
 import { ProjectDetailView } from './components/ProjectDetailView.js';
 import { TrendsPage } from './components/TrendsPage.js';
 import { CreatePage } from './components/CreatePage.js';
+import { LandingPage } from './components/LandingPage.js';
 import { useProjectListData } from './hooks/useProjectData.js';
 
 function HomePage() {
@@ -233,7 +234,8 @@ export default function App() {
         transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       >
         <Routes location={location}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/app" element={<HomePage />} />
           <Route path="/trends" element={<TrendsPageWrapper />} />
           <Route path="/create" element={<CreatePageWrapper />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
