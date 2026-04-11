@@ -41,7 +41,30 @@ services:
         sync: false
       - key: ELEVENLABS_VOICE_ID
         sync: false
+      - key: ELEVENLABS_VOICE_ID_ALT
+        sync: false
       - key: ELEVENLABS_MODEL_ID
+        sync: false
+      # Direct generation endpoints (the creative studio at
+      # `/create` and the chat endpoint at `/api/projects/:id/chat`)
+      # call FAL, World Labs, and Anthropic synchronously from the
+      # web request handler — no BullMQ hop, no worker bounce. The
+      # typed env module in `apps/web/src/env.ts` declares each as
+      # optional so the service still boots without them, but the
+      # matching route returns a structured 503 at call time if the
+      # required key is missing. Expose them here so the creative
+      # studio and chat features actually work in production.
+      - key: FAL_API_KEY
+        sync: false
+      - key: WORLD_LABS_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Exa deep-search tool invoked from the chat endpoint. Chat
+      # still works without it (falls back to Claude's native
+      # web_search), but the dedicated deep-search tool is gated
+      # on this key at request time.
+      - key: EXA_API_KEY
         sync: false
       - key: API_KEY
         sync: false
