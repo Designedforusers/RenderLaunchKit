@@ -7,3 +7,4 @@ export * from './pricing.js';
 export * from './utils.js';
 export * from './voiceover.js';
 export * from './written-asset-serializers.js';
+export * from './compose-minio-endpoint.js';

@@ -15,8 +15,9 @@ import {
   type RemotionRenderInput,
 } from '@launchkit/video/renderer';
 import { createObjectStorageClient } from '@launchkit/asset-generators';
+import { composeMinioEndpoint } from '@launchkit/shared';
 import { database as db } from '../lib/database.js';
-import { composeMinioEndpoint, env } from '../env.js';
+import { env } from '../env.js';
 import {
   RenderRemotionVideoInputSchema,
   type RenderRemotionVideoInput,
