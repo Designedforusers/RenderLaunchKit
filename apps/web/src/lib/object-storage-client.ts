@@ -8,15 +8,17 @@ import { env } from '../env.js';
 /**
  * Module-level lazy singleton MinIO client for the web service.
  *
- * The web service has one write path into MinIO: the narrated-video
- * variant handler in `asset-api-routes.ts` uploads the ElevenLabs
- * MP3 into `audio/<assetId>-<seed>.mp3` before triggering the
- * `renderRemotionVideo` workflow task with a MinIO URL in
- * `inputProps.audioSrc`. The alternative — embedding the audio as
- * a `data:` URI in the task payload — blew up the Workflows SDK
- * call to 3-5 MB per request, which is slow to serialize, slow
- * to transmit, and uncomfortably close to whatever payload cap
- * the SDK happens to enforce this week.
+ * The web service writes to MinIO from inside the three-tier
+ * narration cache (`apps/web/src/lib/elevenlabs.ts`): tier 3
+ * uploads the freshly-synthesized ElevenLabs MP3 + alignment
+ * JSON to `audio/<cacheKey>.mp3` and `audio/<cacheKey>.json`,
+ * where `<cacheKey>` is the 16-char SHA-1 slice produced by
+ * `buildElevenLabsCacheKey`. The route then passes a MinIO URL
+ * (instead of a 3-5 MB inline data URI) to the workflow task as
+ * the `audioSrc` Remotion prop. The alternative — embedding the
+ * audio as a `data:` URI in the task payload — was slow to
+ * serialize, slow to transmit, and uncomfortably close to
+ * whatever payload cap the SDK happens to enforce this week.
  *
  * Constructing the S3 client is cheap but not free (it builds an
  * HTTPS agent, resolves credentials, computes request signers), so

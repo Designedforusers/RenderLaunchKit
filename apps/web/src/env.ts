@@ -120,17 +120,20 @@ const envSchema = z.object({
   //      `rendered_video_url` column on the asset row and
   //      302-redirects clients to it (no credentials needed —
   //      the object is public-read).
-  //   2. The narrated-video variant UPLOADS the synthesized
-  //      ElevenLabs MP3 to `audio/<assetId>-<seed>.mp3` and
-  //      passes the resulting public URL into `audioSrc` on the
-  //      Remotion props instead of embedding a multi-MB data URI.
-  //      This write path needs `MINIO_ROOT_USER` and
+  //   2. The three-tier narration cache in `lib/elevenlabs.ts`
+  //      reads and writes `audio/<cacheKey>.mp3` and
+  //      `audio/<cacheKey>.json` (where `<cacheKey>` is the
+  //      16-char SHA-1 slice produced by `buildElevenLabsCacheKey`).
+  //      Tier 2 reads from MinIO on a local-cache miss; tier 3
+  //      uploads the freshly-synthesized ElevenLabs response so
+  //      future requests can short-circuit ElevenLabs entirely.
+  //      Both write and read need `MINIO_ROOT_USER` and
   //      `MINIO_ROOT_PASSWORD`, wired via `fromService` in
   //      `render.yaml` from the `launchkit-minio` service's
   //      auto-generated credentials.
   // All three fields are optional so the service boots locally
-  // without MinIO; the narrated variant falls back to the data
-  // URI path at call time if the credentials are missing, and
+  // without MinIO; the synth function degrades to disk-only
+  // behaviour at call time if the credentials are missing, and
   // the video route returns 404 when a cache-hit redirect is
   // requested and the column is empty.
   MINIO_ENDPOINT_HOST: z.string().optional(),

@@ -208,3 +208,107 @@ test('object-storage: publicUrl config override changes the returned URL prefix'
   // changing the uploader.
   assert.match(result.url, /^https:\/\/cdn\.example\.com\//);
 });
+
+// ── getObject tier-2 cache read surface ─────────────────────────
+//
+// These four tests lock in the three-tier narration cache contract.
+// `elevenlabs.ts` reads this method in the "warm" tier between a
+// local-disk hot cache and the ElevenLabs API cold path. The
+// invariants under test:
+//
+// 1. A hit returns the exact bytes that were uploaded (round-trip
+//    fidelity — otherwise the MP3 decodes into garbage).
+// 2. A `NoSuchKey` miss returns `null` (not a thrown error) so the
+//    caller's `?? fallThrough()` pattern works.
+// 3. A `NoSuchBucket` miss returns `null` too — on a fresh MinIO
+//    deploy the bucket doesn't exist yet, and the first-request
+//    recovery path relies on this classification to fall through
+//    to synthesize-and-upload instead of 500ing.
+// 4. A non-404 error (bogus credentials) still throws. Swallowing
+//    those would hide real operational failures behind silent
+//    cache misses.
+
+test('object-storage: getObject round-trips uploaded bytes on hit', async (t) => {
+  if (!(await minioReachable())) {
+    t.skip('MinIO not reachable');
+    return;
+  }
+  const client = await makeClient();
+  const key = uniqueKey('get-hit');
+  const bytes = Buffer.concat([
+    Buffer.from('narration-mp3-payload-'),
+    randomBytes(128),
+  ]);
+  await client.uploadAudio(key, bytes);
+  const fetched = await client.getObject(key);
+  assert.ok(fetched !== null, 'expected getObject to return a Buffer, got null');
+  assert.ok(Buffer.isBuffer(fetched), 'expected Buffer, got different type');
+  assert.equal(fetched.byteLength, bytes.byteLength);
+  assert.ok(fetched.equals(bytes), 'fetched bytes do not match uploaded bytes');
+});
+
+test('object-storage: getObject returns null on NoSuchKey miss', async (t) => {
+  if (!(await minioReachable())) {
+    t.skip('MinIO not reachable');
+    return;
+  }
+  // Prime the bucket with a real upload so the bucket itself
+  // definitely exists — this isolates the miss signal to the key
+  // rather than conflating key-missing with bucket-missing (which
+  // the next test covers separately).
+  const client = await makeClient();
+  await client.uploadVideo(uniqueKey('prime'), Buffer.from('prime'), 'video/mp4');
+
+  const missingKey = uniqueKey('get-miss');
+  const fetched = await client.getObject(missingKey);
+  assert.equal(fetched, null);
+});
+
+test('object-storage: getObject returns null on NoSuchBucket miss (fresh-deploy regression guard)', async (t) => {
+  if (!(await minioReachable())) {
+    t.skip('MinIO not reachable');
+    return;
+  }
+  // Point the client at a bucket name that definitely does not
+  // exist. The getObject path must NOT call `ensureBucket` (that
+  // would defeat the tier-2 latency story) so the S3 server
+  // surfaces `NoSuchBucket` directly. The client must classify
+  // that as a cache miss so the first narrated request against
+  // a brand-new MinIO instance falls through to synthesize-and-
+  // upload instead of 500ing.
+  const { createObjectStorageClient } = await import(
+    '../packages/asset-generators/dist/clients/object-storage.js'
+  );
+  const nonExistentBucket = `launchkit-does-not-exist-${randomBytes(6).toString('hex')}`;
+  const client = createObjectStorageClient({
+    endpoint: MINIO_ENDPOINT,
+    bucket: nonExistentBucket,
+    accessKeyId: MINIO_ROOT_USER,
+    secretAccessKey: MINIO_ROOT_PASSWORD,
+  });
+  const fetched = await client.getObject('any/key.mp3');
+  assert.equal(fetched, null);
+});
+
+test('object-storage: getObject propagates non-404 errors (bogus credentials)', async (t) => {
+  if (!(await minioReachable())) {
+    t.skip('MinIO not reachable');
+    return;
+  }
+  // Credential failures must NOT fold into the `null` miss path.
+  // A silent cache miss on a permission error would hide the real
+  // operational failure and cause the caller to quietly re-call
+  // ElevenLabs on every request — the exact leak this fix is
+  // trying to close. The error class varies across AWS SDK
+  // versions, so we only assert that *something* throws.
+  const { createObjectStorageClient } = await import(
+    '../packages/asset-generators/dist/clients/object-storage.js'
+  );
+  const badClient = createObjectStorageClient({
+    endpoint: MINIO_ENDPOINT,
+    bucket: MINIO_BUCKET,
+    accessKeyId: 'definitely-not-the-real-user',
+    secretAccessKey: 'definitely-not-the-real-password',
+  });
+  await assert.rejects(async () => badClient.getObject('any/key.mp3'));
+});
