@@ -1394,17 +1394,22 @@ type StackLogo = {
   /** Monochrome SVGs get the brightness-0/invert filter so the mark renders
    * white on dark. Raster (webp) logos keep their native brand colour. */
   readonly mono: boolean;
+  /** Intrinsic dimensions so the browser reserves the correct CLS slot
+   * on first paint before the asset resolves. Tailwind `h-7 w-auto` still
+   * controls the visual size; these are purely the layout reservation. */
+  readonly width: number;
+  readonly height: number;
 };
 
 const STACK_LOGOS: readonly StackLogo[] = [
-  { src: '/logos/render.svg',     name: 'RENDER',     sub: 'WORKFLOWS',  mono: true  },
-  { src: '/logos/claude.svg',     name: 'CLAUDE',     sub: 'AGENT SDK',  mono: true  },
-  { src: '/logos/fal.webp',       name: 'FAL.AI',     sub: 'DIFFUSION',  mono: false },
-  { src: '/logos/elevenlabs.svg', name: 'ELEVENLABS', sub: 'VOICE',      mono: true  },
-  { src: '/logos/worldlabs.svg',  name: 'WORLD LABS', sub: '3D SCENES',  mono: true  },
-  { src: '/logos/remotion.webp',  name: 'REMOTION',   sub: 'VIDEO',      mono: false },
-  { src: '/logos/exa.webp',       name: 'EXA',        sub: 'DEEP SEARCH',mono: false },
-  { src: '/logos/postgresql.svg', name: 'POSTGRES',   sub: 'PGVECTOR',   mono: true  },
+  { src: '/logos/render.svg',     name: 'RENDER',     sub: 'WORKFLOWS',  mono: true,  width: 120, height: 28 },
+  { src: '/logos/claude.svg',     name: 'CLAUDE',     sub: 'AGENT SDK',  mono: true,  width: 120, height: 28 },
+  { src: '/logos/fal.webp',       name: 'FAL.AI',     sub: 'DIFFUSION',  mono: false, width: 120, height: 28 },
+  { src: '/logos/elevenlabs.svg', name: 'ELEVENLABS', sub: 'VOICE',      mono: true,  width: 120, height: 28 },
+  { src: '/logos/worldlabs.svg',  name: 'WORLD LABS', sub: '3D SCENES',  mono: true,  width: 120, height: 28 },
+  { src: '/logos/remotion.webp',  name: 'REMOTION',   sub: 'VIDEO',      mono: false, width: 120, height: 28 },
+  { src: '/logos/exa.webp',       name: 'EXA',        sub: 'DEEP SEARCH',mono: false, width: 120, height: 28 },
+  { src: '/logos/postgresql.svg', name: 'POSTGRES',   sub: 'PGVECTOR',   mono: true,  width: 120, height: 28 },
 ] as const;
 
 function TechStackStrip() {
@@ -1448,6 +1453,8 @@ function TechStackStrip() {
             <img
               src={logo.src}
               alt={`${logo.name} logo`}
+              width={logo.width}
+              height={logo.height}
               loading="lazy"
               decoding="async"
               className={`relative h-7 w-auto max-w-[120px] object-contain transition-all duration-300 group-hover:scale-110 ${
