@@ -1,4 +1,4 @@
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, and, or, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import * as schema from '@launchkit/shared';
 import {
@@ -78,13 +78,34 @@ export async function findSimilarProjects(
 
 /**
  * Get strategy insights for a given project category.
+ *
+ * Excludes Layer 3 `edit_pattern` rows so the strategist's
+ * "## Past Insights from Similar Projects" block stays focused on
+ * stat-based strategic findings (approval rates, tone analysis,
+ * trend velocity). Edit-pattern rows are routed to a separate
+ * `## Common Edits Reviewers Made` block via
+ * `getEditPatternsForCategory` so the agent prompts can teach
+ * Claude to use the two signal types differently — strategic
+ * insights inform channel selection and asset prioritisation, edit
+ * patterns inform the actual writing inside each asset.
+ *
+ * Pre-Phase-7 rows (NULL `insightType`) are still returned — the
+ * filter is "`insightType IS NULL OR insightType != 'edit_pattern'`"
+ * to preserve every legacy stat-based insight while excluding only
+ * the Layer 3 cluster rows.
  */
 export async function getInsightsForCategory(
   category: string
 ): Promise<StrategyInsight[]> {
   try {
     const insights = await db.query.strategyInsights.findMany({
-      where: eq(schema.strategyInsights.category, category),
+      where: and(
+        eq(schema.strategyInsights.category, category),
+        or(
+          isNull(schema.strategyInsights.insightType),
+          ne(schema.strategyInsights.insightType, 'edit_pattern')
+        )
+      ),
       orderBy: [desc(schema.strategyInsights.confidence)],
       limit: 10,
     });
@@ -99,6 +120,49 @@ export async function getInsightsForCategory(
     }));
   } catch (err) {
     console.error('[Memory] Error getting insights:', err);
+    return [];
+  }
+}
+
+/**
+ * Get Layer 3 edit-pattern insights for a given project category.
+ *
+ * The Phase 7 cron writes one `strategy_insights` row per cluster
+ * of semantically-similar user edits, with `insight_type='edit_pattern'`
+ * and an insight string of the form
+ * `Layer 3 edit pattern (<asset_type>, <N> similar edits): "<text>"`.
+ * This accessor returns ONLY those rows, top-N by confidence, so a
+ * consuming agent (`launch-strategy-agent` for prioritisation
+ * decisions, `written.ts` writer agent for per-asset rewrite
+ * guidance) can render them in a dedicated prompt block instead of
+ * mixing them with the stat-based strategic insights.
+ *
+ * Returns an empty array on any DB failure — same degrade-gracefully
+ * pattern as `getInsightsForCategory`.
+ */
+export async function getEditPatternsForCategory(
+  category: string
+): Promise<StrategyInsight[]> {
+  try {
+    const insights = await db.query.strategyInsights.findMany({
+      where: and(
+        eq(schema.strategyInsights.category, category),
+        eq(schema.strategyInsights.insightType, 'edit_pattern')
+      ),
+      orderBy: [desc(schema.strategyInsights.confidence)],
+      limit: 10,
+    });
+
+    return insights.map((i) => ({
+      id: i.id,
+      category: i.category,
+      insight: i.insight,
+      confidence: i.confidence,
+      sampleSize: i.sampleSize,
+      insightType: i.insightType,
+    }));
+  } catch (err) {
+    console.error('[Memory] Error getting edit patterns:', err);
     return [];
   }
 }

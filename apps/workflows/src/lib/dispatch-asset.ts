@@ -14,7 +14,10 @@ import { CostTracker, runWithCostTracker } from '@launchkit/asset-generators';
 import { database as db } from './database.js';
 import { projectProgressPublisher } from './project-progress-publisher.js';
 import { assetGenerators } from './asset-generators-instance.js';
-import { getInsightsForCategory } from './project-insight-memory.js';
+import {
+  getInsightsForCategory,
+  getEditPatternsForCategory,
+} from './project-insight-memory.js';
 import { persistCostEvents } from './persist-cost-events.js';
 
 /**
@@ -124,7 +127,24 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
     'project.strategy'
   );
 
-  const pastInsights = await getInsightsForCategory(repoAnalysis.category);
+  // Load both stat-based strategic insights AND Layer 3 edit
+  // patterns for the project category. The two accessors return
+  // disjoint sets — `getInsightsForCategory` filters out
+  // `edit_pattern` rows so the writer's "## Insights from Similar
+  // Projects" block stays focused, while
+  // `getEditPatternsForCategory` returns ONLY the cluster rows the
+  // weekly cron writes from `asset_feedback_events`. The writer
+  // agent renders the two in separate prompt blocks via
+  // `WriterInput.editPatterns` (filtered to entries that mention
+  // the current asset type before rendering — see `buildContext`
+  // in `packages/asset-generators/src/agents/written.ts`).
+  //
+  // Both calls swallow DB errors and return `[]` on failure, so a
+  // missing strategy_insights row never blocks an asset generation.
+  const [pastInsights, editPatterns] = await Promise.all([
+    getInsightsForCategory(repoAnalysis.category),
+    getEditPatternsForCategory(repoAnalysis.category),
+  ]);
 
   // Pull generation instructions off the asset metadata. The
   // strategist persists this on each asset row at the end of its
@@ -293,6 +313,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           research,
           strategy,
           pastInsights,
+          editPatterns,
           generationInstructions,
           ...(revisionInstructions !== undefined
             ? { revisionInstructions }
@@ -309,6 +330,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           research,
           strategy,
           pastInsights,
+          editPatterns,
           generationInstructions,
           ...(revisionInstructions !== undefined
             ? { revisionInstructions }
@@ -335,6 +357,7 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
           research,
           strategy,
           pastInsights,
+          editPatterns,
           assetType,
           generationInstructions,
           ...(revisionInstructions !== undefined

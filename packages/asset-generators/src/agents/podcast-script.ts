@@ -43,6 +43,10 @@ export interface PodcastScriptInput {
   research: ResearchResult;
   strategy: StrategyBrief;
   pastInsights: StrategyInsight[];
+  /** Phase 7 Layer 3 edit patterns — passed through to the writer
+   *  agent so the dialogue script honours common reviewer edits.
+   *  See `WriterInput.editPatterns` for the full rationale. */
+  editPatterns?: StrategyInsight[];
   generationInstructions: string;
   revisionInstructions?: string;
 }
@@ -128,6 +132,9 @@ export function makeGeneratePodcastScriptAsset(deps: PodcastScriptAgentDeps) {
       research: input.research,
       strategy: input.strategy,
       pastInsights: input.pastInsights,
+      ...(input.editPatterns !== undefined
+        ? { editPatterns: input.editPatterns }
+        : {}),
       assetType: 'podcast_script',
       generationInstructions: input.generationInstructions,
       ...(input.revisionInstructions !== undefined

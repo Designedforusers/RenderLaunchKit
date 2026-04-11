@@ -37,6 +37,19 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   GITHUB_TOKEN: z.string().optional(),
+  // Anthropic credentials. Optional because the cron's primary work
+  // (sync, ingest, cleanup, aggregation) does not require an LLM call —
+  // every Anthropic-using path inside the cron self-skips when the
+  // key is unset and falls back to a placeholder string instead. The
+  // current consumer is the Phase 7 Layer 3 cluster-summary upgrade
+  // in `aggregate-feedback-insights.ts` (see `clusterEditFeedback`),
+  // which calls Claude Haiku to compress each cluster of similar
+  // user edits into a one-sentence human-readable rule the strategist
+  // and writer agents read back through `strategy_insights`. Without
+  // the key the cron still writes the cluster row using the longest
+  // edit text as the representative — degraded but functional.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-haiku-4-5-20251001'),
   // Trending-signal ingest TTL. The cron uses this to stamp the
   // `expiresAt` field on the BullMQ job payload so every row from a
   // single ingest wave shares the same TTL regardless of per-cluster
@@ -44,11 +57,11 @@ const envSchema = z.object({
   // same default in `apps/worker/src/env.ts` for the bypass path when
   // the cron did not pass an explicit override.
   //
-  // Every other trending-signal credential (ANTHROPIC_API_KEY,
-  // VOYAGE_API_KEY, GROK_API_KEY, EXA_API_KEY, PRODUCT_HUNT_TOKEN)
-  // lives exclusively in the worker env module — the cron only
-  // enqueues jobs, the worker executes them, so those keys are dead
-  // configuration on the cron service and would only confuse
+  // The other trending-signal credentials (`VOYAGE_API_KEY`,
+  // `GROK_API_KEY`, `EXA_API_KEY`, `PRODUCT_HUNT_TOKEN`) still live
+  // exclusively in the worker env module — the cron only enqueues
+  // those jobs, the worker executes them, so those keys would be
+  // dead configuration on the cron service and would only confuse
   // operators configuring the cron on Render.
   TRENDING_SIGNAL_TTL_HOURS: z.coerce
     .number()

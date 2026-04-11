@@ -348,6 +348,18 @@ services:
         value: production
       - key: GITHUB_TOKEN
         sync: false
+      # Optional. Used by the Phase 7 Layer 3 cluster summary upgrade
+      # in `apps/cron/src/aggregate-feedback-insights.ts` —
+      # `summariseEditCluster` calls Claude Haiku to compress each
+      # cluster of similar user edits into a one-sentence imperative
+      # directive. Without this key, the cron still writes the
+      # cluster row using the longest edit text as the placeholder,
+      # so the self-learning loop is degraded-but-functional. Set
+      # `sync: false` so operators can opt in by pasting the same
+      # key the worker uses, without forcing a re-deploy on every
+      # cron service that previously ran without it.
+      - key: ANTHROPIC_API_KEY
+        sync: false
 
   # ── MinIO object storage ───────────────────────────────────────────
   #
