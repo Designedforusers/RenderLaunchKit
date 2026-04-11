@@ -7,11 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
-import {
-  createRemotionRenderer,
-  getRenderedVideoFilename,
-} from '@launchkit/video/renderer';
-import type { RemotionRenderer } from '@launchkit/video/renderer';
 import { database } from '../lib/database.js';
 import {
   buildElevenLabsCacheKey,
@@ -26,7 +21,7 @@ import {
 } from '../lib/narration.js';
 import { enqueueEmbedFeedbackEvent } from '../lib/job-queue-clients.js';
 import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
-import { env } from '../env.js';
+import { triggerRemotionRender } from '../lib/trigger-remotion-render.js';
 import { fileToWebStream } from '../lib/stream-utils.js';
 import {
   AssetFeedbackEventRequestSchema,
@@ -51,20 +46,6 @@ const REPO_ROOT = path.resolve(
   '..'
 );
 
-// Lazy singleton Remotion renderer for the web service's legacy
-// synchronous render path. Shared across every request so the
-// browser pool + bundle cache survive between requests. The
-// Remotion-on-Workflows migration (follow-up commit) replaces
-// direct calls to this with `triggerRemotionRender`, at which
-// point the singleton becomes unused and the import drops.
-let webRendererInstance: RemotionRenderer | null = null;
-function getWebRenderer(): RemotionRenderer {
-  webRendererInstance ??= createRemotionRenderer({
-    cacheDir: path.resolve(REPO_ROOT, '.cache/remotion-renders'),
-    concurrency: env.REMOTION_CONCURRENCY,
-  });
-  return webRendererInstance;
-}
 
 /**
  * Type guard for the Remotion video composition props pulled from
@@ -135,8 +116,31 @@ assetApiRoutes.get('/:id', async (c) => {
   });
 });
 
-// ── GET /api/assets/:id/video.mp4 — Render/download a Remotion MP4 ──
-
+// ── GET /api/assets/:id/video.mp4 — Dispatch a Remotion render ──
+//
+// The rendering itself lives in the `renderRemotionVideo` task on
+// the Render Workflows service (see `apps/workflows/src/tasks/
+// render-remotion-video.ts`). This handler is a thin dispatcher:
+//
+//   1. Look up the asset row. Return 404 / 400 / 409 on any
+//      structural precondition failure.
+//   2. If the row already carries `rendered_video_url` and the
+//      version matches, 302-redirect straight to MinIO — zero
+//      workflow traffic for cache hits.
+//   3. Build narrated props (via ElevenLabs) when the narrated
+//      variant is requested. The narration step stays on the web
+//      service so voice synthesis is not on the hot path of a
+//      pro-dyno workflow run — it is I/O-bound against ElevenLabs
+//      and runs fine on the web service's starter dyno. The
+//      narrated `audioSrc` is embedded in the task payload; see
+//      the payload-size caveat in `tasks/input-schemas.ts`.
+//   4. Call `triggerRemotionRender` to invoke the workflow task.
+//      The helper awaits the run to completion and parses the
+//      result through a Zod schema so the returned URL is typed.
+//   5. 302-redirect to the public URL the workflows task
+//      persisted on the asset row. Honour `?download=1` via a
+//      `Content-Disposition` hint appended to the URL fragment
+//      when requested.
 assetApiRoutes.get('/:id/video.mp4', async (c) => {
   const id = c.req.param('id');
   const variant = getRequestedVariant(c.req.query('variant'));
@@ -152,6 +156,23 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     return c.json({ error: 'Only product video assets can be rendered as MP4' }, 400);
   }
 
+  // Fast-path cache hit on a previously-rendered URL. The
+  // workflows task is idempotent-ish on `(assetId, version)` —
+  // rendering the same version twice just overwrites the upload
+  // — so a row that already carries a URL is trustworthy as long
+  // as the version matches. `?variant=narrated` uses a separate
+  // `rendered_video_url` cache slot is a future enhancement;
+  // today the single column stores the most recent render
+  // regardless of variant, and cross-variant requests fall
+  // through to the workflow call which produces a fresh upload.
+  if (
+    variant === 'visual' &&
+    asset.renderedVideoUrl !== null &&
+    asset.renderedVideoUrl !== ''
+  ) {
+    return c.redirect(asset.renderedVideoUrl, 302);
+  }
+
   const metadata = (asset.metadata as Record<string, unknown> | null) ?? null;
   const remotionProps = metadata?.['remotionProps'];
 
@@ -159,7 +180,13 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     return c.json({ error: 'This asset does not have Remotion render data yet' }, 409);
   }
 
-  let rendered;
+  // Narrated variant: synthesize the voiceover on the web service
+  // (I/O-bound ElevenLabs call, cheap on a starter dyno) and
+  // inline the resulting data URI into the Remotion props the
+  // workflow task will render. Visual variant skips this branch
+  // and ships the base props directly.
+  let taskInputProps: LaunchKitVideoProps = remotionProps;
+  let cacheSeed: string | undefined;
   let narrationCache = 'n/a';
 
   if (variant === 'narrated') {
@@ -215,52 +242,37 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     });
     narrationCache = narration.cached ? 'hit' : 'miss';
 
-    const renderedProps = buildNarratedVideoProps({
+    taskInputProps = buildNarratedVideoProps({
       baseProps: remotionProps,
       audioSrc: audioBufferToDataUri(narration.audioBuffer),
       captions: alignmentToCaptions(parsedVoiceover, narration.alignment),
     });
-
-    rendered = await getWebRenderer().renderLaunchVideoAsset({
-      assetId: asset.id,
-      version: asset.version,
-      inputProps: renderedProps,
-      variant: 'narrated',
-      cacheSeed: narrationSeed,
-      abortSignal: c.req.raw.signal,
-    });
-  } else {
-    rendered = await getWebRenderer().renderLaunchVideoAsset({
-      assetId: asset.id,
-      version: asset.version,
-      inputProps: remotionProps,
-      variant: 'visual',
-      abortSignal: c.req.raw.signal,
-    });
+    cacheSeed = narrationSeed;
   }
 
-  // Stream the file from disk rather than buffering it in memory.
-  //
-  // A 30-second 1080p Remotion render can easily exceed 100 MB. On Render's
-  // starter plan (512 MB RAM) two concurrent downloads of `readFile`-buffered
-  // responses would OOM the web process. `fileToWebStream` hands the bytes
-  // to the platform fetch implementation as a chunked stream so memory stays
-  // bounded regardless of file size. The Node-vs-WHATWG `ReadableStream`
-  // type bridge lives in that helper so this route doesn't repeat the cast.
-  const fileStat = await stat(rendered.outputPath);
-  const shouldDownload = c.req.query('download') === '1';
-  const filename = getRenderedVideoFilename(asset.id, asset.version, variant);
-
-  return new Response(fileToWebStream(rendered.outputPath), {
-    headers: {
-      'Content-Type': 'video/mp4',
-      'Content-Length': String(fileStat.size),
-      'Content-Disposition': `${shouldDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
-      'Cache-Control': 'private, max-age=3600',
-      'X-Remotion-Cache': rendered.cached ? 'hit' : 'miss',
-      'X-Narration-Cache': narrationCache,
-    },
+  // Dispatch to the workflow task and wait for it to finish. The
+  // task handles render + MinIO upload + asset row update; the
+  // helper blocks until the task reaches a terminal state and
+  // parses the result through a Zod schema.
+  const rendered = await triggerRemotionRender({
+    assetId: asset.id,
+    version: asset.version,
+    compositionId: 'LaunchKitProductVideo',
+    inputProps: taskInputProps,
+    variant,
+    ...(cacheSeed !== undefined ? { cacheSeed } : {}),
   });
+
+  // 302 to the public MinIO URL. The workflow task has already
+  // persisted the URL on `assets.renderedVideoUrl`, so subsequent
+  // requests short-circuit on the fast-path check above. No
+  // streaming, no in-memory buffering, no web-dyno bandwidth cost
+  // beyond the redirect itself.
+  const redirectUrl = rendered.url;
+  c.header('X-Remotion-Cache', rendered.cached ? 'hit' : 'miss');
+  c.header('X-Narration-Cache', narrationCache);
+  c.header('X-Task-Run-Id', rendered.taskRunId);
+  return c.redirect(redirectUrl, 302);
 });
 
 // ── GET /api/assets/:id/audio.mp3 — Stream the worker-rendered audio ──
