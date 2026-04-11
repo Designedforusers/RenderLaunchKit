@@ -12,7 +12,7 @@ LaunchKit is an AI-powered go-to-market teammate. The pipeline:
 GitHub URL → Analyze → Research (Agent SDK) → Strategize → Generate (parallel) → Review → Done
 ```
 
-Six Render services (web, worker, cron, workflows, redis, postgres). One TypeScript monorepo. Public showcase for Render — every PR is graded on engineering discipline as much as product behavior. See `README.md` for the architectural rationale and `CONTRIBUTING.md` for the short-form contribution rules.
+Eight Render services total — `launchkit-web`, `launchkit-worker`, `launchkit-pika-worker`, `launchkit-cron`, `launchkit-minio`, `launchkit-redis`, `launchkit-db` (seven from the Blueprint), plus `launchkit-workflows` which is a one-time dashboard step because Render Workflows is public beta and the Blueprint syntax doesn't support it yet. One TypeScript monorepo. Public showcase for Render — every PR is graded on engineering discipline as much as product behavior. See `README.md` for the architectural rationale and `CONTRIBUTING.md` for the short-form contribution rules.
 
 The `launchkit-workflows` service hosts every asset-generation run in the app on Render Workflows (public beta). Every generation path — strategize → generate, creative-review re-queue, commit-marketing refresh, user-facing "Regenerate" button — calls `render.workflows.startTask('${RENDER_WORKFLOW_SLUG}/generateAllAssetsForProject', [{ projectId }])` via a lazy SDK client. The parent task reads `status='queued'` asset rows from the DB and fans out to five compute-bucketed child tasks via run chaining. The workflows service is created manually in the Render dashboard (not via `render.yaml` Blueprint, which doesn't support workflows yet) — see README § "Create the workflow service" for the one-time setup.
 
