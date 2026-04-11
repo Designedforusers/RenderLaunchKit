@@ -16,9 +16,25 @@
     "studio": "remotion studio src/Root.tsx"
   },
   "dependencies": {
+    "@remotion/animation-utils": "^4.0.448",
+    "@remotion/bundler": "^4.0.448",
+    "@remotion/google-fonts": "^4.0.448",
+    "@remotion/licensing": "^4.0.448",
+    "@remotion/media-parser": "^4.0.448",
+    "@remotion/media-utils": "^4.0.448",
+    "@remotion/paths": "^4.0.448",
+    "@remotion/player": "^4.0.448",
+    "@remotion/renderer": "^4.0.448",
+    "@remotion/shapes": "^4.0.448",
+    "@remotion/streaming": "^4.0.448",
+    "@remotion/studio": "^4.0.448",
+    "@remotion/studio-shared": "^4.0.448",
+    "@remotion/transitions": "^4.0.448",
+    "@remotion/web-renderer": "^4.0.448",
+    "@remotion/zod-types": "^4.0.448",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "remotion": "^4.0.446",
+    "remotion": "^4.0.448",
     "zod": "^4.0.0"
   },
   "devDependencies": {

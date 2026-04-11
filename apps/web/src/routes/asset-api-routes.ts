@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
@@ -197,6 +198,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       inputProps: renderedProps,
       variant: 'narrated',
       cacheSeed: narrationSeed,
+      abortSignal: c.req.raw.signal,
     });
   } else {
     rendered = await renderLaunchVideoAsset({
@@ -204,6 +206,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       version: asset.version,
       inputProps: remotionProps,
       variant: 'visual',
+      abortSignal: c.req.raw.signal,
     });
   }
 
@@ -274,8 +277,12 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
     );
   }
 
+  const repoRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..', '..', '..', '..'
+  );
   const audioPath = path.resolve(
-    process.cwd(),
+    repoRoot,
     '.cache/elevenlabs-rendered',
     `${parsed.data.audioCacheKey}.mp3`
   );

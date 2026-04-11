@@ -1,14 +1,21 @@
+import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { loadFont as loadJetBrainsMono } from '@remotion/google-fonts/JetBrainsMono';
 import React from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { Composition } from 'remotion';
 import { LaunchKitVideo } from './LaunchKitVideo.js';
 import { PodcastWaveform } from './PodcastWaveform.js';
+import { VerticalVideo } from './VerticalVideo.js';
 import { VoiceCommercial } from './VoiceCommercial.js';
 import {
   defaultLaunchKitVideoProps,
   defaultPodcastWaveformProps,
+  defaultVerticalVideoProps,
   defaultVoiceCommercialProps,
   getLaunchKitVideoDurationInFrames,
+  getVerticalVideoDurationInFrames,
+  VERTICAL_VIDEO_HEIGHT,
+  VERTICAL_VIDEO_WIDTH,
   VIDEO_FPS,
   VIDEO_HEIGHT,
   VIDEO_WIDTH,
@@ -16,8 +23,22 @@ import {
 import type {
   LaunchKitVideoProps,
   PodcastWaveformProps,
+  VerticalVideoProps,
   VoiceCommercialProps,
 } from './types.js';
+
+// Load fonts at the composition root so every composition inherits
+// them. Remotion blocks the render until fonts are ready, so text
+// never flashes unstyled even on a cold VPS where system fonts are
+// absent.
+loadInter('normal', {
+  weights: ['400', '600', '700', '800'],
+  subsets: ['latin'],
+});
+loadJetBrainsMono('normal', {
+  weights: ['400'],
+  subsets: ['latin'],
+});
 
 // Remotion types `CalculateMetadataFunction` as returning a Promise,
 // but our implementation is purely synchronous, so we wrap with
@@ -45,6 +66,13 @@ const calculatePodcastWaveformMetadata: CalculateMetadataFunction<
 > = ({ props }) =>
   Promise.resolve({
     durationInFrames: props.durationInFrames,
+  });
+
+const calculateVerticalVideoMetadata: CalculateMetadataFunction<
+  VerticalVideoProps
+> = ({ props }) =>
+  Promise.resolve({
+    durationInFrames: getVerticalVideoDurationInFrames(props),
   });
 
 export const RemotionRoot = () => {
@@ -82,14 +110,18 @@ export const RemotionRoot = () => {
         defaultProps={defaultPodcastWaveformProps}
         calculateMetadata={calculatePodcastWaveformMetadata}
       />
-      {/*
-        Phase 4 plan also lists `LaunchKitPerCommitTeaser` (a 15-second
-        per-commit card video). It's intentionally cut from this PR —
-        the plan marks it optional and the demo path doesn't need it
-        before Phase 6 wires the per-commit marketing run pipeline. The
-        composition will land alongside `process-commit-marketing-run.ts`
-        in that PR so the two ship as one reviewable unit.
-      */}
+      <Composition
+        id="LaunchKitVerticalVideo"
+        component={VerticalVideo}
+        durationInFrames={getVerticalVideoDurationInFrames(
+          defaultVerticalVideoProps
+        )}
+        fps={VIDEO_FPS}
+        width={VERTICAL_VIDEO_WIDTH}
+        height={VERTICAL_VIDEO_HEIGHT}
+        defaultProps={defaultVerticalVideoProps}
+        calculateMetadata={calculateVerticalVideoMetadata}
+      />
     </>
   );
 };

@@ -52,21 +52,35 @@ export const VIDEO_WIDTH = 960;
 export const VIDEO_HEIGHT = 540;
 export const OUTRO_DURATION_IN_FRAMES = 36;
 
+// TransitionSeries overlaps adjacent shots by this many frames.
+// 8 frames at 24fps = 0.33s — subtle and professional.
+export const TRANSITION_DURATION_IN_FRAMES = 8;
+
+// Vertical (9:16) composition for TikTok / Reels / Shorts.
+export const VERTICAL_VIDEO_WIDTH = 1080;
+export const VERTICAL_VIDEO_HEIGHT = 1920;
+
 export function getLaunchKitVideoDurationInFrames(
   props: LaunchKitVideoProps
 ): number {
+  const shotsDuration = props.shots.reduce(
+    (total, shot) => total + shot.durationInFrames,
+    0
+  );
+  // Each transition overlaps two adjacent shots, eating frames from
+  // both sides. With N shots there are (N-1) transitions.
+  const overlapFrames =
+    Math.max(0, props.shots.length - 1) * TRANSITION_DURATION_IN_FRAMES;
+
   const captionDuration =
     props.captions?.reduce(
       (max, caption) => Math.max(max, caption.endInFrames),
       0
     ) ?? 0;
 
-  return (
-    Math.max(
-      props.shots.reduce((total, shot) => total + shot.durationInFrames, 0),
-      captionDuration
-    ) +
-    OUTRO_DURATION_IN_FRAMES
+  return Math.max(
+    Math.max(shotsDuration - overlapFrames, 0) + OUTRO_DURATION_IN_FRAMES,
+    captionDuration
   );
 }
 
@@ -172,6 +186,66 @@ export const defaultPodcastWaveformProps: PodcastWaveformProps = {
       text: 'Today we dig into the agentic GTM stack.',
       startInFrames: VIDEO_FPS * 60,
       endInFrames: VIDEO_FPS * 120,
+    },
+  ],
+};
+
+/**
+ * Vertical video composition (1080x1920, 9:16) for TikTok, Reels,
+ * and Shorts. Reuses {@link LaunchKitVideoShotSchema} and
+ * {@link LaunchKitCaptionSchema} so the same storyboard data can
+ * feed both landscape and vertical renders.
+ */
+export const VerticalVideoPropsSchema = z.object({
+  productName: z.string(),
+  tagline: z.string(),
+  accentColor: z.string(),
+  backgroundColor: z.string(),
+  heroImageUrl: z.string(),
+  shots: z.array(LaunchKitVideoShotSchema),
+  outroCta: z.string(),
+  audioSrc: z.string().optional(),
+  captions: z.array(LaunchKitCaptionSchema).optional(),
+});
+export type VerticalVideoProps = z.infer<typeof VerticalVideoPropsSchema>;
+
+export function getVerticalVideoDurationInFrames(
+  props: VerticalVideoProps
+): number {
+  const shotsDuration = props.shots.reduce(
+    (total, shot) => total + shot.durationInFrames,
+    0
+  );
+  const overlapFrames =
+    Math.max(0, props.shots.length - 1) * TRANSITION_DURATION_IN_FRAMES;
+
+  const captionDuration =
+    props.captions?.reduce(
+      (max, caption) => Math.max(max, caption.endInFrames),
+      0
+    ) ?? 0;
+
+  return Math.max(
+    Math.max(shotsDuration - overlapFrames, 0) + OUTRO_DURATION_IN_FRAMES,
+    captionDuration
+  );
+}
+
+export const defaultVerticalVideoProps: VerticalVideoProps = {
+  productName: 'LaunchKit',
+  tagline: 'AI go-to-market teammate',
+  accentColor: '#10b981',
+  backgroundColor: '#020617',
+  heroImageUrl: 'https://placehold.co/1080x1920/020617/10b981?text=LaunchKit',
+  outroCta: 'Paste a repo. Launch in minutes.',
+  shots: [
+    {
+      id: 'shot-1',
+      headline: 'Ship the launch',
+      caption: 'Research, strategy, creative — one flow.',
+      imageUrl: 'https://placehold.co/1080x1920/020617/10b981?text=LaunchKit',
+      durationInFrames: 48,
+      accent: 'fast',
     },
   ],
 };

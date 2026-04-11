@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { env } from '../env.js';
 
 export type ElevenLabsCharacterAlignment = {
@@ -16,7 +17,11 @@ type ElevenLabsResponse = {
   normalized_alignment?: ElevenLabsCharacterAlignment;
 };
 
-const ELEVENLABS_CACHE_DIR = path.resolve(process.cwd(), '.cache/elevenlabs');
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..', '..', '..', '..'
+);
+const ELEVENLABS_CACHE_DIR = path.resolve(REPO_ROOT, '.cache/elevenlabs');
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 export function getElevenLabsConfig(): {
