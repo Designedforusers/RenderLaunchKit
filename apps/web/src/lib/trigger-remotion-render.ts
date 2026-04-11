@@ -115,7 +115,32 @@ export async function triggerRemotionRender(
     },
   ]);
 
-  const details = await handle.get();
+  // `handle.get()` blocks until the task run reaches a terminal
+  // state. Under normal operation a `renderRemotionVideo` run
+  // settles inside the task's own 600-second timeout, but if the
+  // orchestrator never delivers a terminal event (network
+  // partition, task process killed mid-run without a clean
+  // status write), the promise would hang forever and the web
+  // dyno would hold the HTTP connection open until the client
+  // disconnects. Race against a deadline slightly longer than
+  // the task-side timeout so a stuck run surfaces as a
+  // structured 502 instead of an indefinite hang. Caught by the
+  // local code-reviewer pass on PR #63.
+  const TASK_SETTLE_TIMEOUT_MS = 660_000; // 11 minutes
+  const details = await Promise.race([
+    handle.get(),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `triggerRemotionRender: task run did not settle within ${String(
+              TASK_SETTLE_TIMEOUT_MS / 1000
+            )}s — check the Render Workflows dashboard for orphaned runs`
+          )
+        );
+      }, TASK_SETTLE_TIMEOUT_MS).unref();
+    }),
+  ]);
 
   if (details.status !== 'succeeded' && details.status !== 'completed') {
     throw new Error(

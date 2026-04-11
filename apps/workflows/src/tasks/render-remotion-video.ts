@@ -153,6 +153,21 @@ export const renderRemotionVideo = task<
     //    voiceover-specific cacheSeed and renders fresh every time
     //    so the audio data URI stays current against the latest
     //    ElevenLabs synthesis.
+    //
+    //    Known race: two concurrent `renderRemotionVideo` runs
+    //    targeting the same `(assetId, version, 'visual')` can
+    //    both reach this check before either has written a URL,
+    //    render in parallel, and both upload. The second upload's
+    //    DB write overwrites the first — no data corruption, but
+    //    the second render wastes a full pro-dyno cycle. We
+    //    accept this tradeoff because the alternatives (advisory
+    //    lock, DB-level unique constraint with ON CONFLICT, or an
+    //    idempotency key on the SDK side) each add cross-service
+    //    coordination complexity for a race window we have not
+    //    observed in practice. The web route's own cache-hit
+    //    check filters most duplicate triggers before the task
+    //    even starts; only genuinely simultaneous first-clicks
+    //    on a never-rendered asset hit this path.
     const [existing] = await db
       .select({
         renderedVideoUrl: assets.renderedVideoUrl,
@@ -182,7 +197,13 @@ export const renderRemotionVideo = task<
       // the object exists in MinIO. We do not round-trip a
       // HeadObject here because the task boots on a fresh Render
       // instance every call and the overhead would dominate the
-      // fast path.
+      // fast path. `sizeBytes` is reported as `0` on cache hits;
+      // callers that care about real byte counts should filter
+      // on `cached === true` before summing. Persisting the
+      // actual byte count on the asset row so cache hits can
+      // return the real value is a follow-up — the schema has
+      // no column for it today and this path has no consumer
+      // that reads it.
       return {
         url: existing.renderedVideoUrl,
         key: existing.renderedVideoKey,
