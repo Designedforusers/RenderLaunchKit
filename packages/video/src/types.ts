@@ -67,10 +67,20 @@ export function getLaunchKitVideoDurationInFrames(
     (total, shot) => total + shot.durationInFrames,
     0
   );
-  // Each transition overlaps two adjacent shots, eating frames from
-  // both sides. With N shots there are (N-1) transitions.
-  const overlapFrames =
-    Math.max(0, props.shots.length - 1) * TRANSITION_DURATION_IN_FRAMES;
+  // Count every `TransitionSeries.Transition` that overlaps two
+  // adjacent sequences inside `LaunchKitVideo.tsx`:
+  //   - (N - 1) shot-to-shot transitions between the N shots
+  //   - 1 shot-to-outro transition between the last shot and the
+  //     Outro sequence (always present, see the render body)
+  // so the total count of transitions is N (not N - 1). Each one
+  // overlaps `TRANSITION_DURATION_IN_FRAMES` worth of frames
+  // between the two sequences it joins, so the composition's
+  // on-screen duration shrinks by that much per transition. The
+  // previous formula subtracted only `(N - 1)` transitions' worth
+  // and Remotion truncated the outro by 8 frames on every render.
+  const transitionCount =
+    props.shots.length > 0 ? props.shots.length : 0;
+  const overlapFrames = transitionCount * TRANSITION_DURATION_IN_FRAMES;
 
   const captionDuration =
     props.captions?.reduce(
@@ -79,7 +89,7 @@ export function getLaunchKitVideoDurationInFrames(
     ) ?? 0;
 
   return Math.max(
-    Math.max(shotsDuration - overlapFrames, 0) + OUTRO_DURATION_IN_FRAMES,
+    Math.max(shotsDuration + OUTRO_DURATION_IN_FRAMES - overlapFrames, 0),
     captionDuration
   );
 }
@@ -216,8 +226,14 @@ export function getVerticalVideoDurationInFrames(
     (total, shot) => total + shot.durationInFrames,
     0
   );
-  const overlapFrames =
-    Math.max(0, props.shots.length - 1) * TRANSITION_DURATION_IN_FRAMES;
+  // Same N-transition math as `getLaunchKitVideoDurationInFrames`:
+  // (N - 1) shot-to-shot transitions plus 1 shot-to-outro transition
+  // = N total transitions, each eating `TRANSITION_DURATION_IN_FRAMES`
+  // from the on-screen duration. The previous formula only counted
+  // (N - 1) transitions and truncated the outro by 8 frames.
+  const transitionCount =
+    props.shots.length > 0 ? props.shots.length : 0;
+  const overlapFrames = transitionCount * TRANSITION_DURATION_IN_FRAMES;
 
   const captionDuration =
     props.captions?.reduce(
@@ -226,7 +242,7 @@ export function getVerticalVideoDurationInFrames(
     ) ?? 0;
 
   return Math.max(
-    Math.max(shotsDuration - overlapFrames, 0) + OUTRO_DURATION_IN_FRAMES,
+    Math.max(shotsDuration + OUTRO_DURATION_IN_FRAMES - overlapFrames, 0),
     captionDuration
   );
 }
