@@ -93,6 +93,23 @@ services:
         sync: false
       - key: RENDER_WORKFLOW_SLUG
         sync: false
+      # MinIO object storage. The `/api/assets/:id/video.mp4`
+      # route reads `assets.rendered_video_url` and 302-redirects
+      # clients to the MinIO public URL when present. The url is
+      # populated by the `renderRemotionVideo` workflows task
+      # after it uploads the MP4 bytes, so the web service never
+      # needs S3 write access itself — MINIO_ROOT_USER /
+      # MINIO_ROOT_PASSWORD are scoped to the workflows service
+      # only (set via the dashboard on the manually-created
+      # workflow service). The web service only needs the public
+      # hostname to compose redirect targets. See ADR-002.
+      - key: MINIO_ENDPOINT_HOST
+        fromService:
+          name: launchkit-minio
+          type: web
+          property: host
+      - key: MINIO_BUCKET
+        value: launchkit-renders
 
   - type: worker
     name: launchkit-worker
@@ -309,6 +326,53 @@ services:
         value: production
       - key: GITHUB_TOKEN
         sync: false
+
+  # ── MinIO object storage ───────────────────────────────────────────
+  #
+  # S3-compatible object storage for rendered Remotion video bytes.
+  # Deployed from the official Docker image with a Render SSD Disk
+  # mounted at `/data` for persistence across service restarts and
+  # deploys. Daily Disk snapshots provide automatic backups.
+  #
+  # The workflows service's `renderRemotionVideo` task uploads
+  # finished MP4 files here; the web service's
+  # `/api/assets/:id/video.mp4` handler 302-redirects clients to the
+  # public MinIO URL instead of streaming bytes through the web
+  # dyno. The bucket (`launchkit-renders`) is created programmatically
+  # on the first upload via an idempotent `HeadBucket` + `CreateBucket`
+  # check in `packages/asset-generators/src/clients/object-storage.ts`
+  # so there is no manual setup after the service boots.
+  #
+  # Render routes external HTTPS traffic on port 443 to whatever port
+  # the service binds to via the `PORT` env var. We bind MinIO's S3
+  # API to `$PORT` (9000 by default) so the public URL
+  # `https://<service-hostname>.onrender.com/<bucket>/<key>` reaches
+  # the bucket directly. The admin console is intentionally NOT
+  # exposed — operators run `mc` against the service's internal
+  # hostname when they need to inspect buckets.
+  #
+  # See ADR-002 for the full decision rationale and rejected
+  # alternatives (Cloudflare R2, AWS S3, dyno-local cache).
+  - type: web
+    name: launchkit-minio
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/minio/minio:latest
+    dockerCommand: minio server /data --address :$PORT --console-address :9090
+    autoDeploy: false
+    healthCheckPath: /minio/health/live
+    disk:
+      name: minio-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: MINIO_ROOT_USER
+        generateValue: true
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+      - key: PORT
+        value: 9000
 
   - type: keyvalue
     name: launchkit-redis
