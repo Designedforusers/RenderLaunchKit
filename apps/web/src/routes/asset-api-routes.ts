@@ -5,8 +5,12 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { LaunchKitVideoPropsSchema } from '@launchkit/video';
-import type { LaunchKitVideoProps } from '@launchkit/video';
+import {
+  LaunchKitVideoPropsSchema,
+  createRemotionRenderer,
+  getRenderedVideoFilename,
+} from '@launchkit/video';
+import type { LaunchKitVideoProps, RemotionRenderer } from '@launchkit/video';
 import { database } from '../lib/database.js';
 import {
   buildElevenLabsCacheKey,
@@ -21,10 +25,7 @@ import {
 } from '../lib/narration.js';
 import { enqueueEmbedFeedbackEvent } from '../lib/job-queue-clients.js';
 import { triggerWorkflowGeneration } from '../lib/trigger-workflow-generation.js';
-import {
-  getRenderedVideoFilename,
-  renderLaunchVideoAsset,
-} from '../lib/remotion-render.js';
+import { env } from '../env.js';
 import { fileToWebStream } from '../lib/stream-utils.js';
 import {
   AssetFeedbackEventRequestSchema,
@@ -48,6 +49,21 @@ const REPO_ROOT = path.resolve(
   '..',
   '..'
 );
+
+// Lazy singleton Remotion renderer for the web service's legacy
+// synchronous render path. Shared across every request so the
+// browser pool + bundle cache survive between requests. The
+// Remotion-on-Workflows migration (follow-up commit) replaces
+// direct calls to this with `triggerRemotionRender`, at which
+// point the singleton becomes unused and the import drops.
+let webRendererInstance: RemotionRenderer | null = null;
+function getWebRenderer(): RemotionRenderer {
+  webRendererInstance ??= createRemotionRenderer({
+    cacheDir: path.resolve(REPO_ROOT, '.cache/remotion-renders'),
+    concurrency: env.REMOTION_CONCURRENCY,
+  });
+  return webRendererInstance;
+}
 
 /**
  * Type guard for the Remotion video composition props pulled from
@@ -204,7 +220,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       captions: alignmentToCaptions(parsedVoiceover, narration.alignment),
     });
 
-    rendered = await renderLaunchVideoAsset({
+    rendered = await getWebRenderer().renderLaunchVideoAsset({
       assetId: asset.id,
       version: asset.version,
       inputProps: renderedProps,
@@ -213,7 +229,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
       abortSignal: c.req.raw.signal,
     });
   } else {
-    rendered = await renderLaunchVideoAsset({
+    rendered = await getWebRenderer().renderLaunchVideoAsset({
       assetId: asset.id,
       version: asset.version,
       inputProps: remotionProps,
