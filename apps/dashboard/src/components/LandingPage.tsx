@@ -27,6 +27,10 @@ import {
   CaretDown,
   Plus,
   Waveform,
+  CurrencyDollarSimple,
+  Clock,
+  Stack,
+  ShareNetwork,
 } from '@phosphor-icons/react';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -1296,10 +1300,10 @@ function Differentiators() {
 
 function StatsSection() {
   const stats = [
-    { value: '$0.11', label: 'MEDIAN KIT COST' },
-    { value: '6m 42s', label: 'MEDIAN KIT TIME' },
-    { value: '17', label: 'ASSETS PER KIT' },
-    { value: '5', label: 'PARALLEL CHILD TASKS' },
+    { value: '$0.11',  label: 'MEDIAN KIT COST',     icon: CurrencyDollarSimple },
+    { value: '6m 42s', label: 'MEDIAN KIT TIME',     icon: Clock },
+    { value: '17',     label: 'ASSETS PER KIT',      icon: Stack },
+    { value: '5',      label: 'PARALLEL CHILD TASKS', icon: ShareNetwork },
   ] as const;
 
   return (
@@ -1323,28 +1327,36 @@ function StatsSection() {
         />
 
         <div className="relative grid gap-10 md:grid-cols-4">
-          {stats.map((s, i) => (
-            <motion.div
-              key={s.label}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{
-                duration: 0.6,
-                delay: i * 0.08,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="relative"
-            >
-              <div className="font-display text-[clamp(2.4rem,5vw,3.5rem)] leading-none tracking-[-0.03em] text-text-primary">
-                {s.value}
-              </div>
-              <div className="mt-3 flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] text-text-muted">
-                <span className="h-px w-4 bg-accent-500" />
-                {s.label}
-              </div>
-            </motion.div>
-          ))}
+          {stats.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.div
+                key={s.label}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{
+                  duration: 0.6,
+                  delay: i * 0.08,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                className="relative"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="font-display text-[clamp(2.4rem,5vw,3.5rem)] leading-none tracking-[-0.03em] text-text-primary">
+                    {s.value}
+                  </div>
+                  <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-accent-500/25 bg-accent-500/[0.06] text-accent-400">
+                    <Icon size={16} weight="fill" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] text-text-muted">
+                  <span className="h-px w-4 bg-accent-500" />
+                  {s.label}
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -1355,34 +1367,86 @@ function StatsSection() {
 // Section: Tech stack strip
 // ─────────────────────────────────────────────────────────────────────
 
+type StackLogo = {
+  readonly src: string;
+  readonly name: string;
+  readonly sub: string;
+  /** Monochrome SVGs get the brightness-0/invert filter so the mark renders
+   * white on dark. Raster (webp) logos keep their native brand colour. */
+  readonly mono: boolean;
+};
+
+const STACK_LOGOS: readonly StackLogo[] = [
+  { src: '/logos/render.svg',     name: 'RENDER',     sub: 'WORKFLOWS',  mono: true  },
+  { src: '/logos/claude.svg',     name: 'CLAUDE',     sub: 'AGENT SDK',  mono: true  },
+  { src: '/logos/fal.webp',       name: 'FAL.AI',     sub: 'DIFFUSION',  mono: false },
+  { src: '/logos/elevenlabs.svg', name: 'ELEVENLABS', sub: 'VOICE',      mono: true  },
+  { src: '/logos/worldlabs.svg',  name: 'WORLD LABS', sub: '3D SCENES',  mono: true  },
+  { src: '/logos/remotion.webp',  name: 'REMOTION',   sub: 'VIDEO',      mono: false },
+  { src: '/logos/exa.webp',       name: 'EXA',        sub: 'DEEP SEARCH',mono: false },
+  { src: '/logos/postgresql.svg', name: 'POSTGRES',   sub: 'PGVECTOR',   mono: true  },
+] as const;
+
 function TechStackStrip() {
-  const stack = [
-    'RENDER WORKFLOWS',
-    'CLAUDE AGENT SDK',
-    'FAL.AI',
-    'ELEVENLABS',
-    'WORLD LABS',
-    'REMOTION',
-    'EXA',
-    'POSTGRES · PGVECTOR',
-  ];
   return (
-    <section className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-      <div className="flex items-center justify-center gap-2 text-label text-text-muted">
-        <span className="h-px w-6 bg-accent-500/40" />
-        POWERED BY A REAL STACK
-        <span className="h-px w-6 bg-accent-500/40" />
+    <section className="relative z-10 mx-auto max-w-7xl px-6 py-24">
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="inline-flex items-center gap-2 text-label text-text-muted">
+          <span className="h-px w-6 bg-accent-500/40" />
+          POWERED BY A REAL STACK
+          <span className="h-px w-6 bg-accent-500/40" />
+        </div>
+        <h2 className="mt-4 font-display text-display-md leading-[1.08] tracking-[-0.02em] text-text-primary">
+          No toy APIs. The actual providers we call.
+        </h2>
       </div>
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-        {stack.map((s) => (
-          <span
-            key={s}
-            className="font-mono text-[11px] font-semibold tracking-[0.2em] text-text-tertiary transition-colors hover:text-text-primary"
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-surface-800 bg-surface-800/60 md:grid-cols-4 lg:grid-cols-8"
+      >
+        {STACK_LOGOS.map((logo) => (
+          <div
+            key={logo.name}
+            className="group relative flex h-28 flex-col items-center justify-center gap-3 bg-surface-950/90 px-4 py-5 backdrop-blur-sm transition-all hover:bg-surface-900"
           >
-            {s}
-          </span>
+            {/* hover glow */}
+            <span className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <span
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'radial-gradient(circle at 50% 40%, rgba(16,185,129,0.14), transparent 70%)',
+                }}
+              />
+              <span className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-accent-500/60 to-transparent" />
+            </span>
+
+            <img
+              src={logo.src}
+              alt={`${logo.name} logo`}
+              loading="lazy"
+              decoding="async"
+              className={`relative h-7 w-auto max-w-[120px] object-contain transition-all duration-300 group-hover:scale-110 ${
+                logo.mono
+                  ? 'opacity-70 brightness-0 invert group-hover:opacity-100'
+                  : 'opacity-80 group-hover:opacity-100'
+              }`}
+            />
+            <div className="relative text-center">
+              <div className="font-mono text-[10px] font-semibold tracking-[0.14em] text-text-primary">
+                {logo.name}
+              </div>
+              <div className="font-mono text-[9px] tracking-[0.14em] text-text-muted">
+                {logo.sub}
+              </div>
+            </div>
+          </div>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }
