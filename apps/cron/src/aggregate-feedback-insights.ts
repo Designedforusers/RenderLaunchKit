@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import * as schema from '@launchkit/shared';
@@ -8,6 +9,104 @@ import {
   StrategyBriefSchema,
 } from '@launchkit/shared';
 import { database } from './database.js';
+import { env } from './env.js';
+
+/**
+ * Lazy Anthropic SDK client. Constructed on first use so a cron run
+ * with `ANTHROPIC_API_KEY` unset never instantiates the SDK at all
+ * (and therefore never throws on a missing-key check inside the
+ * SDK constructor). Re-used across cluster summary calls within a
+ * single cron run.
+ */
+let cachedAnthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic | null {
+  if (!env.ANTHROPIC_API_KEY) return null;
+  cachedAnthropicClient ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  return cachedAnthropicClient;
+}
+
+/**
+ * Phase 7 Layer 3 cluster-summary upgrade. Takes a cluster of
+ * semantically-similar user edits + the asset type + the category
+ * and asks Claude Haiku to compress them into a single one-sentence
+ * actionable rule the strategist and writer agents read back through
+ * `strategy_insights`.
+ *
+ * Returns the summary string on success, or `null` on any failure
+ * (missing API key, SDK throw, unexpected response shape, empty
+ * model output). The caller falls back to the longest-edit-text
+ * representative on `null` so the cluster row still ships — the
+ * Claude upgrade is degraded-but-not-blocking by construction.
+ *
+ * The prompt is written to produce a directive sentence the writer
+ * agent can act on ("Omit emoji from the intro paragraph") rather
+ * than a description ("Users tend to remove emoji"). The directive
+ * form survives the round-trip through the strategy_insights table
+ * and lands in the writer's prompt as immediately-actionable text.
+ */
+async function summariseEditCluster(
+  assetType: string,
+  category: string,
+  editTexts: string[]
+): Promise<string | null> {
+  const client = getAnthropicClient();
+  if (!client) return null;
+
+  // Cap at the 8 longest edits to keep the prompt small. The
+  // semantic content of the cluster is already captured by the
+  // top-K most descriptive examples — adding more is noise.
+  const examples = editTexts
+    .filter((t) => t.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 8);
+
+  if (examples.length === 0) return null;
+
+  const systemPrompt = `You read clusters of user edits and compress them into one-sentence directive rules for an AI marketing writer. Output a single sentence in the imperative mood, like "Omit emoji from the intro paragraph" or "Tighten the closing CTA to under fifteen words." Never include preamble, quotes, or explanations — just the rule itself.`;
+
+  const userPrompt = `Asset type: ${assetType}
+Project category: ${category}
+Cluster size: ${String(examples.length)} similar edits
+
+Edits in this cluster:
+${examples.map((t, i) => `${String(i + 1)}. ${t}`).join('\n')}
+
+Compress this cluster into one imperative sentence the writer agent should follow on the next ${assetType} generation for ${category} projects.`;
+
+  try {
+    const response = await client.messages.create({
+      model: env.ANTHROPIC_MODEL,
+      max_tokens: 200,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    // Concatenate every text block in the response. The SDK's
+    // `ContentBlock` is a discriminated union on `type`, so a
+    // `block.type === 'text'` narrowing flow folds it into the
+    // `TextBlock` interface and exposes `block.text` without a
+    // cast.
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text.trim() : ''))
+      .filter((s) => s.length > 0)
+      .join(' ')
+      .trim();
+
+    if (text.length === 0) return null;
+
+    // Trim trailing whitespace and any trailing punctuation we
+    // double-rendered ourselves below. Cap at 240 chars to match
+    // the placeholder ceiling so the dashboard chip lays out
+    // identically across the two code paths.
+    return text.length > 240 ? `${text.slice(0, 237)}...` : text;
+  } catch (err) {
+    console.warn(
+      `[Cron:AggregateFeedbackInsights] Claude cluster summary failed for (${assetType}, ${category}) — falling back to longest-edit-text:`,
+      err instanceof Error ? err.message : String(err)
+    );
+    return null;
+  }
+}
 
 /**
  * Aggregate learning insights from user feedback on generated assets.
@@ -460,16 +559,13 @@ async function aggregateTrendVelocityVsSuccess(): Promise<number> {
  *      cluster (lightweight DBSCAN-style approach without the full
  *      library dependency).
  *   3. For clusters of ≥3 members, write a strategy_insights row
- *     with insight_type='edit_pattern' using the cluster's
- *     representative edit_text (the longest edit, as a proxy for
- *     "the most informative example") as the insight content.
- *
- * The per-cluster human-readable summary via Claude is documented as
- * a clean ~30-min follow-up — the cron service intentionally does not
- * carry an `ANTHROPIC_API_KEY` (per `apps/cron/src/env.ts:26-31`), so
- * adding a Claude call would require a render.yaml change. The
- * representative edit text is informative enough as a placeholder
- * and the upgrade path is documented in CLAUDE.md.
+ *     with insight_type='edit_pattern' using a Claude-generated
+ *     one-sentence directive rule as the insight content. Falls
+ *     back to the longest edit_text in the cluster when the
+ *     cron's `ANTHROPIC_API_KEY` is unset or the SDK call fails —
+ *     the cluster row still ships, the strategist still picks it
+ *     up, the only thing that degrades is the readability of the
+ *     directive in the dashboard.
  */
 async function clusterEditFeedback(): Promise<number> {
   // Read all feedback rows with embeddings from the last N days,
@@ -662,30 +758,39 @@ async function clusterEditFeedback(): Promise<number> {
       }
     }
 
-    // Emit one insight per cluster. The representative edit_text is
-    // the longest edit in the cluster — as a proxy for "the most
-    // informative example." A future PR replaces this with a Claude-
-    // generated one-sentence summary (see CLAUDE.md forward-compat
-    // note for the upgrade path).
+    // Emit one insight per cluster. The cluster body is a Claude-
+    // generated one-sentence directive rule that the strategist and
+    // writer agents read back through `strategy_insights`. When the
+    // cron's `ANTHROPIC_API_KEY` is unset OR the SDK call fails, we
+    // fall back to the longest edit_text in the cluster as the
+    // representative — the cluster row still ships and the strategist
+    // still picks it up, the only thing that degrades is the
+    // readability of the directive in the dashboard.
     for (const cluster of clusters) {
       const clusterRows = cellRows.filter((r) =>
         cluster.includes(r.feedbackId)
       );
-      const representative = clusterRows
+      const editTexts = clusterRows
         .map((r) => r.editText)
-        .filter((t): t is string => t !== null && t.length > 0)
-        .sort((a, b) => b.length - a.length)[0];
+        .filter((t): t is string => t !== null && t.length > 0);
 
-      if (!representative) continue;
+      if (editTexts.length === 0) continue;
 
-      const truncated =
-        representative.length > 240
-          ? `${representative.slice(0, 237)}...`
-          : representative;
+      const summary = await summariseEditCluster(assetType, category, editTexts);
+
+      let body: string;
+      if (summary !== null) {
+        body = summary;
+      } else {
+        const longest = [...editTexts].sort((a, b) => b.length - a.length)[0];
+        if (!longest) continue;
+        body =
+          longest.length > 240 ? `${longest.slice(0, 237)}...` : `"${longest}"`;
+      }
 
       await upsertInsight({
         category,
-        insight: `Layer 3 edit pattern (${assetType}, ${String(cluster.length)} similar edits): "${truncated}"`,
+        insight: `Layer 3 edit pattern (${assetType}, ${String(cluster.length)} similar edits): ${body}`,
         confidence: Math.min(cluster.length / 8, 1),
         sampleSize: cluster.length,
         insightType: 'edit_pattern',

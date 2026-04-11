@@ -29,6 +29,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx seed.ts",
+    "seed:run-feedback-cron": "tsx apps/cron/src/run-feedback-aggregation.ts",
     "test:narration": "npm run build && node --test tests/narration.test.mjs",
     "test:agent": "npm run build && node --test --test-force-exit tests/agent-sdk-runner.test.mjs",
     "test": "npm run build && node --test --test-force-exit tests/*.test.mjs",

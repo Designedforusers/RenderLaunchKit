@@ -17,7 +17,7 @@ import 'dotenv/config';
 
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import * as schema from './packages/shared/src/schema.js';
 
 const pool = new pg.Pool({
@@ -49,6 +49,20 @@ async function setEmbedding(projectId: string, text: string) {
   const vector = fakeEmbedding(text);
   const vectorStr = `[${vector.join(',')}]`;
   await db.execute(sql`UPDATE projects SET embedding = ${vectorStr}::vector WHERE id = ${projectId}`);
+}
+
+// Sister of `setEmbedding` for `asset_feedback_events.edit_embedding`.
+// Used by the Layer 3 cluster seed below — every edit row needs an
+// embedding the cron's pgvector cosine-similarity query can read, and
+// the demo path doesn't have a Voyage key by default. Same 1024-dim
+// `fakeEmbedding` so two seed edits with very similar prefixes land
+// in the same cluster after the cron's `<=> ≥ 0.7` filter.
+async function setEditEmbedding(feedbackId: string, text: string) {
+  const vector = fakeEmbedding(text);
+  const vectorStr = `[${vector.join(',')}]`;
+  await db.execute(
+    sql`UPDATE asset_feedback_events SET edit_embedding = ${vectorStr}::vector WHERE id = ${feedbackId}`
+  );
 }
 
 // ── Seed Data ──
@@ -362,6 +376,7 @@ async function seed() {
 
   // Clear existing data
   console.log('  Clearing existing data...');
+  await db.delete(schema.assetFeedbackEvents);
   await db.delete(schema.assets);
   await db.delete(schema.jobs);
   await db.delete(schema.webhookEvents);
@@ -557,7 +572,115 @@ async function seed() {
     ]);
   }
 
+  // ── Phase 7 Layer 3: realistic edit clusters ──
+  //
+  // Seed `asset_feedback_events` with three clusters of semantically
+  // similar user edits across two completed projects. Each cluster is
+  // a set of 4-5 phrasings of the same underlying edit pattern with
+  // very high prefix overlap so the deterministic `fakeEmbedding`
+  // produces vectors that cluster cleanly under the cron's
+  // `1 - (a <=> b) >= 0.7` threshold.
+  //
+  // After running `npm run seed && npm run seed:run-feedback-cron`
+  // the cron's Layer 3 pass writes one `strategy_insights` row per
+  // cluster (insight_type='edit_pattern') and the strategist + writer
+  // agents pick them up via `getEditPatternsForCategory` on the next
+  // generation. End-to-end demo: real DB rows → real cron → real
+  // strategy_insights → real prompt context.
+  //
+  // Cluster 1 → launchkit (devtool) blog_post: "removed emoji from intro"
+  // Cluster 2 → launchkit (devtool) blog_post: "tightened closing CTA"
+  // Cluster 3 → cal.com (web_app) twitter_thread: "added runnable code example"
+  console.log('  Inserting Layer 3 edit clusters...');
+
+  const launchkitProject = await db.query.projects.findFirst({
+    where: eq(schema.projects.repoName, 'launchkit'),
+    with: { assets: true },
+  });
+  const calcomProject = await db.query.projects.findFirst({
+    where: eq(schema.projects.repoName, 'cal.com'),
+    with: { assets: true },
+  });
+
+  interface SeedEditCluster {
+    assetId: string;
+    edits: string[];
+  }
+
+  const editClusters: SeedEditCluster[] = [];
+
+  if (launchkitProject) {
+    const launchkitBlog = launchkitProject.assets.find((a) => a.type === 'blog_post');
+    if (launchkitBlog) {
+      // Cluster 1 — "removed emoji from intro paragraph". Five edits
+      // sharing a 49-char prefix so they cluster under the 0.7 cosine
+      // threshold even with the deterministic fake embedder.
+      editClusters.push({
+        assetId: launchkitBlog.id,
+        edits: [
+          'Removed the emoji from the intro paragraph; too playful here.',
+          'Removed the emoji from the intro paragraph; too casual here.',
+          'Removed the emoji from the intro paragraph; too noisy here.',
+          'Removed the emoji from the intro paragraph; too distracting now.',
+          'Removed the emoji from the intro paragraph; engineers skim past.',
+        ],
+      });
+
+      // Cluster 2 — "tightened the closing CTA". Same projection but
+      // a different prefix so the union-find pass keeps it as a
+      // distinct cluster from cluster 1.
+      editClusters.push({
+        assetId: launchkitBlog.id,
+        edits: [
+          'Tightened the closing CTA to fifteen words; less verbose now.',
+          'Tightened the closing CTA to fifteen words; punchier this way.',
+          'Tightened the closing CTA to fifteen words; sharper for readers.',
+          'Tightened the closing CTA to fifteen words; faster to scan now.',
+        ],
+      });
+    }
+  }
+
+  if (calcomProject) {
+    const calcomThread = calcomProject.assets.find((a) => a.type === 'twitter_thread');
+    if (calcomThread) {
+      // Cluster 3 — "added runnable code example to tweet three". Lives
+      // under (twitter_thread, web_app) so it lands in a distinct
+      // strategy_insights row from clusters 1 and 2.
+      editClusters.push({
+        assetId: calcomThread.id,
+        edits: [
+          'Added a runnable code example to tweet three; engineers expect it.',
+          'Added a runnable code example to tweet three; concrete is better.',
+          'Added a runnable code example to tweet three; less marketing speak.',
+          'Added a runnable code example to tweet three; aligns with audience.',
+        ],
+      });
+    }
+  }
+
+  let editEventCount = 0;
+  for (const cluster of editClusters) {
+    for (const editText of cluster.edits) {
+      const [row] = await db
+        .insert(schema.assetFeedbackEvents)
+        .values({
+          assetId: cluster.assetId,
+          action: 'edited',
+          editText,
+        })
+        .returning();
+      if (row) {
+        await setEditEmbedding(row.id, editText);
+        editEventCount++;
+      }
+    }
+  }
+  console.log(`    ✓ ${editEventCount} edit events across ${editClusters.length} clusters`);
+
   console.log('\n✨ Seed complete!\n');
+  console.log('Next: run `npm run seed:run-feedback-cron` to fire the Layer 3 aggregator');
+  console.log('and write the cluster summaries to strategy_insights.\n');
   await pool.end();
 }
 

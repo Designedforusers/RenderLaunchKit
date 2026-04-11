@@ -443,15 +443,17 @@ export const commitMarketingRuns = pgTable(
 // Every approve / reject / edit / regenerate action on an asset
 // writes a row here with the edit text and a Voyage embedding of
 // the edit. The cron clusters edits by `(asset_type, category)`
-// using pgvector cosine similarity, generates a one-sentence
-// human-readable summary per cluster via Claude, and writes the
-// summary to `strategy_insights` as an `edit_pattern` insight type.
+// using pgvector cosine similarity, asks Claude Haiku to compress
+// each cluster into a one-sentence imperative directive, and writes
+// it to `strategy_insights` as an `edit_pattern` insight type.
 //
-// Forward-compat note: the prompt-feedback closure (agents read
-// the new `edit_pattern` insights and bake them into prompt
-// context) is documented in `CLAUDE.md` as next iteration. The
-// data infrastructure ships in this PR so the closure is a clean
-// 2-3h follow-up later.
+// The loop is closed end-to-end as of Phase 7: the strategist reads
+// edit patterns via `getEditPatternsForCategory` and renders them as
+// `## Common Edits Reviewers Made`, the writer agent renders the
+// per-asset-type-filtered subset inside `buildContext`, and the
+// dispatch site loads both stat insights and edit patterns in
+// parallel before invoking the generator. See CLAUDE.md "Self-
+// learning loop (closed end-to-end)" for the architectural detail.
 export const assetFeedbackEvents = pgTable(
   'asset_feedback_events',
   {

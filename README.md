@@ -188,7 +188,7 @@ The full design — including the AsyncLocalStorage rationale, the data flow dia
 
 ## The self-learning system
 
-This is the part that helps LaunchKit adapt recommendations over time.
+This is the part that helps LaunchKit adapt recommendations over time. The loop is **closed end-to-end** — every approve, reject, edit, and regenerate produces structured signal that the next strategy build reads back as prompt context.
 
 ```
 User feedback (approve/reject/edit/regenerate) → asset_feedback_events table
@@ -199,17 +199,35 @@ User feedback (approve/reject/edit/regenerate) → asset_feedback_events table
                                                             ↓
                               pgvector cluster by (asset_type, category)
                                                             ↓
-                  "CLI tools: technical tone +35% approval"
-                  "Web apps: video drives 2x review scores"
-                  "Users delete LinkedIn 60% of the time for libraries"
+                       Claude Haiku compresses each cluster
+                            into one imperative directive
+                                                            ↓
+                  "Omit emoji from the intro paragraph"
+                  "Tighten the closing CTA to under fifteen words"
+                  "Add a runnable code example to tweet three"
                                                             ↓
                               Stored as strategy_insights rows
                                                             ↓
-                Next project: strategist reads insights + pgvector finds
-                similar past projects → makes better decisions
+                Next project: strategist reads insights + writer scopes
+                edit patterns to its asset type → sharper output
 ```
 
-The strategist agent receives these insights as part of its prompt context. Over time, the system adapts which content types and tones it favors for different categories. The seeded database includes example insights so you can see the system in action immediately.
+Three layers feed the loop:
+
+1. **Layer 1 — stat-based insights.** The cron writes notable approval-rate cells per `(asset_type, category)`, tone-vs-score correlations, and trend-velocity-vs-asset-quality findings to `strategy_insights` rows. The `launch-strategy-agent` reads them as `## Past Insights from Similar Projects`.
+2. **Layer 2 — pgvector similarity search.** Every analyzed project embeds its description with Voyage and stores it on `projects.embedding`. The strategist's `findSimilarProjects` tool returns the top-3 cosine-nearest past projects so the agent can reuse what worked.
+3. **Layer 3 — semantic edit clustering.** Every user edit on an asset writes a row to `asset_feedback_events`, the worker embeds the edit text with Voyage, and the cron clusters semantically-similar edits per `(asset_type, category)` cell via pgvector cosine similarity (`<=> ≥ 0.7` + ≥ 2 mutual neighbors). For each cluster of ≥ 3 members, Claude Haiku compresses the edits into a one-sentence imperative-mood directive and the cron writes a `strategy_insights` row with `insight_type='edit_pattern'`. The strategist reads them as `## Common Edits Reviewers Made`, and the writer agent (`packages/asset-generators/src/agents/written.ts`) renders the per-asset-type-filtered subset inside `buildContext` so a `blog_post` generation only sees blog-post edit patterns.
+
+When `ANTHROPIC_API_KEY` is set on the cron service, Layer 3 directives are polished by Claude. When it's unset, the cron writes the longest raw edit text instead — degraded but never blocking; the strategist still picks the cluster up.
+
+**Local demo.** The seed script writes three realistic edit clusters into `asset_feedback_events` against the bundled completed projects, with deterministic 1024-dim fake embeddings that share enough prefix to cluster cleanly. After seeding, fire the aggregator manually:
+
+```bash
+npm run seed
+npm run seed:run-feedback-cron
+```
+
+The cron writes one `strategy_insights` row per cluster. Open the dashboard, start a new project against any `devtool` or `web_app` repo, and the strategist's prompt now includes the directive sentences the cron just generated.
 
 ---
 

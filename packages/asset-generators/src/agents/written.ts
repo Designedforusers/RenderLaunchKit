@@ -36,6 +36,18 @@ export interface WriterInput {
   research: ResearchResult;
   strategy: StrategyBrief;
   pastInsights: StrategyInsight[];
+  /**
+   * Phase 7 Layer 3 edit patterns — one entry per cluster of
+   * semantically-similar user edits the cron has aggregated for this
+   * asset's project category. Filtered to entries whose insight text
+   * mentions the current `assetType` so the writer agent only sees
+   * edit patterns that apply to the asset it is generating right
+   * now. Optional and defaults to an empty list — the dispatch site
+   * loads them via `getEditPatternsForCategory` and passes them
+   * through, but a unit test or a future caller is free to omit
+   * them.
+   */
+  editPatterns?: StrategyInsight[];
   assetType: AssetType;
   generationInstructions: string;
   revisionInstructions?: string;
@@ -106,6 +118,24 @@ function buildContext(input: WriterInput): string {
           .join('\n')}`
       : '';
 
+  // Phase 7 Layer 3 edit patterns. The cron writes the asset_type
+  // into the insight text as `(<asset_type>, ...)`, so we filter to
+  // entries whose text mentions THIS asset type before rendering —
+  // a writer producing a `twitter_thread` should not see edit
+  // patterns scoped to `blog_post` even though both share the
+  // category. The block teaches the writer to apply the patterns
+  // proactively, not just acknowledge them.
+  const relevantEditPatterns =
+    input.editPatterns?.filter((p) =>
+      p.insight.includes(`(${input.assetType},`)
+    ) ?? [];
+  const editPatternsBlock =
+    relevantEditPatterns.length > 0
+      ? `\n\n## Common Edits Reviewers Made to Past ${input.assetType} Assets\nThese are real edits human reviewers applied to past ${input.assetType} assets in this category. Pre-empt them — write the asset the way reviewers want it, not the way the previous generation drafted it.\n${relevantEditPatterns
+          .map((p) => `- ${p.insight}`)
+          .join('\n')}`
+      : '';
+
   return `## Product Context
 
 **Repository:** ${input.repoAnalysis.description || input.research.targetAudience}
@@ -128,7 +158,7 @@ ${input.strategy.keyMessages.map((m) => `- ${m}`).join('\n')}
     .join('; ')}
 
 ## Asset Generation Instructions
-${input.generationInstructions}${revisionBlock}${insightsBlock}`;
+${input.generationInstructions}${revisionBlock}${insightsBlock}${editPatternsBlock}`;
 }
 
 function buildBaseMetadata(input: WriterInput): Record<string, unknown> {

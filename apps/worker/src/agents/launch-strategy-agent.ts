@@ -1,5 +1,8 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
-import { getInsightsForCategory } from '../tools/project-insight-memory.js';
+import {
+  getInsightsForCategory,
+  getEditPatternsForCategory,
+} from '../tools/project-insight-memory.js';
 import { StrategyBriefSchema } from '@launchkit/shared';
 import type { RepoAnalysis, ResearchResult, StrategyBrief, StrategyInsight } from '@launchkit/shared';
 
@@ -48,15 +51,50 @@ Key strategic principles:
 - Recommend "world_scene" when the product benefits from being *seen in context* — an interactive 3D walk-through of the natural setting where developers actually use it. Good examples: a home office for a local developer tool, a data center aisle for infrastructure, a lab bench for research software, a busy conference floor for SaaS, a terminal setup for a CLI. World Labs (Marble) generates a shareable 3D scene the user can walk around in, which makes abstract software feel tactile. Especially strong for libraries and invisible tooling where there's nothing physical to show — the scene gives reviewers something to remember. Skip for products that are already visually self-explanatory in a 2D video (those should get product_video instead).
 
 If past insights from similar projects are provided, factor them into your decisions.
-For example, if insights say "CLI tools: users delete LinkedIn posts 60%", skip LinkedIn for CLI tools.`;
+For example, if insights say "CLI tools: users delete LinkedIn posts 60%", skip LinkedIn for CLI tools.
+
+If "Common Edits Reviewers Made" patterns are provided, those are real revisions human users applied to past assets in this category. Treat each pattern as evidence about what the previous generation got wrong:
+- A repeated "removed emoji from intro" pattern → omit emoji from the intro of every asset you recommend.
+- A repeated "shortened CTA" pattern → tighten the CTA wording in your generationInstructions.
+- A repeated "added code example" pattern → include "must contain a runnable code example" in the generationInstructions for blog_post and faq.
+Bake the pattern into the assetsToGenerate[].generationInstructions strings, not into the positioning — the writer agent reads those instructions verbatim.`;
 
 export async function createLaunchStrategy(
   repoAnalysis: RepoAnalysis,
   research: ResearchResult,
-  pastInsights?: StrategyInsight[]
+  pastInsights?: StrategyInsight[],
+  editPatterns?: StrategyInsight[]
 ): Promise<StrategyBrief> {
-  // Fetch insights if not provided
-  const insights = pastInsights ?? await getInsightsForCategory(repoAnalysis.category);
+  // Fetch insights and edit patterns if not provided. The two
+  // accessors return disjoint sets — `getInsightsForCategory`
+  // excludes `edit_pattern` rows so the strategic block stays
+  // focused on stat-based findings, while
+  // `getEditPatternsForCategory` returns ONLY the Layer 3 cluster
+  // rows. Both fall back to empty arrays on DB failure.
+  const insights =
+    pastInsights ?? (await getInsightsForCategory(repoAnalysis.category));
+  const edits =
+    editPatterns ?? (await getEditPatternsForCategory(repoAnalysis.category));
+
+  const insightsBlock =
+    insights.length > 0
+      ? `## Past Insights from Similar Projects\n${insights
+          .map(
+            (i) =>
+              `- [${i.category}] ${i.insight} (confidence: ${String(i.confidence)}, based on ${String(i.sampleSize)} projects)`
+          )
+          .join('\n')}`
+      : '';
+
+  const editsBlock =
+    edits.length > 0
+      ? `## Common Edits Reviewers Made to Past ${repoAnalysis.category} Assets\n${edits
+          .map(
+            (i) =>
+              `- ${i.insight} (confidence: ${String(i.confidence)}, ${String(i.sampleSize)} similar edits)`
+          )
+          .join('\n')}\n\nUse these patterns to refine the assetsToGenerate[].generationInstructions strings — do not just acknowledge them in your reasoning.`
+      : '';
 
   const userPrompt = `Create a go-to-market strategy for this product:
 
@@ -66,7 +104,9 @@ ${JSON.stringify(repoAnalysis, null, 2)}
 ## Market Research
 ${JSON.stringify(research, null, 2)}
 
-${insights.length > 0 ? `## Past Insights from Similar Projects\n${insights.map((i) => `- [${i.category}] ${i.insight} (confidence: ${i.confidence}, based on ${i.sampleSize} projects)`).join('\n')}` : ''}
+${insightsBlock}
+
+${editsBlock}
 
 Based on this information, create a focused, opinionated strategy. Don't try to be everywhere — pick the channels and assets that will have the highest impact for this specific product.`;
 
