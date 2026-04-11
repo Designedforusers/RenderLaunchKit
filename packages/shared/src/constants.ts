@@ -250,7 +250,6 @@ export const REDIS_CHANNELS = {
 
 export const MAX_REVISION_ROUNDS = 2;
 export const MIN_APPROVAL_SCORE = 7;
-export const RESEARCH_MAX_STEPS = 15;
 // Voyage `voyage-3-large` default output dimension. Anthropic's
 // canonical embeddings pairing — replaces the previous 1536-dim
 // OpenAI-compatible setting from when this column was a placeholder
