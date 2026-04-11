@@ -59,3 +59,4 @@ coverage/
 # `.agents/skills/`). Anchored to the repo root with a leading slash
 # so it does NOT match `.agents/skills/`, which we explicitly track.
 /skills/
+docker-compose.override.yml
