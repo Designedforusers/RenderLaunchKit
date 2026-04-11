@@ -138,8 +138,9 @@ money, and the operator deserves to see them on the dashboard chip.
   dispatch-site wrap is the belt-and-braces second layer, `recordCost`
   being a no-op outside a tracker scope is the third, and `pricing.ts`
   returning `0` on an unknown model id is the fourth. Four independent
-  guards — `docs/cost-tracking.md` § "The non-blocking invariant"
-  enumerates all four and why each is load-bearing.
+  guards — [`../cost-tracking.md`](../cost-tracking.md) § "The
+  non-blocking invariant" enumerates all four and why each is
+  load-bearing.
 - **Cached paths don't charge.** The ElevenLabs cache-hit check at
   `clients/elevenlabs.ts:175` returns BEFORE reaching the `recordCost`
   call at line 197; the same ordering holds at the dialogue and
@@ -191,7 +192,7 @@ money, and the operator deserves to see them on the dashboard chip.
   `/api/projects/:projectId/costs` route at
   `apps/web/src/routes/project-cost-routes.ts` all pick up the new
   provider automatically because they are schema-driven. Documented in
-  `docs/cost-tracking.md` § "Adding a new provider".
+  [`../cost-tracking.md`](../cost-tracking.md) § "Adding a new provider".
 
 ## Alternatives considered
 
@@ -239,8 +240,8 @@ money, and the operator deserves to see them on the dashboard chip.
 
 ## References
 
-- `CLAUDE.md` § "Cost tracking" — canonical short-form rules
-- `docs/cost-tracking.md` — long-form explainer with the four-layer
+- [`../../CLAUDE.md`](../../CLAUDE.md) § "Cost tracking" — canonical short-form rules
+- [`../cost-tracking.md`](../cost-tracking.md) — long-form explainer with the four-layer
   non-blocking invariant
 - `packages/asset-generators/src/cost-tracker.ts` — `CostTracker`,
   `runWithCostTracker`, `recordCost`

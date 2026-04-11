@@ -63,14 +63,14 @@ The typed env module `apps/web/src/env.ts` declares `FAL_API_KEY`, `WORLD_LABS_A
 
 ## References
 
-- `CLAUDE.md` § "Workflows service"
+- [`../../CLAUDE.md`](../../CLAUDE.md) § "Workflows service"
 - `apps/workflows/src/tasks/generate-all-assets-for-project.ts` — async path parent task
 - `apps/workflows/src/lib/dispatch-asset.ts` — async path agent routing switch
 - `apps/web/src/routes/generate-routes.ts` — sync path creative studio endpoints (`POST /image|video|audio|world`)
 - `apps/web/src/routes/chat-routes.ts` — sync path streaming chat endpoint (direct Anthropic SDK, SSE deltas)
 - `apps/web/src/lib/generation-clients.ts` — lazy-cached FAL / ElevenLabs / World Labs clients for the sync path
-- `apps/web/src/routes/asset-api-routes.ts:490-563` — the one route that crosses the boundary (Regenerate)
-- `apps/web/src/index.ts:154-160` — where `chatRoutes` and `generateRoutes` are mounted
-- `render.yaml` lines 41-93 — creative studio provider keys on the `launchkit-web` service
+- `apps/web/src/routes/asset-api-routes.ts` — the one route that crosses the boundary (`/api/assets/:id/regenerate`)
+- `apps/web/src/index.ts` — where `chatRoutes` and `generateRoutes` are mounted
+- `render.yaml` — the `launchkit-web` service block declares the creative studio provider keys (`FAL_API_KEY`, `WORLD_LABS_API_KEY`, `ANTHROPIC_API_KEY`, `EXA_API_KEY`)
 - Commit `db7a5b4 fix(deploy): expose creative studio provider keys to web service`
-- ADR-001 — Render Workflows for the asset generation pipeline
+- [ADR-001](./ADR-001-render-workflows-for-asset-pipeline.md) — Render Workflows for the asset generation pipeline
