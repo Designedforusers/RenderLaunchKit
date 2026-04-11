@@ -70,7 +70,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
       >
         <div>
           <Link
-            to="/"
+            to="/app"
             className="text-text-muted hover:text-text-tertiary text-body-sm mb-2 inline-flex items-center gap-1 transition-colors group"
           >
             <motion.svg
@@ -745,7 +745,7 @@ function ProjectDetailErrorCard({ message }: { message: string }) {
           transition={{ delay: 0.34 }}
         >
           <Link
-            to="/"
+            to="/app"
             className="btn-secondary mt-7 inline-flex items-center gap-2 text-body-sm"
           >
             <svg

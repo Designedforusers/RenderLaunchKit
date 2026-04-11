@@ -259,7 +259,7 @@ function Nav() {
 
         <div className="flex items-center gap-3">
           <a
-            href="https://github.com"
+            href="https://github.com/Designedforusers/RenderLaunchKit"
             target="_blank"
             rel="noreferrer"
             className="hidden items-center gap-1.5 rounded-lg border border-surface-800 bg-surface-900/70 px-3 py-1.5 text-body-xs text-text-tertiary transition-colors hover:border-surface-700 hover:text-text-primary md:flex"
@@ -378,7 +378,22 @@ function Hero() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                window.location.href = '/app';
+                // Read whatever the user typed in the repo input and
+                // forward it to `/app` as a query param so the real
+                // `RepositoryUrlForm` on that page can pre-fill from
+                // it. An empty / placeholder-only value just lands on
+                // `/app` with no prefill, which matches what the old
+                // fire-and-forget behavior did anyway.
+                const form = e.currentTarget;
+                const input = form.elements.namedItem(
+                  'repo'
+                ) as HTMLInputElement | null;
+                const raw = input?.value.trim() ?? '';
+                const prefill =
+                  raw.length === 0 || raw === 'github.com/' ? '' : raw;
+                window.location.href = prefill
+                  ? `/app?repo=${encodeURIComponent(prefill)}`
+                  : '/app';
               }}
               className="group relative flex items-center overflow-hidden rounded-xl border border-surface-700 bg-surface-900/80 p-1.5 backdrop-blur-sm transition-all focus-within:border-accent-500/60 focus-within:shadow-[0_0_0_4px_rgba(16,185,129,0.12)]"
             >
@@ -387,7 +402,12 @@ function Hero() {
                 weight="fill"
                 className="ml-3 text-text-tertiary"
               />
+              <label htmlFor="landing-repo-input" className="sr-only">
+                GitHub repository URL
+              </label>
               <input
+                id="landing-repo-input"
+                name="repo"
                 type="text"
                 defaultValue="github.com/"
                 placeholder="github.com/your/repo"
@@ -1575,7 +1595,7 @@ function FinalCTA() {
               />
             </Link>
             <a
-              href="https://github.com"
+              href="https://github.com/Designedforusers/RenderLaunchKit"
               target="_blank"
               rel="noreferrer"
               className="group flex items-center gap-2 rounded-xl border border-surface-700 bg-surface-900/70 px-6 py-3.5 text-body-md font-semibold text-text-primary backdrop-blur-sm transition-all hover:border-surface-600 hover:bg-surface-900"
@@ -1619,7 +1639,7 @@ function Footer() {
           <a href="#pipeline" className="transition-colors hover:text-text-primary">PIPELINE</a>
           <a href="#assets" className="transition-colors hover:text-text-primary">ASSETS</a>
           <a href="#faq" className="transition-colors hover:text-text-primary">FAQ</a>
-          <a href="https://github.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-text-primary">
+          <a href="https://github.com/Designedforusers/RenderLaunchKit" target="_blank" rel="noreferrer" className="transition-colors hover:text-text-primary">
             GITHUB
           </a>
         </div>
