@@ -121,19 +121,37 @@ export function createObjectStorageClient(
       ensuredBuckets.add(config.bucket);
       return;
     } catch (err: unknown) {
-      // HeadBucket throws `NoSuchBucket` when the bucket doesn't
-      // exist, `NotFound` (404) on some S3 implementations, and
-      // other shapes for permission errors. Only the first two
-      // mean "create it"; anything else re-throws so auth or
-      // network errors don't get silently swallowed into a
-      // spurious `CreateBucket` call that would also fail.
-      const isMissing =
+      // Distinguish "bucket doesn't exist yet" (→ CreateBucket) from
+      // "everything else" (→ re-throw with the original cause). AWS
+      // SDK surfaces the former as `NoSuchBucket` or `NotFound` with
+      // `$metadata.httpStatusCode === 404`; 403 permission errors
+      // also surface with `name === 'NotFound'` on some S3-compatible
+      // implementations (including older MinIO builds), so the
+      // name check alone is too broad and would silently fall
+      // through to a `CreateBucket` call that also fails with a
+      // different error — obscuring the real "your IAM credentials
+      // are wrong" root cause.
+      //
+      // The check below is a positive allowlist: NoSuchBucket class,
+      // or `NotFound` WITH an explicit 404 status. Anything else
+      // (403, 5xx, network errors, malformed responses) re-throws
+      // unchanged so the real error reaches the caller.
+      const isBucketMissing =
         err instanceof NoSuchBucket ||
         (err !== null &&
           typeof err === 'object' &&
           'name' in err &&
-          (err.name === 'NoSuchBucket' || err.name === 'NotFound'));
-      if (!isMissing) throw err;
+          err.name === 'NoSuchBucket') ||
+        (err !== null &&
+          typeof err === 'object' &&
+          'name' in err &&
+          err.name === 'NotFound' &&
+          '$metadata' in err &&
+          typeof err.$metadata === 'object' &&
+          err.$metadata !== null &&
+          'httpStatusCode' in err.$metadata &&
+          err.$metadata.httpStatusCode === 404);
+      if (!isBucketMissing) throw err;
     }
 
     await s3.send(new CreateBucketCommand({ Bucket: config.bucket }));
