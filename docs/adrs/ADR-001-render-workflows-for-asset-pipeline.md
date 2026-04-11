@@ -255,11 +255,11 @@ environments where the workflow service has not been provisioned yet.
   per-pod compute sizing. Rejected because LaunchKit is a Render showcase —
   the whole point is to stay Render-native and demonstrate what Render's
   primitives can do end-to-end. Adding a managed K8s control plane would
-  undermine the submission.
+  undermine the Render-native story.
 
 ## References
 
-- `CLAUDE.md` § "Workflows service" — the canonical invariant doc
+- [`../../CLAUDE.md`](../../CLAUDE.md) § "Workflows service" — the canonical invariant doc
 - `apps/workflows/src/index.ts` — side-effect-only task registration
   entrypoint
 - `apps/workflows/src/tasks/generate-all-assets-for-project.ts` — the

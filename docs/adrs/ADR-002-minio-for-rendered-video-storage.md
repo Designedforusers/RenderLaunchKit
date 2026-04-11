@@ -184,7 +184,7 @@ protecting anything the asset card doesn't already expose.
 
 ## References
 
-- `CLAUDE.md` § "Workflows service"
+- [`../../CLAUDE.md`](../../CLAUDE.md) § "Workflows service"
 - `apps/web/src/lib/remotion-render.ts` — the current synchronous render
   path, to be migrated onto the Workflows service in a follow-up commit
 - `apps/web/src/routes/asset-api-routes.ts:111` — the
