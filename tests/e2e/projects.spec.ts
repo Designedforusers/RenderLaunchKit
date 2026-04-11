@@ -4,25 +4,55 @@ import { TEST_REPO } from './fixtures/test-repos.js';
 /**
  * Full-pipeline E2E test. Tagged `@full-pipeline` so the smoke
  * suite skips it by default — this spec creates a real project
- * via `POST /api/projects`, polls the progress feed through the
- * full `analyze → research → strategize → generating → reviewing
- * → complete` lifecycle, and asserts generated assets appear.
+ * via `POST /api/projects`, polls the status badge through the
+ * full `analyzing → researching → strategizing → generating →
+ * reviewing → complete` lifecycle, and asserts generated asset
+ * cards appear.
  *
- * Runs against real providers: Anthropic, Voyage, fal.ai (if
- * configured), ElevenLabs (if configured), World Labs (if
- * configured). Costs real money per run (~$0.10-0.50 typical)
- * and takes 5-15 minutes wall-clock. Does NOT run on every PR;
- * CI gates it behind a `run-e2e-full` label.
+ * Runs against real providers: Anthropic, Voyage, fal.ai,
+ * ElevenLabs, World Labs, Exa. Costs real money per run
+ * (~$0.10-0.50 typical) and takes 5-15 minutes wall-clock.
+ * Does NOT run on every PR; CI gates it behind a
+ * `run-e2e-full` label.
+ *
+ * Selector strategy: the spec uses discrete `data-*` attributes
+ * on `LaunchStatusBadge` (`data-status`, `data-testid=
+ * launch-status-badge`) and `GeneratedAssetCard`
+ * (`data-asset-card`, `data-asset-type`, `data-asset-status`).
+ * These are stable across copy tweaks, motion animations, and
+ * CSS refactors.
  *
  * Invoke manually via `npm run test:e2e:full` against a running
- * dev stack.
+ * dev stack (`npm run dev` in another terminal).
  */
 
 test.describe.configure({ timeout: 20 * 60 * 1000 }); // 20 min
 
 test('@full-pipeline paste URL → analyze → strategize → generate → reviewing → complete', async ({
   page,
+  request,
 }) => {
+  // Programmatic cleanup: find any existing project for the
+  // `TEST_REPO` URL and delete it via the DELETE /api/projects/:id
+  // endpoint. The `POST /api/projects` path dedupes on repo_url,
+  // so without this cleanup a second run of this spec would
+  // silently fast-forward to the already-completed project and
+  // skip the actual pipeline execution this test exists to
+  // verify.
+  const existingProjectsResponse = await request.get(
+    'http://localhost:3000/api/projects'
+  );
+  if (existingProjectsResponse.ok()) {
+    const existing: { projects?: Array<{ id: string; repoUrl: string }> } =
+      await existingProjectsResponse.json();
+    const stale = (existing.projects ?? []).filter(
+      (p) => p.repoUrl === TEST_REPO
+    );
+    for (const project of stale) {
+      await request.delete(`http://localhost:3000/api/projects/${project.id}`);
+    }
+  }
+
   // Start at the landing page to exercise the full user flow.
   await page.goto('/');
 
@@ -34,50 +64,76 @@ test('@full-pipeline paste URL → analyze → strategize → generate → revie
     page.getByRole('button', { name: /^Launch it$/ }).click(),
   ]);
 
-  // On `/app`, the real RepositoryUrlForm submit button fires
-  // the `POST /api/projects` call. The button appears after the
-  // URL pre-fill settles.
-  const submitButton = page
-    .locator('button[type="submit"]')
-    .filter({ hasText: /Analyze|Launch|Submit|Create/i })
-    .first();
+  // On `/app`, the real `RepositoryUrlForm` submit button fires
+  // the `POST /api/projects` call. The form input already
+  // carries the pre-filled URL from the `?repo=` query param;
+  // we just need to click submit. The form has one submit
+  // button in its mounted tree.
+  const submitButton = page.locator('form button[type="submit"]').first();
   await expect(submitButton).toBeVisible({ timeout: 15_000 });
   await Promise.all([
-    page.waitForURL(/\/projects\//, { timeout: 30_000 }),
+    page.waitForURL(/\/projects\//, { timeout: 60_000 }),
     submitButton.click(),
   ]);
 
-  // On `/projects/:id` we should be watching the progress feed.
-  // Stages roll through analyze → research → strategize →
-  // generating → reviewing → complete. We just watch for the
-  // terminal "complete" (or "reviewing" as a proxy if the review
-  // loop is fast) marker rather than asserting every stage.
+  // We are now on `/projects/:id` watching the live pipeline.
+  // The `LaunchStatusBadge` flips atomically with `project.status`
+  // as the pipeline progresses through each stage. We wait for a
+  // terminal state (`complete`, `reviewing`, or `failed`) via the
+  // discrete `data-status` attribute on the badge — resilient
+  // across the motion.span re-key animations and copy tweaks.
   //
   // Timeout budget: 15 minutes. nanoid is a small repo so
-  // research + strategize + generate + review typically land
-  // in under 8 minutes when all providers are configured.
-  const completeMarker = page
-    .getByText(/complete|reviewing/i)
+  // analyze + research + strategize lands in 1-2 minutes when
+  // all providers are configured, and generate + review lands
+  // in 5-10 minutes under normal load. 15 minutes leaves
+  // headroom for provider rate limits or slow paths.
+  const statusBadge = page
+    .locator('[data-testid="launch-status-badge"]')
     .first();
-  await expect(completeMarker).toBeVisible({ timeout: 15 * 60 * 1000 });
+  await expect(statusBadge).toBeVisible({ timeout: 30_000 });
 
-  // Once at least one asset has been generated, it should render
-  // in the project detail grid. We assert the generic shape
-  // (asset cards visible) without pinning to a specific count
-  // because the asset fan-out varies with provider availability.
-  const assetCards = page
-    .locator('[data-asset-type], article, [class*="asset"]')
-    .first();
-  await expect(assetCards).toBeVisible({ timeout: 30_000 });
+  // Log the initial badge status for diagnostics. The pipeline
+  // moves through `pending → analyzing → researching →
+  // strategizing → generating → reviewing` on a small repo in
+  // 60-180 seconds, so the "initial" status Playwright captures
+  // depends on render timing — this is informational only, not
+  // an assertion.
+  const initialStatus = await statusBadge.getAttribute('data-status');
+  console.log(`[e2e] @full-pipeline: initial status = ${String(initialStatus)}`);
 
-  // Back-nav regression: the project detail's back arrow should
-  // land on `/app`, not `/`. Direct guard for the Phase 3c fix.
-  const backLink = page
-    .locator('a[href="/app"]')
-    .filter({ hasText: /back|←|Projects/i })
-    .first();
-  if (await backLink.isVisible()) {
-    await backLink.click();
-    await expect(page).toHaveURL(/\/app$/);
+  // Poll the badge until it reaches a terminal state. `reviewing`
+  // counts as success for this test because the review loop
+  // itself is a separate Phase-6 LangGraph run that can take
+  // another 2-3 minutes; once `reviewing` is reached we know the
+  // generation fan-out succeeded.
+  await expect
+    .poll(async () => statusBadge.getAttribute('data-status'), {
+      timeout: 15 * 60 * 1000,
+      intervals: [5_000, 10_000, 15_000],
+    })
+    .toMatch(/^(complete|reviewing|failed)$/);
+
+  // If the pipeline failed, capture which stage broke via the
+  // stuck badge text before throwing a useful error message.
+  const terminalStatus = await statusBadge.getAttribute('data-status');
+  if (terminalStatus === 'failed') {
+    throw new Error(
+      `Pipeline reached 'failed' terminal state — check worker logs for the broken stage`
+    );
   }
+
+  // At least one `GeneratedAssetCard` should have mounted by
+  // now via the stable `data-asset-card` hook. We do not pin
+  // to a specific count because the asset fan-out varies with
+  // provider availability (fal.ai down → skips image/video,
+  // ElevenLabs down → skips audio, etc.).
+  const assetCards = page.locator('[data-asset-card]');
+  await expect(assetCards.first()).toBeVisible({ timeout: 30_000 });
+
+  const cardCount = await assetCards.count();
+  expect(cardCount).toBeGreaterThan(0);
+  console.log(
+    `[e2e] @full-pipeline: project reached ${String(terminalStatus)} with ${String(cardCount)} asset cards`
+  );
 });

@@ -126,6 +126,13 @@ export function LaunchStatusBadge({
         // new one enters, the user sees an obvious transition rather
         // than a silent in-place text swap.
         key={status}
+        // `data-status` is a stable selector hook for Playwright E2E
+        // tests. The visible badge text is animated and split across
+        // motion.span children, which makes text-based matching
+        // fragile; a discrete data attribute flips atomically with
+        // the status prop and is trivial to assert on.
+        data-status={status}
+        data-testid="launch-status-badge"
         initial={{ opacity: 0, scale: 0.85, y: -2 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.85, y: 2 }}

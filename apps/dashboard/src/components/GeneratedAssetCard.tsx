@@ -406,6 +406,13 @@ export function GeneratedAssetCard({
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 240, damping: 24 }}
       whileHover={{ y: -2 }}
+      // `data-asset-card` + `data-asset-type` are stable selector
+      // hooks for Playwright E2E tests. The `card` Tailwind class
+      // is reused across many surfaces (project cards, Pika card,
+      // stats cards) so matching on it alone is too broad.
+      data-asset-card
+      data-asset-type={asset.type}
+      data-asset-status={asset.status}
       className={`card group relative overflow-hidden bg-gradient-to-br ${tint.from} ${tint.to} hover:border-surface-700 transition-colors`}
     >
       {/* Lightbox (portalled to body) */}
