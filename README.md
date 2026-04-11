@@ -10,14 +10,14 @@
 
 This repo is a working multi-service AI app and a teaching artifact for several patterns that come up when you ship real production AI infrastructure. If you read it cover to cover you'll see, in working code:
 
-- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one parent task via run chaining. A 10-minute video render never blocks a 20-second blog post because they land on different hardware.
+- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one parent task via run chaining. A sixth `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads finished bytes to MinIO — so the web service never runs Chrome and never holds a client connection open for a 10-minute render. A 10-minute video render never blocks a 20-second blog post because they land on different hardware. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
 - **Provider-agnostic AI pipeline architecture.** A `packages/asset-generators/` factory takes injected provider clients (`LLMClient`, fal.ai, ElevenLabs, World Labs) so the agents are completely decoupled from Anthropic vs. Bedrock vs. Vertex. Same factory binding works for the worker and the workflows service.
 - **AsyncLocalStorage for cross-cutting concerns without parameter pollution.** [Cost tracking](docs/cost-tracking.md) threads through every upstream API call without touching a single agent signature, by reading the active `CostTracker` from `node:async_hooks` at the call boundary. The intermediate ~20 files are completely unaware that cost tracking exists.
 - **Strict TypeScript without escape hatches.** `strict: true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`, and `noImplicitOverride` are all on. Two `as unknown as` casts in the entire repo, both centralised in helpers and documented. Zero `any`. Zero non-null assertions in source. ESLint runs with `--max-warnings=0` and the type-aware preset at `error` severity.
 - **Zod at every runtime boundary.** HTTP request bodies, jsonb columns, LLM JSON responses, external API responses, SSE payloads, `process.env`, GitHub webhook payloads, and pgvector raw-SQL row results all parse through a Zod schema. The boundary discipline is mechanical, not aspirational.
 - **Self-learning via pgvector clustering.** User edits on generated assets get embedded with Voyage AI, clustered by category via pgvector cosine similarity, and rolled up into `strategy_insights` rows that the strategist agent reads as prompt context on the next project.
 - **Two layers of code review per PR.** A local Claude Code subagent runs against the staged diff before push (free, contextual, fast); a `@claude review` GitHub Action runs on demand for second opinions on tricky changes (independent, async, visible to the team).
-- **Six Render services, one Blueprint.** `render.yaml` provisions five of them in one click. The sixth (the workflow service) is a one-time dashboard step because Render Workflows is in public beta and the Blueprint syntax doesn't support it yet — see [Deploy Your Own](#deploy-your-own-on-render-in-4-steps) for the runbook.
+- **Eight Render services, one Blueprint.** `render.yaml` provisions seven of them in one click — including a Render-native MinIO object store for rendered video bytes (see [ADR-002](docs/adrs/ADR-002-minio-for-rendered-video-storage.md)) and a dedicated `launchkit-pika-worker` dyno for the Python subprocess spawn ([ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md)). The eighth (the workflow service) is a one-time dashboard step because Render Workflows is in public beta and the Blueprint syntax doesn't support it yet — see [Deploy Your Own](#deploy-your-own-on-render-in-4-steps) for the runbook.
 - **Vendoring a third-party CLI as a pinned subprocess.** The [Pika video meeting integration](docs/pika-integration.md) shells out to a vendored Python CLI from `vendor/pikastream-video-meeting/` (Apache 2.0, pinned to a specific upstream commit SHA, provenance header on every file) so LaunchKit's AI teammate can walk into a live Google Meet as a video participant. Reuses Pika's reference client instead of reimplementing the HTTP surface in Node, and wraps the subprocess with a `child_process.spawn` + Zod-validated stdout + exit-code-to-typed-error pattern that the existing Claude Agent SDK runner already uses for its own subprocess boundary.
 
 The full engineering invariants live in [`CLAUDE.md`](CLAUDE.md). The long-form cost-tracking explainer is at [`docs/cost-tracking.md`](docs/cost-tracking.md). The Pika integration explainer is at [`docs/pika-integration.md`](docs/pika-integration.md).
@@ -43,35 +43,46 @@ It's not a prompt template. It's a multi-agent system with a real pipeline, real
 ## How it works
 
 ```
-                    ┌─────────────────────────────────────────────────┐
-                    │  Browser  ──── SSE ────  launchkit-web (Hono)   │
-                    └─────────────────────┬───────────────────────────┘
-                                          │ enqueue
-                            ┌─────────────▼─────────────┐
-                            │   launchkit-redis         │
-                            │   (BullMQ queues)         │
-                            └──┬──────────────────────┬─┘
-                               │ ANALYSIS             │ REVIEW
-              ┌────────────────▼──────────┐         ┌─▼───────────────────┐
-              │  launchkit-worker          │         │  launchkit-worker   │
-              │  ─ analyze                 │         │  ─ review           │
-              │  ─ research (Agent SDK)    │         └─────────────────────┘
-              │  ─ strategize              │                  ▲
-              │  ─ commit-marketing        │                  │ enqueue
-              └────────────┬───────────────┘                  │
-                           │ trigger                          │
-            ┌──────────────▼──────────────────────────────────┴────┐
-            │   launchkit-workflows  (Render Workflows)            │
-            │   ┌──────────────────────────────────────────────┐   │
-            │   │  generateAllAssetsForProject  [starter]       │   │
-            │   │            │                                  │   │
-            │   │            ├─ generateWrittenAsset  [starter] │   │
-            │   │            ├─ generateImageAsset    [standard]│   │
-            │   │            ├─ generateAudioAsset    [standard]│   │
-            │   │            ├─ generateVideoAsset    [pro]     │   │
-            │   │            └─ generateWorldScene    [pro]     │   │
-            │   └──────────────────────────────────────────────┘   │
-            └──────────────────────────┬───────────────────────────┘
+                    ┌──────────────────────────────────────────────────┐
+                    │  Browser  ──── SSE ────  launchkit-web (Hono)    │
+                    │                            │                     │
+                    │                            │ 302 redirect        │
+                    │                            ▼                     │
+                    │                   ┌─────────────────┐            │
+                    │                   │ launchkit-minio │            │
+                    │                   │  (S3-compat)    │            │
+                    │                   └─────────────────┘            │
+                    └────────────────────────┬─────────────────────────┘
+                                             │ enqueue
+                               ┌─────────────▼─────────────┐
+                               │   launchkit-redis         │
+                               │   (BullMQ queues)         │
+                               └──┬────────────────┬──────┬┘
+                         ANALYSIS │          REVIEW│      │ PIKA_INVITE
+              ┌───────────────────▼──┐           ┌─▼──────▼────────────┐
+              │  launchkit-worker    │           │launchkit-pika-worker│
+              │  ─ analyze           │           │ ─ pika-invite       │
+              │  ─ research          │           │   (Python subproc)  │
+              │  ─ strategize        │           └─────────────────────┘
+              │  ─ review            │
+              │  ─ commit-marketing  │
+              │  ─ pika-poll/leave   │
+              └───────────┬──────────┘
+                          │ trigger
+            ┌─────────────▼───────────────────────────────────────┐
+            │   launchkit-workflows  (Render Workflows)           │
+            │   ┌──────────────────────────────────────────────┐  │
+            │   │  generateAllAssetsForProject  [starter]       │  │
+            │   │            │                                  │  │
+            │   │            ├─ generateWrittenAsset  [starter] │  │
+            │   │            ├─ generateImageAsset    [standard]│  │
+            │   │            ├─ generateAudioAsset    [standard]│  │
+            │   │            ├─ generateVideoAsset    [pro]     │  │
+            │   │            └─ generateWorldScene    [pro]     │  │
+            │   │                                                │  │
+            │   │  renderRemotionVideo              [pro] ──────┼──┼──> launchkit-minio
+            │   └──────────────────────────────────────────────┘  │
+            └──────────────────────────┬──────────────────────────┘
                                        │
                             ┌──────────▼─────────┐
                             │  launchkit-db      │
@@ -87,26 +98,40 @@ The workflow parent task reads `status='queued'` asset rows from Postgres, fans 
 
 ## Architecture
 
-Six Render services, each with one job:
+Eight Render services, each with one job:
 
 | Service | Type | Role |
 |---|---|---|
 | `launchkit-web` | Web | Hono API + React SPA + GitHub webhook receiver + SSE stream |
-| `launchkit-worker` | Worker | BullMQ processor for analyze/research/strategize/review/commit-marketing/trending |
+| `launchkit-worker` | Worker | BullMQ processor for analyze/research/strategize/review/commit-marketing/trending + the Pika `pika-poll` and `pika-leave` control-plane jobs |
+| `launchkit-pika-worker` | Worker | Single-purpose dyno that spawns the vendored Python CLI for the ~90s Pika meeting-join subprocess. Process-isolated so a heavy analysis job on the shared worker cannot contend for the Node event loop during a click-to-join window. See [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md) |
 | `launchkit-cron` | Cron | 6-hour cron for trending signal ingestion + nightly feedback insight aggregation |
-| `launchkit-workflows` | Workflows | Per-asset compute-isolated generation tasks (1 parent + 5 children, 3 compute profiles) |
+| `launchkit-workflows` | Workflows | Per-asset compute-isolated generation tasks (1 parent + 5 children, 3 compute profiles) plus the `renderRemotionVideo` task that renders MP4s and uploads to MinIO |
+| `launchkit-minio` | Docker | S3-compatible object storage for rendered Remotion video bytes, backed by a 10 GB Render Disk. See [ADR-002](docs/adrs/ADR-002-minio-for-rendered-video-storage.md) |
 | `launchkit-redis` | Key-Value | BullMQ queue + pub/sub for SSE + GitHub API cache |
 | `launchkit-db` | Postgres | Durable state + pgvector embeddings for similarity search |
 
-`launchkit-workflows` is the newest piece and the one that makes the per-task compute story work. Every generation path in the app — the strategize → generate handoff, the creative-review re-queue, the commit-marketing refresh, and the user-facing "Regenerate" button — flows through it. Render Workflows is in public beta and the Blueprint syntax doesn't yet support workflow services, so the workflow service is created via the dashboard once at deploy time. Every other service comes from `render.yaml`.
+Seven of the eight come from the Blueprint. The eighth (`launchkit-workflows`) is a one-time dashboard step because Render Workflows is in public beta and `render.yaml` doesn't yet know about workflow services — see [Deploy Your Own](#deploy-your-own-on-render-in-4-steps) for the runbook.
 
-### Why six services?
+**Three planes, one Blueprint.** The topology above lands naturally in three groups:
 
-**Web ↔ Worker separation** is non-negotiable. AI agentic loops take 30-180 seconds. They cannot run in HTTP request handlers. The worker exists so the web service stays snappy for the dashboard's interactive surface.
+- **Control plane** — `launchkit-web` + `launchkit-dashboard` (the React SPA served from the web dyno). HTTP, SSE, GitHub webhooks, user clicks. Sub-second latency budget. Never holds a long-running request.
+- **Orchestration plane** — `launchkit-worker`, `launchkit-pika-worker`, and `launchkit-cron`. BullMQ-driven background work. Analysis / research / strategize / review / trending / Pika control / self-learning aggregation. Mid-length jobs (30s to 5 minutes), all small-to-medium compute.
+- **Compute plane** — `launchkit-workflows` + `launchkit-minio`. The per-asset generation fan-out and the rendered-video storage. Heterogeneous compute (starter text tasks through pro video / 3D renders), persistent object storage, partial-failure semantics.
+
+Each plane has one job. The split is deliberate — see [`docs/architecture/dual-path-generation.md`](docs/architecture/dual-path-generation.md) and [ADR-005](docs/adrs/ADR-005-dual-path-generation.md) for the long-form rationale.
+
+### Why eight services?
+
+**Web ↔ Worker separation** is non-negotiable. AI agentic loops take 30-180 seconds. They cannot run in HTTP request handlers. The shared worker exists so the web service stays snappy for the dashboard's interactive surface.
+
+**The dedicated Pika worker exists** because the click-to-avatar-in-meeting latency must stay under 100 ms regardless of what else is running on the shared worker. A heavy analysis job on the shared dyno would contend with a Python subprocess spawn for the Node event loop, which is user-visible during a live Google Meet invite. Splitting the Pika invite processor onto its own dyno — same `apps/worker` workspace, different `dist/` entry point — keeps the click-to-spawn path isolated without duplicating a single line of code. Full rationale in [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md).
 
 **Cron exists** because the self-learning system needs periodic aggregation, the trending-signals ingestion runs every 6 hours, and webhook-enabled repos need a fallback poller for missed events.
 
-**The workflows service exists** because asset generation has wildly different compute profiles. A `pro` worker dyno is wasteful for blog posts; a `starter` dyno crashes on Kling video renders. Per-task compute sizing on Render Workflows is the right primitive — every task gets its own isolated VM, sized for its workload, with per-task retries and timeouts.
+**The workflows service exists** because asset generation has wildly different compute profiles. A `pro` worker dyno is wasteful for blog posts; a `starter` dyno crashes on Kling video renders. Per-task compute sizing on Render Workflows is the right primitive — every task gets its own isolated VM, sized for its workload, with per-task retries and timeouts. Full rationale in [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
+
+**MinIO exists** because the workflows service produces rendered MP4 bytes that need a durable home. The prior architecture cached renders under `.cache/remotion-renders` on the web dyno, which broke on every deploy, didn't share across horizontally-scaled dynos, and couldn't be read by the workflows service at all once Remotion rendering moved off the web. MinIO on a 10 GB Render Disk is S3-compatible (so the AWS SDK Just Works), Render-native (no external account or credentials), and the `/api/assets/:id/video.mp4` handler 302-redirects clients directly to the MinIO public URL instead of streaming bytes through Node. Full rationale in [ADR-002](docs/adrs/ADR-002-minio-for-rendered-video-storage.md).
 
 **Redis serves three roles:**
 1. BullMQ queue backing store
@@ -202,9 +227,9 @@ LaunchKit deploys from a Render Blueprint plus one manual workflow service. Tota
 ### Step 1 — Create the Render Blueprint
 
 1. [dashboard.render.com](https://dashboard.render.com/) → **New +** → **Blueprint**
-2. Connect your fork. Render reads `render.yaml` automatically and provisions five services: `launchkit-web`, `launchkit-worker`, `launchkit-cron`, `launchkit-redis`, `launchkit-db`.
+2. Connect your fork. Render reads `render.yaml` automatically and provisions seven services: `launchkit-web`, `launchkit-worker`, `launchkit-pika-worker`, `launchkit-cron`, `launchkit-minio`, `launchkit-redis`, and `launchkit-db`.
 3. Fill in the secrets prompt — your Anthropic API key is the only required one. Optional keys unlock more asset types. Leave `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` blank for now; you'll fill them in after step 2.
-4. Click **Apply**. Wait until all five services turn green. The web service runs DB migrations on its `preDeployCommand` so the schema is in place automatically.
+4. Click **Apply**. Wait until all seven services turn green. The web service runs DB migrations on its `preDeployCommand` so the schema is in place automatically. `launchkit-minio` provisions a 10 GB Render Disk for object persistence and generates its `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` on first boot; `render.yaml` wires the public hostname into `MINIO_ENDPOINT_HOST` on the web service via `fromService.host`.
 
 ### Step 2 — Create the workflow service (one-time manual step)
 
@@ -212,9 +237,18 @@ Render Workflows is in public beta and the Blueprint syntax doesn't yet support 
 
 1. Dashboard → **New +** → **Workflow**
 2. Connect the same fork. Pick the same region the Blueprint used (private network access depends on co-region).
-3. Build command: `npm ci && npm run build`. Start command: `npm run start:workflows`.
-4. In the env vars page, link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add the same `ANTHROPIC_API_KEY` plus any optional keys you set in step 1.
-5. Click **Deploy**. Wait until the Tasks tab shows six registered tasks (`generateAllAssetsForProject`, `generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`).
+3. Build command — install Chrome Headless Shell so the new `renderRemotionVideo` task has what Remotion needs at runtime:
+   ```
+   apt-get update &&
+   apt-get install -y --no-install-recommends \
+     libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 \
+     libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 \
+     libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 &&
+   npm ci && npx remotion browser ensure && npm run build
+   ```
+   Start command: `npm run start:workflows`. Plan: `pro` (the `renderRemotionVideo` task needs 2 CPU / 4 GB for Chrome + Remotion's in-memory work).
+4. In the env vars page, link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add `ANTHROPIC_API_KEY`, `FAL_API_KEY`, `WORLD_LABS_API_KEY`, and the ElevenLabs trio (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`). Then copy the MinIO credentials from the `launchkit-minio` service's env page into three new vars on the workflows service: `MINIO_ENDPOINT_HOST` (the `launchkit-minio` public hostname, e.g. `launchkit-minio-xyz.onrender.com`), `MINIO_ROOT_USER`, and `MINIO_ROOT_PASSWORD`. The workflows service uses them to write video bytes to the bucket; the Blueprint cannot auto-sync these because the workflow service is not defined in `render.yaml`.
+5. Click **Deploy**. Wait until the Tasks tab shows seven registered tasks (`generateAllAssetsForProject`, `generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`, `renderRemotionVideo`).
 
 ### Step 3 — Wire the worker and web to the workflow
 
@@ -303,16 +337,23 @@ renderlaunchkit/
 ├── docs/
 │   └── cost-tracking.md              # Long-form cost tracking explainer
 │
+├── docs/
+│   ├── adrs/                         # 5 architectural decision records (ADR-001 through 005)
+│   ├── architecture/                 # 2 long-form rationale essays
+│   ├── cost-tracking.md              # AsyncLocalStorage cost-tracking explainer
+│   ├── first-30-minutes.md           # Self-paced walkthrough for new contributors
+│   └── pika-integration.md           # Pika video-meeting integration guide
+│
 ├── packages/
 │   ├── shared/                       # Drizzle schema, Zod schemas, types, pricing constants
-│   ├── asset-generators/             # Provider-agnostic agent factories + cost tracker
-│   └── video/                        # Remotion compositions
+│   ├── asset-generators/             # Provider-agnostic agent factories + cost tracker + MinIO client
+│   └── video/                        # Remotion compositions + the Remotion renderer factory
 │
 └── apps/
     ├── web/                          # Hono API + SSE + GitHub webhook receiver
-    ├── worker/                       # BullMQ processor (analyze/research/strategize/review)
+    ├── worker/                       # Two entry points: shared worker + dedicated Pika worker
     ├── cron/                         # 6-hour cron + nightly feedback aggregation
-    ├── workflows/                    # Render Workflows tasks (per-asset generation)
+    ├── workflows/                    # Render Workflows tasks (per-asset generation + Remotion render)
     └── dashboard/                    # Vite React SPA
 ```
 
@@ -328,8 +369,30 @@ renderlaunchkit/
 
 ## Further reading
 
-- [`CLAUDE.md`](CLAUDE.md) — engineering invariants (TypeScript strict flags, ESLint rules, Zod boundaries, env modules, the two documented `as unknown as` casts, the workflows service architecture, the cost-tracking design, the code review chain)
-- [`docs/cost-tracking.md`](docs/cost-tracking.md) — long-form explainer with the AsyncLocalStorage rationale, the non-blocking invariant guard layers, the schema, and the recipe for adding a new provider
+### First stop for new contributors
+
+- [`docs/first-30-minutes.md`](docs/first-30-minutes.md) — a self-paced walkthrough that gets a senior engineer from a fresh clone to "I understand what this repo does and where to dig deeper" in about half an hour.
+
+### Engineering invariants and long-form rationale
+
+- [`CLAUDE.md`](CLAUDE.md) — engineering invariants. TypeScript strict flags, ESLint rules, Zod boundaries, env modules, the two documented `as unknown as` casts, the workflows service architecture, the cost-tracking design, the code review chain. Start here if you are changing any convention.
+- [`docs/architecture/dual-path-generation.md`](docs/architecture/dual-path-generation.md) — long-form essay on the dual-path architecture (async pipeline on Workflows, synchronous direct calls for the creative studio and chat streaming). Companion to [ADR-005](docs/adrs/ADR-005-dual-path-generation.md).
+- [`docs/architecture/bullmq-to-workflows-migration.md`](docs/architecture/bullmq-to-workflows-migration.md) — narrative account of the migration from BullMQ-on-one-worker to the Render Workflows fan-out, including specific commit hashes that landed each step.
+- [`docs/cost-tracking.md`](docs/cost-tracking.md) — AsyncLocalStorage rationale, non-blocking invariant guard layers, schema, and the 3-step recipe for adding a new provider. Companion to [ADR-004](docs/adrs/ADR-004-async-local-storage-for-cost-tracking.md).
+- [`docs/pika-integration.md`](docs/pika-integration.md) — Pika video-meeting integration: lifecycle state machine, exit-code-to-error-class mapping, and the env-var scoping rules. Companion to [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md).
+
+### Architectural decision records
+
+The five accepted ADRs in [`docs/adrs/`](docs/adrs/) capture the load-bearing decisions in the repo, each with Context / Decision / Consequences (positive, negative, neutral) / Alternatives considered / References:
+
+- [ADR-001 — Render Workflows for the asset generation pipeline](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md)
+- [ADR-002 — MinIO on Render for rendered video storage](docs/adrs/ADR-002-minio-for-rendered-video-storage.md)
+- [ADR-003 — Dedicated Pika worker for subprocess isolation](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md)
+- [ADR-004 — AsyncLocalStorage for per-asset cost tracking](docs/adrs/ADR-004-async-local-storage-for-cost-tracking.md)
+- [ADR-005 — Dual-path generation](docs/adrs/ADR-005-dual-path-generation.md)
+
+### Contributing and review chain
+
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — short-form contribution rules
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — the CI gate (typecheck + lint + build + test)
 - [`.github/workflows/claude-review.yml`](.github/workflows/claude-review.yml) — the on-demand `@claude review` cloud reviewer
