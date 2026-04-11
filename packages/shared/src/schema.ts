@@ -262,6 +262,26 @@ export const assets = pgTable(
     // for the asset yet.
     costBreakdown: jsonb('cost_breakdown'),
 
+    // ── Rendered video storage (MinIO) ──
+    //
+    // Populated by the `renderRemotionVideo` workflows task after it
+    // uploads finished Remotion MP4 bytes to the `launchkit-minio`
+    // bucket. The web service's `/api/assets/:id/video.mp4` route
+    // reads `renderedVideoUrl` and 302-redirects clients straight to
+    // it instead of streaming bytes through the web dyno — turning
+    // a 30+ MB response into a cheap redirect.
+    //
+    // `renderedVideoKey` stores the raw S3 key (e.g.
+    // `videos/<assetId>-v<version>-visual.mp4`) so the task can
+    // detect cache hits without re-parsing the URL, and so a future
+    // CDN swap can swap the public URL prefix without rewriting
+    // every row.
+    //
+    // Both are NULL until the first successful render. See ADR-002
+    // for the storage decision rationale.
+    renderedVideoUrl: text('rendered_video_url'),
+    renderedVideoKey: text('rendered_video_key'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
