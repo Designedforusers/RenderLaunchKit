@@ -39,7 +39,7 @@
 //
 // - Runs against the local docker-compose MinIO container at
 //   localhost:9000. If the container is not reachable, the whole
-//   test file skips loudly rather than silently passing.
+//   test file skips each test gracefully via `t.skip()`.
 
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/launchkit_test';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
@@ -50,7 +50,7 @@ process.env.MINIO_ROOT_USER ??= 'launchkit';
 process.env.MINIO_ROOT_PASSWORD ??= 'launchkit-dev-password';
 process.env.MINIO_BUCKET ??= 'launchkit-renders-test-elevenlabs';
 
-import test, { after, before } from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -218,15 +218,7 @@ async function clearLocalCache(cacheKey) {
 
 // ── Preflight ──────────────────────────────────────────────────────
 
-before(async () => {
-  if (!(await minioReachable())) {
-    throw new Error(
-      `MinIO not reachable at ${MINIO_ENDPOINT} — run \`docker compose up -d minio\` ` +
-        'before this test file. The three-tier cache tests need live MinIO for ' +
-        'tiers 2 and 3 to have anything to assert on.'
-    );
-  }
-});
+const MINIO_OK = await minioReachable();
 
 // Best-effort cleanup of local .cache/elevenlabs entries created by
 // this test run. Does not block test correctness — we use unique
@@ -246,7 +238,8 @@ function registerCacheKey(key) {
 
 // ── Tests ──────────────────────────────────────────────────────────
 
-test('three-tier cache: tier-1 hit with MinIO configured returns cacheSource=local and never speculatively populates minioUrl', async () => {
+test('three-tier cache: tier-1 hit with MinIO configured returns cacheSource=local and never speculatively populates minioUrl', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -284,7 +277,8 @@ test('three-tier cache: tier-1 hit with MinIO configured returns cacheSource=loc
   }
 });
 
-test('three-tier cache: tier-1 hit with MinIO NOT configured returns cacheSource=local with no minioUrl', async () => {
+test('three-tier cache: tier-1 hit with MinIO NOT configured returns cacheSource=local with no minioUrl', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -319,7 +313,8 @@ test('three-tier cache: tier-1 hit with MinIO NOT configured returns cacheSource
   }
 });
 
-test('three-tier cache: tier-2 hit returns cacheSource=minio, hydrates local disk, and never calls ElevenLabs', async () => {
+test('three-tier cache: tier-2 hit returns cacheSource=minio, hydrates local disk, and never calls ElevenLabs', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -379,7 +374,8 @@ test('three-tier cache: tier-2 hit returns cacheSource=minio, hydrates local dis
   }
 });
 
-test('three-tier cache: tier-3 full miss calls ElevenLabs, writes local + MinIO, returns cacheSource=api', async () => {
+test('three-tier cache: tier-3 full miss calls ElevenLabs, writes local + MinIO, returns cacheSource=api', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -432,7 +428,8 @@ test('three-tier cache: tier-3 full miss calls ElevenLabs, writes local + MinIO,
   }
 });
 
-test('three-tier cache: tier-3 with MinIO upload failure still succeeds but reports minioUploadStatus=upload-failed', async () => {
+test('three-tier cache: tier-3 with MinIO upload failure still succeeds but reports minioUploadStatus=upload-failed', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -464,7 +461,8 @@ test('three-tier cache: tier-3 with MinIO upload failure still succeeds but repo
   }
 });
 
-test('three-tier cache: tier-3 with no MinIO client returns cacheSource=api and no MinIO metadata', async () => {
+test('three-tier cache: tier-3 with no MinIO client returns cacheSource=api and no MinIO metadata', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -490,7 +488,8 @@ test('three-tier cache: tier-3 with no MinIO client returns cacheSource=api and 
   }
 });
 
-test('three-tier cache: partial MinIO state (mp3 present, alignment missing) falls through to tier 3', async () => {
+test('three-tier cache: partial MinIO state (mp3 present, alignment missing) falls through to tier 3', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -532,7 +531,8 @@ test('three-tier cache: partial MinIO state (mp3 present, alignment missing) fal
   }
 });
 
-test('three-tier cache: corrupt MinIO alignment JSON falls through to tier 3 and repairs both slots', async () => {
+test('three-tier cache: corrupt MinIO alignment JSON falls through to tier 3 and repairs both slots', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -590,7 +590,8 @@ test('three-tier cache: corrupt MinIO alignment JSON falls through to tier 3 and
 // successful synthesis isn't turned into a 500 by a failed hot
 // cache hydration.
 
-test('guardrails: synthesis rejects a cacheKey that does not match /^[a-f0-9]{16}$/', async () => {
+test('guardrails: synthesis rejects a cacheKey that does not match /^[a-f0-9]{16}$/', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   modules._setWebObjectStorageClientForTests(null);
 
@@ -622,7 +623,8 @@ test('guardrails: synthesis rejects a cacheKey that does not match /^[a-f0-9]{16
   }
 });
 
-test('guardrails: ElevenLabs fetch timeout throws a clear error instead of hanging', async () => {
+test('guardrails: ElevenLabs fetch timeout throws a clear error instead of hanging', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
@@ -680,7 +682,8 @@ test('guardrails: ElevenLabs fetch timeout throws a clear error instead of hangi
   }
 });
 
-test('guardrails: tier-3 local disk write failure does not break synthesis', async () => {
+test('guardrails: tier-3 local disk write failure does not break synthesis', async (t) => {
+  if (!MINIO_OK) { t.skip('MinIO not reachable — run docker compose up -d minio'); return; }
   const modules = await loadModules();
   const cacheKey = registerCacheKey(uniqueCacheKey());
 
