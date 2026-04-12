@@ -150,17 +150,27 @@ githubWebhookRoutes.post(
       );
     }
 
-    // Queue the filtering decision.
-    await analysisJobQueue.add(
-      'filter-webhook',
-      {
-        projectId: project.id,
-        webhookEventId: webhookEvent.id,
-      },
-      {
-        jobId: `webhook__${webhookEvent.id}`,
-      }
-    );
+    // Queue the filtering decision. If the enqueue fails, remove
+    // the webhook_events row so GitHub's automatic redelivery is
+    // not deduped against a delivery we never actually processed.
+    try {
+      await analysisJobQueue.add(
+        'filter-webhook',
+        {
+          projectId: project.id,
+          webhookEventId: webhookEvent.id,
+        },
+        {
+          jobId: `webhook__${webhookEvent.id}`,
+        }
+      );
+    } catch {
+      await database.delete(webhookEvents).where(eq(webhookEvents.id, webhookEvent.id));
+      return c.json(
+        { error: 'Failed to enqueue webhook processing — GitHub will redeliver' },
+        503
+      );
+    }
 
     return c.json({ ok: true, queued: true, webhookEventId: webhookEvent.id });
   }

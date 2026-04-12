@@ -218,15 +218,25 @@ pikaRoutes.post('/:projectId/meetings', expensiveRouteRateLimit, async (c) => {
     return c.json({ error: 'Failed to persist session row' }, 500);
   }
 
-  // Enqueue the invite job AFTER the row is persisted. The
-  // invite processor loads the row it expects to already exist —
-  // if the enqueue happened first and the insert failed, the
-  // processor would no-op on a missing row and the dashboard
-  // would see a silent failure.
-  await enqueuePikaInvite({
-    sessionRowId: sessionRow.id,
-    projectId,
-  });
+  // Enqueue the invite job AFTER the row is persisted. If the
+  // queue is transiently unavailable, flip the row to `failed` so
+  // the 409 guard does not permanently block future invites for
+  // this project.
+  try {
+    await enqueuePikaInvite({
+      sessionRowId: sessionRow.id,
+      projectId,
+    });
+  } catch {
+    await database
+      .update(pikaMeetingSessions)
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where(eq(pikaMeetingSessions.id, sessionRow.id));
+    return c.json(
+      { error: 'Failed to enqueue meeting invite — please retry' },
+      503
+    );
+  }
 
   // Parse the row through the schema before return so a
   // drizzle-vs-Zod drift surfaces here, not on the dashboard.

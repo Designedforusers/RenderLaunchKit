@@ -153,13 +153,23 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
     );
   }
 
-  // Enqueue the analysis pipeline
-  await enqueueRepositoryAnalysis({
-    projectId: project.id,
-    repoUrl: project.repoUrl,
-    repoOwner: project.repoOwner,
-    repoName: project.repoName,
-  });
+  // Enqueue the analysis pipeline. If the queue is transiently
+  // unavailable, remove the pending row so the next submit retries
+  // cleanly instead of hitting the in-progress guard.
+  try {
+    await enqueueRepositoryAnalysis({
+      projectId: project.id,
+      repoUrl: project.repoUrl,
+      repoOwner: project.repoOwner,
+      repoName: project.repoName,
+    });
+  } catch {
+    await database.delete(projects).where(eq(projects.id, project.id));
+    return c.json(
+      { error: 'Failed to enqueue analysis — please retry' },
+      503
+    );
+  }
 
   // Update status to analyzing
   await database
