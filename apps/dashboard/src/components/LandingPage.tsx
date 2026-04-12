@@ -164,7 +164,7 @@ const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: 'How does it handle long runs without timeouts?',
-    a: 'Render Workflows. The parent task fans out to five child tasks via run chaining, each sized to the work: starter dynos for text, pro dynos for video and 3D. A 10-minute render never blocks a 20-second blog post.',
+    a: 'Render Workflows. The parent task fans out to six child tasks via run chaining, each sized to the work: starter dynos for text, pro dynos for video renders and 3D. A 10-minute Remotion render never blocks a 20-second blog post.',
   },
 ] as const;
 

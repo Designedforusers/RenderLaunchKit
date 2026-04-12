@@ -56,7 +56,9 @@ The pipeline generates 5+ assets per project across different media types:
 - Audio content (voiceovers, podcast scripts)
 - 3D worlds (Marble Gaussian-splat scenes)
 
-A parent task reads `status='queued'` assets from the database and fans out to **five child tasks** via `Promise.allSettled` (run chaining). Each child runs on its own instance, in parallel. This is the textbook "rapidly distribute computational work across multiple independent instances" use case Render's docs describe.
+A parent task reads `status='queued'` assets from the database and fans out to **five generation child tasks** via `Promise.allSettled` (run chaining). Each child runs on its own instance, in parallel. This is the textbook "rapidly distribute computational work across multiple independent instances" use case Render's docs describe.
+
+A sixth child task, `renderRemotionVideo`, handles on-demand Remotion video composition (product videos, voice commercials, podcast waveforms, vertical video). It runs separately from the generation fan-out — triggered by the web service when a user requests a rendered video — and uploads the finished MP4 to MinIO for persistent caching. See [ADR-002](../adrs/ADR-002-minio-for-rendered-video-storage.md) for the storage rationale.
 
 ### 2. Compute bucketing matters
 
@@ -66,7 +68,7 @@ Different asset types need different compute profiles:
 |---|---|---|
 | **Starter** (0.5 CPU/512 MB) | Written content | Text generation is light, mostly token streaming |
 | **Standard** (1 CPU/2 GB) | Image, audio | Provider call + light post-processing |
-| **Pro** (2 CPU/4 GB) | Video, 3D world | Long polling, larger memory footprint, longer wait windows |
+| **Pro** (2 CPU/4 GB) | Video, 3D world, Remotion render | Long polling, Chrome headless + H.264 encoding, larger memory footprint |
 
 A 10-minute video render gets a Pro instance. A 20-second blog post gets a Starter instance. **A monolithic web dyno can't right-size like this even if you wanted to** — it would have to be sized for the worst case (Pro) and then sit idle for the cheap cases.
 

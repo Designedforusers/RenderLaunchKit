@@ -11,12 +11,14 @@ paths:
 
 ## Architecture
 
-Five child tasks grouped by compute profile:
+Six child tasks grouped by compute profile:
 - `starter`: `generateWrittenAsset` (text)
 - `standard`: `generateImageAsset`, `generateAudioAsset`
-- `pro`: `generateVideoAsset`, `generateWorldScene`
+- `pro`: `generateVideoAsset`, `generateWorldScene`, `renderRemotionVideo`
 
 Parent task (`generateAllAssetsForProject`) reads `status='queued'` assets, fans out via `Promise.allSettled`, then enqueues the review BullMQ job. Partial failures are first-class.
+
+The `renderRemotionVideo` task is NOT part of the generation fan-out — it runs on-demand when a user requests `/api/assets/:id/video.mp4` and no cached render exists. It launches Chrome headless, renders the Remotion composition (product video, voice commercial, podcast waveform, or vertical video), uploads the MP4 to MinIO (`launchkit-minio`), and persists the public URL on the asset row (`rendered_video_url`). Subsequent requests 302-redirect to the cached MinIO URL without triggering a new task.
 
 ## Trigger call sites
 

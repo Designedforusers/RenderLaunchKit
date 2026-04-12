@@ -226,9 +226,9 @@ This is the part of the story that makes the decision *informed* rather than *ca
 
 **LaunchKit's Workflows surface today:**
 
-- **Asset generation only.** The five child tasks (`generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`) plus the parent `generateAllAssetsForProject` task that fans them out.
+- **Asset generation and Remotion video rendering.** The five generation child tasks (`generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`) plus the parent `generateAllAssetsForProject` that fans them out. A sixth child task, `renderRemotionVideo`, was added in a follow-up migration to move Chrome-headless video composition off the web dyno and onto a compute-right-sized Workflows instance — the same 4-step migration discipline applied a second time. Rendered MP4 bytes are uploaded to MinIO (`launchkit-minio`) for persistent caching.
 
-That's it. Workflows is one path; everything else is BullMQ. The decision wasn't "Workflows is better, migrate everything" — it was "Workflows is better *for this specific workload because of these specific reasons*, and BullMQ stays in place for everything else where its trade-offs are still optimal."
+That's it. Workflows handles the compute-bound work; everything else is BullMQ. The decision wasn't "Workflows is better, migrate everything" — it was "Workflows is better *for compute-heterogeneous and CPU-bound workloads*, and BullMQ stays in place for the orchestration-layer jobs where its trade-offs are still optimal."
 
 ---
 

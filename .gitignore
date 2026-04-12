@@ -15,6 +15,7 @@ coverage/
 # Exception: .claude/rules/ contains path-conditional project rules
 # that Claude Code loads on demand (checked in so all contributors
 # get them).
+.claude.json
 .claude/*
 !.claude/rules/
 
