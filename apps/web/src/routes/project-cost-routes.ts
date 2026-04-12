@@ -5,6 +5,7 @@ import {
   ProjectCostsResponseSchema,
 } from '@launchkit/shared';
 import { database } from '../lib/database.js';
+import { parseUuidParam, invalidUuidResponse } from '../lib/validate-uuid.js';
 
 /**
  * Project-level cost aggregation route. Serves the dashboard's
@@ -41,7 +42,8 @@ import { database } from '../lib/database.js';
 const projectCostRoutes = new Hono();
 
 projectCostRoutes.get('/:projectId/costs', async (c) => {
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
 
   // Per-provider aggregate. The `::integer` cast is load-bearing:
   // Postgres's default numeric type for SUM() is `numeric`, which

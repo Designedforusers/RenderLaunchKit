@@ -2,13 +2,15 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createRedisSubscriberClient } from '../lib/redis-client.js';
 import { REDIS_CHANNELS } from '@launchkit/shared';
+import { parseUuidParam, invalidUuidResponse } from '../lib/validate-uuid.js';
 
 const projectEventStreamRoutes = new Hono();
 
 // ── GET /api/projects/:id/events — SSE endpoint for real-time updates ──
 
 projectEventStreamRoutes.get('/:id/events', (c) => {
-  const projectId = c.req.param('id');
+  const projectId = parseUuidParam(c);
+  if (!projectId) return invalidUuidResponse(c);
   const channel = REDIS_CHANNELS.PROJECT_EVENTS(projectId);
 
   return streamSSE(c, async (stream) => {

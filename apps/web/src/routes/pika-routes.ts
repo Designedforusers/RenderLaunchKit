@@ -14,6 +14,8 @@ import {
   enqueuePikaInvite,
   enqueuePikaLeave,
 } from '../lib/job-queue-clients.js';
+import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
+import { parseUuidParam, invalidUuidResponse } from '../lib/validate-uuid.js';
 
 /**
  * Routes for the Pika video-meeting integration.
@@ -83,8 +85,9 @@ const NON_TERMINAL_STATUSES = [
 
 // ── POST /api/projects/:projectId/meetings ───────────────────────────
 
-pikaRoutes.post('/:projectId/meetings', async (c) => {
-  const projectId = c.req.param('projectId');
+pikaRoutes.post('/:projectId/meetings', expensiveRouteRateLimit, async (c) => {
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
 
   // Parse the body against the Zod schema at the boundary. A
   // malformed POST (missing meetUrl, non-URL value, botName too
@@ -246,7 +249,8 @@ pikaRoutes.post('/:projectId/meetings', async (c) => {
 // ── GET /api/projects/:projectId/meetings ────────────────────────────
 
 pikaRoutes.get('/:projectId/meetings', async (c) => {
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
 
   const rows = await database
     .select()
@@ -270,8 +274,10 @@ pikaRoutes.get('/:projectId/meetings', async (c) => {
 // ── GET /api/projects/:projectId/meetings/:sessionRowId ──────────────
 
 pikaRoutes.get('/:projectId/meetings/:sessionRowId', async (c) => {
-  const projectId = c.req.param('projectId');
-  const sessionRowId = c.req.param('sessionRowId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
+  const sessionRowId = parseUuidParam(c, 'sessionRowId');
+  if (!sessionRowId) return invalidUuidResponse(c);
 
   const [row] = await database
     .select()
@@ -304,8 +310,10 @@ pikaRoutes.get('/:projectId/meetings/:sessionRowId', async (c) => {
 // ── POST /api/projects/:projectId/meetings/:sessionRowId/leave ───────
 
 pikaRoutes.post('/:projectId/meetings/:sessionRowId/leave', async (c) => {
-  const projectId = c.req.param('projectId');
-  const sessionRowId = c.req.param('sessionRowId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
+  const sessionRowId = parseUuidParam(c, 'sessionRowId');
+  if (!sessionRowId) return invalidUuidResponse(c);
 
   const [row] = await database
     .select()

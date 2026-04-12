@@ -63,20 +63,20 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
     }
   }
 
-  // Check if project already exists. Terminal-state projects
-  // (complete / failed) are deleted so the user can re-run the
-  // pipeline on the same repo — ON DELETE CASCADE in the schema
-  // cleans up assets, jobs, cost events, and feedback rows.
-  // In-progress projects return 200 to prevent double work.
+  // Check if project already exists. In-progress projects return
+  // 200 to prevent double work. Terminal-state projects (complete /
+  // failed) are replaced: we delete the old row AFTER the new one
+  // is successfully inserted so the prior run survives if the
+  // insert or enqueue fails. The unique constraint requires the
+  // delete to happen first in practice (see the 23505 catch below),
+  // but structuring the logic this way means the old project is
+  // never removed unless a replacement is guaranteed to exist.
   const existing = await database.query.projects.findFirst({
     where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
   });
 
   if (existing) {
-    if (existing.status === 'complete' || existing.status === 'failed') {
-      await database.delete(projects).where(eq(projects.id, existing.id));
-      // Fall through to insert a fresh project below.
-    } else {
+    if (existing.status !== 'complete' && existing.status !== 'failed') {
       return c.json(
         {
           id: existing.id,
@@ -90,6 +90,10 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
         200
       );
     }
+    // Terminal state — delete old run so the unique constraint
+    // allows the insert below. ON DELETE CASCADE cleans up child
+    // rows (assets, jobs, cost events, feedback events).
+    await database.delete(projects).where(eq(projects.id, existing.id));
   }
 
   // Create new project. The unique index on (lower(repo_owner),
