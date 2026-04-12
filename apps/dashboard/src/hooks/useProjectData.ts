@@ -14,7 +14,7 @@ const IN_PROGRESS_PROJECT_STATUSES: ReadonlySet<string> = new Set([
   'strategizing',
   'generating',
   'reviewing',
-  'regenerating',
+  'revising',
 ]);
 
 export function useProjectListData() {

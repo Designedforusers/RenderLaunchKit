@@ -84,6 +84,11 @@ services:
       # on this key at request time.
       - key: EXA_API_KEY
         sync: false
+      # Optional bearer-token gate for programmatic API access. Leave
+      # UNSET for the demo — the React dashboard does not send auth
+      # headers and will 401 on every API call if this is set. Only
+      # set this when restricting access to external scripts/CLIs
+      # that can pass `Authorization: Bearer <key>`.
       - key: API_KEY
         sync: false
       # Comma-separated CORS origins. Defaults to localhost when unset.

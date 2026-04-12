@@ -93,7 +93,7 @@ const TOOLS: Anthropic.Messages.ToolUnion[] = [
   {
     name: 'generate_written_content',
     description:
-      'Generate marketing content for the project. Use this when the user asks for a blog post, tweet thread, LinkedIn post, HN post, FAQ, changelog, or any other written marketing asset. Returns the generated content as markdown.',
+      'Signal that the user wants written marketing content for the project. Use this when the user asks for a blog post, tweet thread, LinkedIn post, HN post, FAQ, changelog, or any other written asset. After calling this tool, generate the content yourself in your follow-up response using the project context.',
     input_schema: {
       type: 'object' as const,
       properties: {

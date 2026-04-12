@@ -146,9 +146,11 @@ assetApiRoutes.get('/:id', async (c) => {
 //      The helper awaits the run to completion and parses the
 //      result through a Zod schema so the returned URL is typed.
 //   5. 302-redirect to the public URL the workflows task
-//      persisted on the asset row. Honour `?download=1` via a
-//      `Content-Disposition` hint appended to the URL fragment
-//      when requested.
+//      persisted on the asset row. When `?download=1` is set,
+//      proxy the response through the web dyno with a
+//      Content-Disposition header so the browser downloads
+//      instead of navigating (avoids cross-origin CORS issues
+//      with the MinIO service).
 assetApiRoutes.get('/:id/video.mp4', async (c) => {
   const id = parseUuidParam(c);
   if (!id) return invalidUuidResponse(c);
@@ -180,6 +182,24 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     asset.renderedVideoUrl !== null &&
     asset.renderedVideoUrl !== ''
   ) {
+    // Download proxy for the fast-path cache hit too.
+    if (c.req.query('download') === '1') {
+      const upstream = await fetch(asset.renderedVideoUrl);
+      if (!upstream.ok) {
+        return c.json({ error: 'Failed to fetch video from storage' }, 502);
+      }
+      const filename = `${asset.projectId}-visual.mp4`;
+      c.header('Content-Type', 'video/mp4');
+      c.header('Content-Disposition', `attachment; filename="${filename}"`);
+      const contentLength = upstream.headers.get('content-length');
+      if (contentLength !== null) {
+        c.header('Content-Length', contentLength);
+      }
+      if (!upstream.body) {
+        return c.json({ error: 'Storage returned empty body' }, 502);
+      }
+      return c.body(upstream.body);
+    }
     return c.redirect(asset.renderedVideoUrl, 302);
   }
 
@@ -298,16 +318,38 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     ...(cacheSeed !== undefined ? { cacheSeed } : {}),
   });
 
-  // 302 to the public MinIO URL. The workflow task has already
-  // persisted the URL on `assets.renderedVideoUrl`, so subsequent
-  // requests short-circuit on the fast-path check above. No
-  // streaming, no in-memory buffering, no web-dyno bandwidth cost
-  // beyond the redirect itself.
   const redirectUrl = rendered.url;
   c.header('X-Remotion-Cache', rendered.cached ? 'hit' : 'miss');
   c.header('X-Narration-Cache', narrationCache);
   c.header('X-Narration-Audio-Src', narrationAudioSourceHeader);
   c.header('X-Task-Run-Id', rendered.taskRunId);
+
+  // When `?download=1` is set, proxy the video through the web dyno
+  // with Content-Disposition so the browser triggers a download. A
+  // plain 302 to MinIO fails for fetch-based downloads because the
+  // dashboard and MinIO are on different origins (no CORS).
+  const wantsDownload = c.req.query('download') === '1';
+  if (wantsDownload) {
+    const upstream = await fetch(redirectUrl);
+    if (!upstream.ok) {
+      return c.json({ error: 'Failed to fetch video from storage' }, 502);
+    }
+    const filename = `${asset.projectId}-${variant}.mp4`;
+    c.header('Content-Type', 'video/mp4');
+    c.header('Content-Disposition', `attachment; filename="${filename}"`);
+    const contentLength = upstream.headers.get('content-length');
+    if (contentLength !== null) {
+      c.header('Content-Length', contentLength);
+    }
+    if (!upstream.body) {
+      return c.json({ error: 'Storage returned empty body' }, 502);
+    }
+    return c.body(upstream.body);
+  }
+
+  // Default: 302 redirect to the public MinIO URL. The workflow task
+  // has already persisted the URL on `assets.renderedVideoUrl`, so
+  // subsequent requests short-circuit on the fast-path check above.
   return c.redirect(redirectUrl, 302);
 });
 
