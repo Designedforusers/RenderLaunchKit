@@ -594,9 +594,20 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   const id = parseUuidParam(c);
   if (!id) return invalidUuidResponse(c);
 
-  const rawBody: unknown = await c.req.json().catch(() => ({}));
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
   const bodyParse = regenerateAssetSchema.safeParse(rawBody);
-  const body = bodyParse.success ? bodyParse.data : { instructions: undefined };
+  if (!bodyParse.success) {
+    return c.json(
+      { error: bodyParse.error.issues[0]?.message ?? 'Invalid request body' },
+      400
+    );
+  }
+  const body = bodyParse.data;
 
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),

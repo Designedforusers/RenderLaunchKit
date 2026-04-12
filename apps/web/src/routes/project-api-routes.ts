@@ -46,6 +46,11 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       400
     );
   }
+  // GitHub treats owner/name as case-insensitive. Normalize here so
+  // the findFirst lookup, the insert, and the unique constraint on
+  // (lower(repo_owner), lower(repo_name)) all agree.
+  repo.owner = repo.owner.toLowerCase();
+  repo.name = repo.name.toLowerCase();
 
   // Encrypt a user-supplied GitHub personal access token before we
   // touch the database. Doing this up-front keeps the "private-repo
