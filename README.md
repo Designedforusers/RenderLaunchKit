@@ -10,7 +10,7 @@
 
 This repo is a working multi-service AI app and a teaching artifact for several patterns that come up when you ship real production AI infrastructure. If you read it cover to cover you'll see, in working code:
 
-- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one `generateAllAssetsForProject` parent task via run chaining. A separate `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads finished bytes to MinIO — so the web service never runs Chrome and never holds a client connection open for a 10-minute render. A 10-minute video render never blocks a 20-second blog post because they land on different hardware. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
+- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out from one `generateAllAssetsForProject` parent task via run chaining. A separate `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads finished bytes to MinIO — so the web service never runs Chrome. The first video preview request dispatches the workflow task and awaits its result; repeat requests hit the cached MinIO URL and 302-redirect instantly. A 10-minute video render never blocks a 20-second blog post because they land on different hardware. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
 - **Provider-agnostic AI pipeline architecture.** A `packages/asset-generators/` factory takes injected provider clients (`LLMClient`, fal.ai, ElevenLabs, World Labs) so the agents are completely decoupled from Anthropic vs. Bedrock vs. Vertex. Same factory binding works for the worker and the workflows service.
 - **AsyncLocalStorage for cross-cutting concerns without parameter pollution.** [Cost tracking](docs/cost-tracking.md) threads through every upstream API call without touching a single agent signature, by reading the active `CostTracker` from `node:async_hooks` at the call boundary. The intermediate ~20 files are completely unaware that cost tracking exists.
 - **Strict TypeScript without escape hatches.** `strict: true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`, and `noImplicitOverride` are all on. Two `as unknown as` casts in the entire repo, both centralised in helpers and documented. Zero `any`. Zero non-null assertions in source. ESLint runs with `--max-warnings=0` and the type-aware preset at `error` severity.
@@ -115,7 +115,7 @@ Seven of the eight come from the Blueprint. The eighth (`launchkit-workflows`) i
 
 **Three planes, one Blueprint.** The topology above lands naturally in three groups:
 
-- **Control plane** — `launchkit-web`, which serves both the Hono API and the compiled Vite React SPA (from `apps/dashboard/`) on the same dyno. HTTP, SSE, GitHub webhooks, user clicks. Sub-second latency budget. Never holds a long-running request.
+- **Control plane** — `launchkit-web`, which serves both the Hono API and the compiled Vite React SPA (from `apps/dashboard/`) on the same dyno. HTTP, SSE, GitHub webhooks, user clicks. Sub-second latency budget for most routes. The one exception is `GET /api/assets/:id/video.mp4`, which dispatches a Render Workflows task and awaits its result before redirecting to the cached MinIO URL — subsequent requests for the same render are instant 302s.
 - **Orchestration plane** — `launchkit-worker`, `launchkit-pika-worker`, and `launchkit-cron`. BullMQ-driven background work. Analysis / research / strategize / review / trending / Pika control / self-learning aggregation. Mid-length jobs (30s to 5 minutes), all small-to-medium compute.
 - **Compute plane** — `launchkit-workflows` + `launchkit-minio`. The per-asset generation fan-out and the rendered-video storage. Heterogeneous compute (starter text tasks through pro video / 3D renders), persistent object storage, partial-failure semantics.
 
@@ -280,7 +280,7 @@ LaunchKit deploys from a Render Blueprint plus one manual workflow service. Tota
 ### Step 4 — Smoke test
 
 1. Open your live `launchkit-web` URL
-2. Click **New Project** and paste a real GitHub URL (e.g. `https://github.com/sindresorhus/nanoid`)
+2. Click **New Project** and paste a real GitHub URL (e.g. `https://github.com/denoland/fresh`)
 3. Watch the dashboard's live progress feed roll through analyze → research → strategize → generating → reviewing → complete
 4. While the project is in `generating`, open the workflow service's **Runs** tab in another browser tab — you'll see the parent run with multiple child runs concurrently underneath
 5. After completion, click through the generated assets. The cost chip near the top of the project page shows the real total: `Generated for $0.47`

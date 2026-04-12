@@ -16,6 +16,7 @@ import {
   getElevenLabsClient,
   getWorldLabsClient,
 } from '../lib/generation-clients.js';
+import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
 
 /**
  * Direct generation endpoints — user writes the prompt, provider
@@ -55,7 +56,7 @@ const GenerateImageSchema = z.object({
   enhance: z.boolean().default(true),
 });
 
-generateRoutes.post('/image', async (c) => {
+generateRoutes.post('/image', expensiveRouteRateLimit, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parse = GenerateImageSchema.safeParse(rawBody);
   if (!parse.success) {
@@ -112,7 +113,7 @@ const GenerateVideoSchema = z.object({
   enhance: z.boolean().default(true),
 });
 
-generateRoutes.post('/video', async (c) => {
+generateRoutes.post('/video', expensiveRouteRateLimit, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parse = GenerateVideoSchema.safeParse(rawBody);
   if (!parse.success) {
@@ -180,7 +181,7 @@ const GenerateAudioSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-generateRoutes.post('/audio', async (c) => {
+generateRoutes.post('/audio', expensiveRouteRateLimit, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parse = GenerateAudioSchema.safeParse(rawBody);
   if (!parse.success) {
@@ -274,7 +275,7 @@ const GenerateWorldSchema = z.object({
   model: z.enum(['marble-1.1', 'marble-1.1-plus']).default('marble-1.1'),
 });
 
-generateRoutes.post('/world', async (c) => {
+generateRoutes.post('/world', expensiveRouteRateLimit, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parse = GenerateWorldSchema.safeParse(rawBody);
   if (!parse.success) {

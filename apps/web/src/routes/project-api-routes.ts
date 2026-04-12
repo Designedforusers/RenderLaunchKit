@@ -16,6 +16,10 @@ import {
   encryptGithubToken,
   GithubTokenEncryptionDisabledError,
 } from '../lib/github-token-crypto.js';
+import {
+  parseUuidParam,
+  invalidUuidResponse,
+} from '../lib/validate-uuid.js';
 
 const projectApiRoutes = new Hono();
 
@@ -59,24 +63,33 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
     }
   }
 
-  // Check if project already exists
+  // Check if project already exists. Terminal-state projects
+  // (complete / failed) are deleted so the user can re-run the
+  // pipeline on the same repo — ON DELETE CASCADE in the schema
+  // cleans up assets, jobs, cost events, and feedback rows.
+  // In-progress projects return 200 to prevent double work.
   const existing = await database.query.projects.findFirst({
     where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
   });
 
   if (existing) {
-    return c.json(
-      {
-        id: existing.id,
-        repoUrl: existing.repoUrl,
-        repoOwner: existing.repoOwner,
-        repoName: existing.repoName,
-        status: existing.status,
-        createdAt: existing.createdAt.toISOString(),
-        message: 'Project already exists',
-      },
-      200
-    );
+    if (existing.status === 'complete' || existing.status === 'failed') {
+      await database.delete(projects).where(eq(projects.id, existing.id));
+      // Fall through to insert a fresh project below.
+    } else {
+      return c.json(
+        {
+          id: existing.id,
+          repoUrl: existing.repoUrl,
+          repoOwner: existing.repoOwner,
+          repoName: existing.repoName,
+          status: existing.status,
+          createdAt: existing.createdAt.toISOString(),
+          message: 'Project already exists and is in progress',
+        },
+        200
+      );
+    }
   }
 
   // Create new project. The unique index on (lower(repo_owner),
@@ -201,10 +214,8 @@ projectApiRoutes.get('/', async (c) => {
 // ── GET /api/projects/:id — Get project detail ──
 
 projectApiRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  if (!z.string().uuid().safeParse(id).success) {
-    return c.json({ error: 'Invalid project ID format' }, 400);
-  }
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
 
   const project = await database.query.projects.findFirst({
     where: eq(projects.id, id),
@@ -273,7 +284,9 @@ projectApiRoutes.get('/:id', async (c) => {
 // ── DELETE /api/projects/:id — Delete a project ──
 
 projectApiRoutes.delete('/:id', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const [deleted] = await database
     .delete(projects)
     .where(eq(projects.id, id))
@@ -293,7 +306,9 @@ const toggleWebhookSchema = z.object({
 });
 
 projectApiRoutes.patch('/:id/webhook', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const rawBody: unknown = await c.req.json();
   const parsedBody = toggleWebhookSchema.safeParse(rawBody);
 

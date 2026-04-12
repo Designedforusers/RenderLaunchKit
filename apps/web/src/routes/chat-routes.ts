@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
 import { eq } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@launchkit/shared';
 import { z } from 'zod';
 import { database } from '../lib/database.js';
+import { parseUuidParam, invalidUuidResponse } from '../lib/validate-uuid.js';
 import { env } from '../env.js';
 
 /**
@@ -152,7 +154,7 @@ const TOOLS: Anthropic.Messages.ToolUnion[] = [
 
 // ── Chat endpoint ────────────────────────────────────────────────
 
-chatRoutes.post('/:projectId/chat', async (c) => {
+chatRoutes.post('/:projectId/chat', expensiveRouteRateLimit, async (c) => {
   const apiKey = env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return c.json(
@@ -164,7 +166,8 @@ chatRoutes.post('/:projectId/chat', async (c) => {
     );
   }
 
-  const projectId = c.req.param('projectId');
+  const projectId = parseUuidParam(c, 'projectId');
+  if (!projectId) return invalidUuidResponse(c);
 
   const rawBody: unknown = await c.req.json().catch(() => ({}));
   const parsed = ChatRequestSchema.safeParse(rawBody);

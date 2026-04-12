@@ -44,6 +44,12 @@ const envSchema = z.object({
   // Optional bearer-token gate for the API. When unset, the API is
   // open. When set, requests must present a matching token.
   API_KEY: z.string().optional(),
+
+  // ── CORS ──────────────────────────────────────────────────────
+  // Comma-separated list of allowed origins for CORS. When unset,
+  // defaults to localhost dev origins. In production, set to the
+  // deployed Render hostname (e.g. `https://launchkit.onrender.com`).
+  CORS_ORIGIN: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
 
   // ── Private-repo token encryption ──────────────────────────────

@@ -60,7 +60,7 @@ function createRedisStore(prefix: string, windowMs: number): Store {
       const redisKey = `${prefix}${key}`;
       const totalHits = await redisClient.incr(redisKey);
       if (totalHits === 1) {
-        await redisClient.expire(redisKey, ttlSeconds);
+        await redisClient.expire(redisKey, ttlSeconds, 'NX');
       }
       const ttl = await redisClient.pttl(redisKey);
       const resetTime =

@@ -86,6 +86,10 @@ services:
         sync: false
       - key: API_KEY
         sync: false
+      # Comma-separated CORS origins. Defaults to localhost when unset.
+      # Set to the public Render hostname for cross-origin requests.
+      - key: CORS_ORIGIN
+        sync: false
       # Render Workflows trigger — the `/api/assets/:id/regenerate`
       # route calls `render.workflows.startTask` to re-fire asset
       # generation instead of enqueuing a BullMQ job. Both fields

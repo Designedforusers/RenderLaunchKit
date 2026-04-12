@@ -34,6 +34,10 @@ import {
   projects,
 } from '@launchkit/shared';
 import type { FeedbackAction } from '@launchkit/shared';
+import {
+  parseUuidParam,
+  invalidUuidResponse,
+} from '../lib/validate-uuid.js';
 
 const assetApiRoutes = new Hono();
 
@@ -88,7 +92,8 @@ function getParsedVoiceoverScriptFromAsset(
 // ── GET /api/assets/:id — Get a single asset ──
 
 assetApiRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
 
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
@@ -145,7 +150,9 @@ assetApiRoutes.get('/:id', async (c) => {
 //      `Content-Disposition` hint appended to the URL fragment
 //      when requested.
 assetApiRoutes.get('/:id/video.mp4', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const variant = getRequestedVariant(c.req.query('variant'));
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
@@ -318,7 +325,9 @@ const audioMetadataSchema = z.object({
 });
 
 assetApiRoutes.get('/:id/audio.mp3', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
   });
@@ -473,7 +482,8 @@ async function writeFeedbackEvent(input: {
 // ── POST /api/assets/:id/approve — Approve an asset ──
 
 assetApiRoutes.post('/:id/approve', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
 
   const [updated] = await database
     .update(assets)
@@ -500,7 +510,8 @@ assetApiRoutes.post('/:id/approve', async (c) => {
 // ── POST /api/assets/:id/reject — Reject an asset ──
 
 assetApiRoutes.post('/:id/reject', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
 
   const [updated] = await database
     .update(assets)
@@ -528,7 +539,9 @@ const editAssetContentSchema = z.object({
 });
 
 assetApiRoutes.put('/:id/content', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const rawBody: unknown = await c.req.json();
   const parsed = editAssetContentSchema.safeParse(rawBody);
 
@@ -578,7 +591,9 @@ const regenerateAssetSchema = z.object({
 });
 
 assetApiRoutes.post('/:id/regenerate', async (c) => {
-  const id = c.req.param('id');
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
   const rawBody: unknown = await c.req.json().catch(() => ({}));
   const bodyParse = regenerateAssetSchema.safeParse(rawBody);
   const body = bodyParse.success ? bodyParse.data : { instructions: undefined };
@@ -681,11 +696,8 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
 // proxy to this implementation in a future cleanup pass.
 
 assetApiRoutes.post('/:id/feedback', async (c) => {
-  const id = c.req.param('id');
-  const idParse = z.string().uuid().safeParse(id);
-  if (!idParse.success) {
-    return c.json({ error: 'Asset id must be a valid UUID' }, 400);
-  }
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
 
   const rawBody: unknown = await c.req.json().catch(() => null);
   const bodyParse = AssetFeedbackEventRequestSchema.safeParse(rawBody);
@@ -699,7 +711,7 @@ assetApiRoutes.post('/:id/feedback', async (c) => {
   // Verify the asset exists before writing the event so we can
   // surface a 404 instead of a confusing FK violation.
   const asset = await database.query.assets.findFirst({
-    where: eq(assets.id, idParse.data),
+    where: eq(assets.id, id),
   });
   if (!asset) {
     return c.json({ error: 'Asset not found' }, 404);
@@ -712,7 +724,7 @@ assetApiRoutes.post('/:id/feedback', async (c) => {
     bodyParse.data.action === 'edited' ? bodyParse.data.editText : null;
 
   const result = await writeFeedbackEvent({
-    assetId: idParse.data,
+    assetId: id,
     action: bodyParse.data.action,
     editText,
   });
