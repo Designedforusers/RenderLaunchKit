@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Sunset Coral palette — CSS custom properties for SVG inline fills that
+   can't use Tailwind classes (e.g. <circle fill="rgb(var(--accent-400))">).
+   Space-separated RGB triplets so the `/ alpha` syntax works. */
+:root {
+  --surface-50:  253 245 230;
+  --surface-100: 245 234 208;
+  --surface-200: 232 211 176;
+  --surface-300: 197 184 216;
+  --surface-400: 139 123 168;
+  --surface-500: 107  93 128;
+  --surface-600: 77   66  89;
+  --surface-700: 51   42  63;
+  --surface-800: 42   32  64;
+  --surface-850: 32   23  40;
+  --surface-900: 23   17  42;
+  --surface-950: 12    8  21;
+
+  --accent-50:  255 242 239;
+  --accent-100: 255 217 208;
+  --accent-200: 255 176 158;
+  --accent-300: 255 134 112;
+  --accent-400: 255 110  86;
+  --accent-500: 255  94  74;
+  --accent-600: 224  66  47;
+  --accent-700: 165  48  31;
+  --accent-800: 111  32  21;
+  --accent-900: 63   18  13;
+
+  --text-primary:   253 245 230;
+  --text-secondary: 197 184 216;
+  --text-tertiary:  139 123 168;
+  --text-muted:     107  93 128;
+}
+
 /* FAIRE Octave — variable display font. Trial weights/variable axis
    loaded via a single woff2. Used for hero/heading "display" surfaces. */
 @font-face {
@@ -111,8 +145,8 @@
   /* Selection color — accent tint so copy-pasting reads as
      intentional brand feedback. */
   ::selection {
-    background-color: rgba(16, 185, 129, 0.25);
-    color: #ecfdf5;
+    background-color: rgba(255, 94, 74, 0.25);
+    color: #fff2ef;
   }
 
   /* Custom scrollbar */
@@ -141,7 +175,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgb(52 211 153 / 0.8);
+    outline: 2px solid rgb(255 110 86 / 0.8);
     outline-offset: 2px;
     border-radius: 6px;
   }
@@ -220,8 +254,8 @@
      home hero logo + the complete banner to lift them from the
      background without being loud. */
   .glow-accent {
-    box-shadow: 0 0 0 1px rgb(16 185 129 / 0.2),
-                0 20px 60px -20px rgb(16 185 129 / 0.35);
+    box-shadow: 0 0 0 1px rgb(255 94 74 / 0.2),
+                0 20px 60px -20px rgb(255 94 74 / 0.35);
   }
 }
 

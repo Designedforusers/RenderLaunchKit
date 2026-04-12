@@ -47,31 +47,31 @@ export default {
       fontSize,
       colors: {
         surface: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          850: '#172033',
-          900: '#0f172a',
-          950: '#020617',
+          50:  '#fdf5e6',
+          100: '#f5ead0',
+          200: '#e8d3b0',
+          300: '#c5b8d8',
+          400: '#8b7ba8',
+          500: '#6b5d80',
+          600: '#4d4259',
+          700: '#332a3f',
+          800: '#2a2040',
+          850: '#201728',
+          900: '#17112a',
+          950: '#0c0815',
         },
         accent: {
-          DEFAULT: '#10b981',
-          50: '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3d0',
-          300: '#6ee7b7',
-          400: '#34d399',
-          500: '#10b981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065f46',
-          900: '#064e3b',
+          DEFAULT: '#ff5e4a',
+          50:  '#fff2ef',
+          100: '#ffd9d0',
+          200: '#ffb09e',
+          300: '#ff8670',
+          400: '#ff6e56',
+          500: '#ff5e4a',
+          600: '#e0422f',
+          700: '#a5301f',
+          800: '#6f2015',
+          900: '#3f120d',
         },
       },
       fontFamily: {
@@ -83,10 +83,10 @@ export default {
       // intent (`text-text-secondary`) rather than as a shade of grey. Mapped
       // onto the existing `surface` ramp so there's a single source of truth.
       textColor: {
-        'text-primary': '#f1f5f9',   // surface-100 — headings, values, primary copy
-        'text-secondary': '#cbd5e1', // surface-300 — body descriptions
-        'text-tertiary': '#94a3b8',  // surface-400 — labels, meta, captions
-        'text-muted': '#64748b',     // surface-500 — disabled, placeholder, tracked CAPS labels
+        'text-primary': '#fdf5e6',   // surface-50  — headings, values, primary copy
+        'text-secondary': '#c5b8d8', // surface-300 — body descriptions
+        'text-tertiary': '#8b7ba8',  // surface-400 — labels, meta, captions
+        'text-muted': '#6b5d80',     // surface-500 — disabled, placeholder, tracked CAPS labels
       },
       // Motion tokens used by the pipeline visualization. Framer Motion
       // and GSAP read these via Tailwind class names (arbitrary value
