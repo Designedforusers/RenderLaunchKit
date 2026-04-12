@@ -46,15 +46,20 @@ export async function cleanupStaleLaunchData(): Promise<void> {
     );
   }
 
-  // Clean Redis cache entries
+  // Clean Redis cache entries using SCAN (non-blocking) instead of KEYS,
+  // which is O(N) and blocks the Redis event loop on the shared instance
+  // that also carries BullMQ queues and SSE pub/sub.
   const redis = new Redis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
   });
 
   try {
-    const cacheKeys = await redis.keys('github:cache:*');
+    const cacheKeys: string[] = [];
+    const stream = redis.scanStream({ match: 'github:cache:*', count: 100 });
+    for await (const batch of stream) {
+      cacheKeys.push(...(batch as string[]));
+    }
     if (cacheKeys.length > 100) {
-      // Only clean if cache is large
       const toDelete = cacheKeys.slice(0, cacheKeys.length - 50);
       if (toDelete.length > 0) {
         await redis.del(...toDelete);

@@ -165,6 +165,14 @@ function parseEnv(): WebEnv {
     throw new Error(`Invalid web environment: ${formatted}`);
   }
   cached = result.data;
+
+  // Surface misconfiguration before the service starts accepting traffic.
+  if (cached.NODE_ENV === 'production' && !cached.API_KEY) {
+    console.warn(
+      '[env] WARNING: API_KEY is not set — the entire API surface is publicly accessible. Set API_KEY to require bearer-token authentication.'
+    );
+  }
+
   return cached;
 }
 

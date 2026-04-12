@@ -1,4 +1,5 @@
 import { Render } from '@renderinc/sdk';
+import type { ProjectStatus } from '@launchkit/shared';
 import { env } from '../env.js';
 
 /**
@@ -59,7 +60,10 @@ function getRenderClient(): Render {
 }
 
 export async function triggerWorkflowGeneration(
-  projectId: string
+  projectId: string,
+  options?: {
+    zeroSuccessProjectStatus?: ProjectStatus;
+  }
 ): Promise<void> {
   const workflowSlug = env.RENDER_WORKFLOW_SLUG;
   if (workflowSlug === undefined || workflowSlug === '') {
@@ -72,7 +76,12 @@ export async function triggerWorkflowGeneration(
   const taskIdentifier = `${workflowSlug}/generateAllAssetsForProject`;
 
   const handle = await client.workflows.startTask(taskIdentifier, [
-    { projectId },
+    {
+      projectId,
+      ...(options?.zeroSuccessProjectStatus !== undefined
+        ? { zeroSuccessProjectStatus: options.zeroSuccessProjectStatus }
+        : {}),
+    },
   ]);
 
   console.log(

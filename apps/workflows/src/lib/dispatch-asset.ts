@@ -476,7 +476,18 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       );
     }
 
-    await projectProgressPublisher.assetReady(projectId, assetId, assetType);
+    // Non-blocking: the asset DB row is already at `status='reviewing'`
+    // with content persisted. A Redis publish failure here must NOT
+    // fall through to the outer catch block which would overwrite the
+    // good row with `status='failed'`.
+    try {
+      await projectProgressPublisher.assetReady(projectId, assetId, assetType);
+    } catch (publishErr) {
+      console.error(
+        '[Workflows:Dispatch] progress publish failed on success path (non-blocking):',
+        publishErr instanceof Error ? publishErr.message : String(publishErr)
+      );
+    }
 
     console.log(
       `[Workflows:Dispatch] ${assetType} complete for project ${projectId}`
@@ -509,11 +520,17 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       }
     }
 
+    // Preserve existing metadata (generationInstructions, modelPreferences,
+    // audio/video metadata) so retries can use the original context instead
+    // of falling back to the generic "Generate a ${type}" path.
+    const existingMetadata =
+      (asset.metadata as Record<string, unknown> | null) ?? {};
+
     await db
       .update(schema.assets)
       .set({
         status: 'failed',
-        metadata: { error: errorMessage },
+        metadata: { ...existingMetadata, error: errorMessage },
         updatedAt: new Date(),
       })
       .where(eq(schema.assets.id, assetId));

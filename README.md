@@ -33,7 +33,7 @@ LaunchKit runs eight services on Render. Each one exists for a specific reason.
 | `launchkit-web` | Web | Hono API + React SPA + SSE stream + GitHub webhooks. Sub-second response budget. |
 | `launchkit-worker` | Worker | BullMQ processor for the agentic loops (30s–5min each). These can't run in HTTP handlers. |
 | `launchkit-pika-worker` | Worker | Isolated dyno for the Pika meeting-join subprocess. Click-to-avatar latency stays under 100ms regardless of what else is running. |
-| `launchkit-cron` | Cron | Trending signal ingestion every 6 hours + nightly feedback insight clustering. |
+| `launchkit-cron` | Cron | Trending signal ingestion + feedback insight clustering, every 6 hours. |
 | `launchkit-workflows` | Workflows | Per-asset generation with per-task compute sizing — `starter` for text, `standard` for images and audio, `pro` for video and 3D. |
 | `launchkit-minio` | Docker | S3-compatible object store on a Render Disk for rendered video bytes. |
 | `launchkit-redis` | Key-Value | BullMQ queues + pub/sub for SSE progress + GitHub API cache. Three roles, one service. |
@@ -176,7 +176,7 @@ Different consistency needs. Redis is fast and ephemeral — queues, pub/sub, an
 
 ### Why pgvector instead of a dedicated vector DB?
 
-The self-learning system needs cosine similarity on project embeddings and edit-text clusters. Two query patterns. Adding Pinecone or Weaviate would mean another service, another credential, another failure mode. pgvector lets one Postgres instance do double duty with an HNSW index — fast enough for this scale, with zero operational overhead.
+The self-learning system needs cosine similarity on project embeddings and edit-text clusters. Two query patterns. Adding Pinecone or Weaviate would mean another service, another credential, another failure mode. pgvector lets one Postgres instance do double duty — fast enough for this scale (sequential scan under a few thousand rows), with zero operational overhead. An HNSW index is a one-migration add when row counts grow.
 
 ### Why the Claude Agent SDK?
 

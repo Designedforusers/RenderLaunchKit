@@ -210,7 +210,9 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     // asset to `queued`, otherwise the parent task would run,
     // find an empty queued-asset set, and return early for nothing.
     if (rejectedCount > 0) {
-      await triggerWorkflowGeneration(projectId);
+      await triggerWorkflowGeneration(projectId, {
+        zeroSuccessProjectStatus: 'failed',
+      });
     }
 
     console.log(

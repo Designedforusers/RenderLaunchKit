@@ -71,6 +71,7 @@ test('triggerWorkflowGeneration (web): happy path fires startTask once and does 
     const inputs = fake.getLastInputs();
     assert.equal(inputs.length, 1);
     assert.equal(inputs[0].projectId, projectId);
+    assert.equal(inputs[0].zeroSuccessProjectStatus, undefined);
     // Critical: fire-and-forget — the helper must NOT await the
     // handle. A regression that adds `await handle.get()` would
     // block the caller until the full generation fan-out settles,
@@ -117,6 +118,29 @@ test('triggerWorkflowGeneration (web): happy path logs taskRunId via console.log
     assert.match(captured, /proj-xyz/);
   } finally {
     console.log = originalLog;
+    _setRenderClientForTests(null);
+  }
+});
+
+test('triggerWorkflowGeneration (web): forwards zeroSuccessProjectStatus when provided', async () => {
+  const {
+    triggerWorkflowGeneration,
+    _setRenderClientForTests,
+  } = await import(
+    '../apps/web/dist/lib/trigger-workflow-generation.js'
+  );
+
+  const fake = makeFakeClient();
+  _setRenderClientForTests(fake.client);
+  try {
+    await triggerWorkflowGeneration('proj-xyz', {
+      zeroSuccessProjectStatus: 'complete',
+    });
+    const inputs = fake.getLastInputs();
+    assert.equal(inputs.length, 1);
+    assert.equal(inputs[0].projectId, 'proj-xyz');
+    assert.equal(inputs[0].zeroSuccessProjectStatus, 'complete');
+  } finally {
     _setRenderClientForTests(null);
   }
 });

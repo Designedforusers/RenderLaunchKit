@@ -27,7 +27,10 @@ app.onError((err, c) => {
   console.error('[Error]', err.message, err.stack);
   return c.json(
     {
-      error: err.message || 'Internal server error',
+      error:
+        env.NODE_ENV === 'production'
+          ? 'Internal server error'
+          : err.message || 'Internal server error',
       ...(env.NODE_ENV !== 'production' && { stack: err.stack }),
     },
     500

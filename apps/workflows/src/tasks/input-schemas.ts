@@ -1,3 +1,4 @@
+import { ProjectStatusSchema } from '@launchkit/shared';
 import { z } from 'zod';
 
 /**
@@ -25,6 +26,12 @@ export type SingleAssetInput = z.infer<typeof SingleAssetInputSchema>;
 
 export const AllAssetsInputSchema = z.object({
   projectId: z.string().min(1),
+  // Optional fallback project status when every queued asset in the
+  // current run fails but sibling assets remain healthy. Lets callers
+  // preserve `complete` for opportunistic refreshes or force `failed`
+  // for revision rounds without relying on the project row's transient
+  // status at task start time.
+  zeroSuccessProjectStatus: ProjectStatusSchema.optional(),
 });
 export type AllAssetsInput = z.infer<typeof AllAssetsInputSchema>;
 

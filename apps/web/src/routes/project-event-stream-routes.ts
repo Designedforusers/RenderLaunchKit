@@ -17,6 +17,18 @@ projectEventStreamRoutes.get('/:id/events', (c) => {
     const subscriber = createRedisSubscriberClient();
     let alive = true;
 
+    // Handle Redis-level errors (connection drops, auth failures)
+    // so they don't surface as unhandled rejections. Mark the
+    // stream dead and let the cleanup in onAbort + the while-loop
+    // exit tear everything down.
+    subscriber.on('error', (err) => {
+      console.error(
+        `[SSE] Redis subscriber error for project ${projectId}:`,
+        err instanceof Error ? err.message : String(err)
+      );
+      alive = false;
+    });
+
     // Send initial connection event
     await stream.writeSSE({
       event: 'connected',
@@ -41,8 +53,20 @@ projectEventStreamRoutes.get('/:id/events', (c) => {
 
     // Subscribe to project events. ioredis `subscribe` returns a
     // promise we need to await to guarantee the subscription is
-    // active before the first publish lands.
-    await subscriber.subscribe(channel);
+    // active before the first publish lands. Wrap in try/catch so
+    // a Redis-down scenario closes the stream cleanly instead of
+    // producing an unhandled rejection.
+    try {
+      await subscriber.subscribe(channel);
+    } catch (subscribeErr) {
+      console.error(
+        `[SSE] Redis subscribe failed for project ${projectId}:`,
+        subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr)
+      );
+      alive = false;
+      subscriber.disconnect();
+      return;
+    }
 
     // Hold a reference to the message handler so we can remove it
     // on abort. ioredis emits to every attached `message` listener,

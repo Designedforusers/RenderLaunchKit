@@ -464,7 +464,9 @@ export async function processCommitMarketingRun(
   // compute-profile child tasks via run chaining. No per-asset
   // enqueue loop needed anymore.
   if (requeuedCount > 0) {
-    await triggerWorkflowGeneration(projectId);
+    await triggerWorkflowGeneration(projectId, {
+      zeroSuccessProjectStatus: 'complete',
+    });
   }
 
   // Step 10: Finalize the commit_marketing_runs row with the

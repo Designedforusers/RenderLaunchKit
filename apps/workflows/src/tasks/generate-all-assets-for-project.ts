@@ -141,7 +141,7 @@ export const generateAllAssetsForProject = task<
     input: AllAssetsInput
   ): Promise<GenerateAllAssetsResult> {
     const parsed = AllAssetsInputSchema.parse(input);
-    const { projectId } = parsed;
+    const { projectId, zeroSuccessProjectStatus } = parsed;
 
     // ── Read the project + its assets in a single query
     const project = await db.query.projects.findFirst({
@@ -216,23 +216,56 @@ export const generateAllAssetsForProject = task<
       }
     }
 
-    // ── Short-circuit when every generation failed — enqueuing a
-    //    review job would find zero reviewable assets and leave the
-    //    project stuck in `reviewing` forever.
+    // ── Short-circuit when every queued asset in this run failed.
+    //    The caller can optionally tell us which project status to
+    //    restore when healthy sibling assets still exist. This keeps
+    //    opportunistic refreshes from downgrading a complete project
+    //    while still letting revision rounds fail the project instead
+    //    of leaving it stuck in `revising`.
     if (succeededCount === 0) {
-      await db
-        .update(schema.projects)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(schema.projects.id, projectId));
-
-      await projectProgressPublisher.error(
-        projectId,
-        'generate',
-        'All asset generations failed'
+      const hasHealthyAssets = project.assets.some(
+        (a) =>
+          a.status !== 'queued' &&
+          a.status !== 'failed' &&
+          a.status !== 'generating'
       );
 
+      if (!hasHealthyAssets || zeroSuccessProjectStatus === 'failed') {
+        await db
+          .update(schema.projects)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(schema.projects.id, projectId));
+
+        await projectProgressPublisher.error(
+          projectId,
+          'generate',
+          'All asset generations failed'
+        );
+      } else if (zeroSuccessProjectStatus !== undefined) {
+        await db
+          .update(schema.projects)
+          .set({
+            status: zeroSuccessProjectStatus,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.projects.id, projectId));
+
+        await projectProgressPublisher.statusUpdate(
+          projectId,
+          zeroSuccessProjectStatus,
+          `All ${queuedAssets.length} queued assets failed — restoring project status to ${zeroSuccessProjectStatus}`
+        );
+      }
+
+      const failureOutcome =
+        !hasHealthyAssets || zeroSuccessProjectStatus === 'failed'
+          ? ' — marking project as failed'
+          : zeroSuccessProjectStatus !== undefined
+            ? ` — restoring status to ${zeroSuccessProjectStatus}`
+            : ' (project has healthy assets — status unchanged)';
+
       console.log(
-        `[Workflows:Parent] Project ${projectId} all ${queuedAssets.length} assets failed — marking project as failed`
+        `[Workflows:Parent] Project ${projectId} all ${queuedAssets.length} queued assets failed${failureOutcome}`
       );
 
       return {

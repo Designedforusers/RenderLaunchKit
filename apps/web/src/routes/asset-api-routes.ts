@@ -8,6 +8,7 @@ import { and, desc, eq, ne } from 'drizzle-orm';
 import { LaunchKitVideoPropsSchema } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
+import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
 import {
   buildElevenLabsCacheKey,
   getElevenLabsConfig,
@@ -637,7 +638,7 @@ const regenerateAssetSchema = z.object({
     .optional(),
 });
 
-assetApiRoutes.post('/:id/regenerate', async (c) => {
+assetApiRoutes.post('/:id/regenerate', expensiveRouteRateLimit, async (c) => {
   const id = parseUuidParam(c);
   if (!id) return invalidUuidResponse(c);
 
@@ -722,7 +723,9 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
   // on the project (which is now just this one, because the other
   // project assets are all in terminal states) and dispatches it to
   // the correct child task.
-  await triggerWorkflowGeneration(asset.projectId);
+  await triggerWorkflowGeneration(asset.projectId, {
+    zeroSuccessProjectStatus: project.status,
+  });
 
   // Phase 7: feedback event log. A regeneration is a signal — even
   // without an edit text — that the user wasn't happy with the prior

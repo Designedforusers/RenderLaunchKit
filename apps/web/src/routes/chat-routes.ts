@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
 import { eq } from 'drizzle-orm';
@@ -154,7 +155,11 @@ const TOOLS: Anthropic.Messages.ToolUnion[] = [
 
 // ── Chat endpoint ────────────────────────────────────────────────
 
-chatRoutes.post('/:projectId/chat', expensiveRouteRateLimit, async (c) => {
+chatRoutes.post(
+  '/:projectId/chat',
+  bodyLimit({ maxSize: 2 * 1024 * 1024 }),
+  expensiveRouteRateLimit,
+  async (c) => {
   const apiKey = env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return c.json(
