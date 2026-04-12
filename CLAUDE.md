@@ -72,15 +72,18 @@ Each backend service owns its own `database.ts`, `anthropic-claude-client.ts`, a
 ## Local development
 
 ```bash
-npm install && docker compose up -d && cp .env.example .env
-npm run db:push && npm run seed && npm run dev
+npm install && cp .env.example .env
+npm run setup:local && npm run dev
 ```
 
 Dashboard: `http://localhost:5173` — API: `http://localhost:3000`
 
 | Script | What it does |
 |---|---|
-| `npm run db:push` | Apply Drizzle schema to the local database |
+| `npm run infra:up` | Boot local Postgres + Redis + MinIO from the tracked compose file |
+| `npm run setup:local` | Boot infra, apply SQL migrations, and seed demo data |
+| `npm run db:migrate` | Apply checked-in SQL migrations to the local database |
+| `npm run db:push` | Drizzle schema sync for schema iteration only |
 | `npm run db:studio` | Open Drizzle Studio against the local database |
 | `npm run seed` | Reseed with demo project + feedback insights |
 

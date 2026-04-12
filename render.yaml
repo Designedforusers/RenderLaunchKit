@@ -451,7 +451,9 @@ services:
     name: launchkit-redis
     plan: starter
     maxmemoryPolicy: noeviction
-    ipAllowList: []
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Allow all services
 
 databases:
   - name: launchkit-db

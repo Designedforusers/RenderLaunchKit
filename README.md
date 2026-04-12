@@ -58,14 +58,18 @@ Fork → Blueprint → fill API keys → deploy. About 10 minutes to a working d
 ### Prerequisites
 
 - A [Render](https://render.com) account with billing enabled
-- An [Anthropic API key](https://console.anthropic.com) (required)
-- Optional: [fal.ai](https://fal.ai) (images + video), [ElevenLabs](https://elevenlabs.io) (voice), [World Labs](https://www.worldlabs.ai) (3D scenes), [Voyage AI](https://www.voyageai.com) (embeddings — recommended)
+- The full showcase key set for the submitted demo:
+  `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `FAL_API_KEY`,
+  `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`,
+  `WORLD_LABS_API_KEY`
+- Optional extras: `EXA_API_KEY`, `GROK_API_KEY`,
+  `PRODUCT_HUNT_TOKEN`, `PIKA_API_KEY`, `PIKA_AVATAR`
 
 ### Step 1 — Create the Blueprint
 
 1. [dashboard.render.com](https://dashboard.render.com/) → **New +** → **Blueprint**
 2. Connect your fork. Render reads `render.yaml` and provisions seven services.
-3. Fill in the secrets prompt — your Anthropic API key is the only required one. Leave `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` blank for now.
+3. Fill in the secrets prompt with the full showcase keys: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `FAL_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and `WORLD_LABS_API_KEY`. Leave `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` blank for now.
 4. Click **Apply**. Wait until all seven services turn green. The web service runs DB migrations on its `preDeployCommand` automatically.
 
 ### Step 2 — Create the workflow service
@@ -79,7 +83,7 @@ Fork → Blueprint → fill API keys → deploy. About 10 minutes to a working d
    apt-get update && apt-get install -y --no-install-recommends libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 && npm ci && npx remotion browser ensure && npm run build
    ```
    Start command: `npm run start:workflows`. Plan: **pro** (the `renderRemotionVideo` task needs 2 CPU / 4 GB for Chrome + Remotion).
-4. Link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add your API keys. Copy MinIO credentials (`MINIO_ENDPOINT_HOST`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`) from the `launchkit-minio` service.
+4. Link `DATABASE_URL` from `launchkit-db` and `REDIS_URL` from `launchkit-redis`. Add the same full showcase keys there too (`ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `FAL_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `WORLD_LABS_API_KEY`). Copy MinIO credentials (`MINIO_ENDPOINT_HOST`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`) from the `launchkit-minio` service.
 5. Deploy. Wait for seven tasks to register in the Tasks tab.
 
 ### Step 3 — Wire the workflow
@@ -260,12 +264,14 @@ Three layers feed the loop:
 git clone <your-fork>
 cd renderlaunchkit
 npm install              # also installs lefthook + git hooks via `prepare`
-docker compose up -d     # local Postgres + Redis
 cp .env.example .env     # then fill in your API keys
-npm run db:push          # apply schema (requires DATABASE_URL)
-npm run seed             # demo data
+npm run setup:local      # tracked local stack + migrations + demo seed
 npm run dev              # web, worker, cron, dashboard concurrently
 ```
+
+`npm run setup:local` boots the tracked Docker stack from `docker-compose.yml`:
+Postgres on `localhost:5432`, Redis on `localhost:6379`, and MinIO on
+`localhost:9000` / `localhost:9001`.
 
 The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`.
 
@@ -278,7 +284,10 @@ To exercise the workflow service locally, run `render workflows dev -- npm run d
 | `npm run typecheck` | `tsc -b` + dashboard `tsc --noEmit` (the prepush gate) |
 | `npm run lint` | `eslint . --max-warnings=0` (the prepush gate) |
 | `npm test` | Smoke tests via `node:test` against compiled worker output |
-| `npm run db:push` | Apply Drizzle schema to the local database |
+| `npm run infra:up` | Boot local Postgres + Redis + MinIO from the tracked compose file |
+| `npm run setup:local` | Boot infra, apply SQL migrations, and seed the demo project |
+| `npm run db:migrate` | Apply checked-in SQL migrations to the local database |
+| `npm run db:push` | Drizzle schema sync for schema iteration only, not fresh-clone onboarding |
 | `npm run seed` | Reseed the local database with the demo project + insights |
 
 ---
