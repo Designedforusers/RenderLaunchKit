@@ -32,7 +32,12 @@ const createProjectSchema = CreateProjectRequestSchema;
 // stricter expensive-route limit (10 req/min/IP) on top of the global
 // /api/* limit (100 req/min/IP).
 projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
-  const body: unknown = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
   const parsed = createProjectSchema.safeParse(body);
 
   if (!parsed.success) {

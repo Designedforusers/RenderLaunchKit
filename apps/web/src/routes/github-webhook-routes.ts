@@ -114,7 +114,9 @@ githubWebhookRoutes.post(
     // field on `GitHubWebhookPayloadSchema`, so the safeParse above
     // already rejected any payload without it — no fallback guard
     // needed here.
-    const repoUrl = event.repository.html_url;
+    // Lowercase the incoming URL so it matches the canonical form
+    // stored by project creation (which lowercases owner/name).
+    const repoUrl = event.repository.html_url.toLowerCase();
 
     const project = await database.query.projects.findFirst({
       where: and(eq(projects.repoUrl, repoUrl), eq(projects.webhookEnabled, true)),
