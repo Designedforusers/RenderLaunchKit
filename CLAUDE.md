@@ -9,7 +9,8 @@ Project context for [Claude Code](https://claude.com/claude-code) sessions. Star
 LaunchKit is an AI-powered go-to-market teammate. Pipeline: `GitHub URL → Analyze → Research → Strategize → Generate (parallel) → Review → Done`. One TypeScript monorepo, eight Render services. Public showcase for Render — every PR is graded on engineering discipline.
 
 ```
-apps/web/                  → Hono API + React dashboard (Vite)
+apps/web/                  → Hono API server + static dashboard hosting
+apps/dashboard/            → React SPA (Vite) served by apps/web
 apps/worker/               → BullMQ processors + AI agents
 apps/workflows/            → Render Workflows asset generation tasks
 apps/cron/                 → Scheduled jobs (feedback aggregation, trending)
@@ -91,6 +92,10 @@ Dashboard: `http://localhost:5173` — API: `http://localhost:3000`
 - Squash-merging (history is linear via rebase-merge)
 - Adding feature flags or error handling for impossible cases
 - Auto-formatting unrelated code in a PR
+
+## Workflows service
+
+`apps/workflows/` hosts seven Render Workflows task definitions (one parent, five generation children, one render child). Created manually in the Render dashboard — not via Blueprint (Render Workflows is public beta). Worker and web each have their own `trigger-workflow-generation.ts` (deliberate copy — each service owns its SDK client). See `.claude/rules/workflows.md` for architecture detail.
 
 ## Reference docs
 

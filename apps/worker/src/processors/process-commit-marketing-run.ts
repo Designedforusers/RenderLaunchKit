@@ -424,9 +424,7 @@ export async function processCommitMarketingRun(
     const existingGenerationInstructions =
       typeof assetMetadata['generationInstructions'] === 'string'
         ? assetMetadata['generationInstructions']
-        : typeof assetMetadata['brief'] === 'string'
-          ? assetMetadata['brief']
-          : undefined;
+        : undefined;
 
     const freshGenerationInstructions = buildRegenerationInstructions(
       asset.type,

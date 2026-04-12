@@ -234,6 +234,23 @@ services:
         sync: false
       - key: VOYAGE_MODEL
         value: voyage-3-large
+      # Grok live X (Twitter) search — the only source with live
+      # post data. Optional: the trending-signals agent skips the
+      # Grok source when absent.
+      - key: GROK_API_KEY
+        sync: false
+      - key: GROK_MODEL
+        value: grok-4-latest
+      # Exa semantic web search for niche developer content. Used by
+      # the trending-signals agent and the research agent's MCP
+      # server. Optional: falls back to Anthropic WebSearch.
+      - key: EXA_API_KEY
+        sync: false
+      # Product Hunt v2 GraphQL developer token. Free to obtain at
+      # https://api.producthunt.com/v2/oauth/applications. Optional:
+      # the tool returns an empty array when absent.
+      - key: PRODUCT_HUNT_TOKEN
+        sync: false
       # Render API key used by `trigger-workflow-generation.ts` to
       # call `render.workflows.startTask` for every asset-generation
       # run. Required — every fan-out (strategize → generate, review

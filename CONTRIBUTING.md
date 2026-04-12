@@ -40,7 +40,7 @@ If any step fails, the push is rejected. Don't `LEFTHOOK=0 git push` to skip it 
 
 - **Atomic and reviewable.** One concern per PR. If you need to refactor a file to make a fix possible, the refactor and the fix can land together as long as the diff is small enough to read in one sitting.
 - **Conventional commit subject.** `type(scope): summary`. The body explains *why*, not *what* — the diff already shows what.
-- **Code-reviewer self-review.** Run the local `code-reviewer` Claude Code subagent against the diff before pushing. See `CLAUDE.md` § Local code review for the prompt template and rationale.
+- **Code-reviewer self-review.** Run the `code-reviewer` Claude Code subagent against the diff before pushing (`/review` in a Claude Code session, or spawn a `code-reviewer` subagent manually).
 - **CI green.** The CI workflow re-runs the prepush chain on the server. A red build blocks merge.
 - **Rebase-merge only.** Linear history is enforced via `gh pr merge --rebase` (or the GitHub UI's "Rebase and merge"). No squash, no merge commits.
 
@@ -56,7 +56,7 @@ It documents:
 - The strict TypeScript flags and what they imply for new code
 - Boundary validation rules (every external input parses through Zod)
 - The env-module pattern (`apps/{web,worker,cron,workflows}/src/env.ts`)
-- The Render Workflows architecture (the asset-generation fan-out lives there, behind a six-task registration; the worker still owns analyze/research/strategize/review)
+- The Render Workflows architecture (the asset-generation fan-out lives there, behind a seven-task registration; the worker still owns analyze/research/strategize/review)
 - The cost tracking design and the non-blocking invariant (long-form explainer at `docs/cost-tracking.md`)
 - The local `code-reviewer` subagent setup for contributors using Claude Code
 - The on-demand `@claude review` cloud reviewer for everyone else

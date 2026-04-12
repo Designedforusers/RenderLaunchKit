@@ -2,11 +2,11 @@ import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import { JOB_NAMES, QUEUE_CONFIG, QUEUE_NAMES, ReviewJobDataSchema } from '@launchkit/shared';
-import type {
-  AnalyzeRepoJobData,
-  FilterWebhookJobData,
-  JobData,
+import {
+  AnalyzeRepoJobDataSchema,
+  FilterWebhookJobDataSchema,
 } from '@launchkit/shared';
+import type { JobData } from '@launchkit/shared';
 import { analyzeProjectRepository } from './processors/analyze-project-repository.js';
 import { researchProjectLaunchContext } from './processors/research-project-launch-context.js';
 import { buildProjectLaunchStrategy } from './processors/build-project-launch-strategy.js';
@@ -39,46 +39,54 @@ import { env } from './env.js';
 const analysisWorker = new Worker(
   QUEUE_NAMES.ANALYSIS,
   async (job) => {
-    const data = job.data as JobData;
+    // Validate job payload at the BullMQ boundary. The schemas exist in
+    // @launchkit/shared and are already used by the review worker — the
+    // analysis worker must follow the same pattern.
+    const baseData = job.data as JobData;
     const startTime = Date.now();
 
-    console.log(`[Worker:Analysis] Processing ${job.name} for project ${data.projectId}`);
+    console.log(`[Worker:Analysis] Processing ${job.name} for project ${baseData.projectId}`);
 
     // Record job start
     await db.insert(schema.jobs).values({
-      projectId: data.projectId,
+      projectId: baseData.projectId,
       bullmqJobId: job.id,
       name: job.name,
       status: 'active',
-      input: data,
+      input: baseData,
       startedAt: new Date(),
     });
 
     try {
       if (job.name === JOB_NAMES.ANALYZE_REPO) {
-        await analyzeProjectRepository(data as AnalyzeRepoJobData);
+        const parsed = AnalyzeRepoJobDataSchema.safeParse(job.data);
+        if (!parsed.success) {
+          console.error('[Worker:Analysis] Invalid analyze job data:', parsed.error.issues);
+          throw new Error('Invalid analyze-repo job data');
+        }
+        await analyzeProjectRepository(parsed.data);
 
         // Chain: enqueue research
         await analysisQueue.add(
           JOB_NAMES.RESEARCH,
-          { projectId: data.projectId },
+          { projectId: baseData.projectId },
           {
-            jobId: `${JOB_NAMES.RESEARCH}__${data.projectId}`,
+            jobId: `${JOB_NAMES.RESEARCH}__${baseData.projectId}`,
           }
         );
       } else if (job.name === JOB_NAMES.RESEARCH) {
-        await researchProjectLaunchContext(data);
+        await researchProjectLaunchContext(baseData);
 
         // Chain: enqueue strategize
         await analysisQueue.add(
           JOB_NAMES.STRATEGIZE,
-          { projectId: data.projectId },
+          { projectId: baseData.projectId },
           {
-            jobId: `${JOB_NAMES.STRATEGIZE}__${data.projectId}`,
+            jobId: `${JOB_NAMES.STRATEGIZE}__${baseData.projectId}`,
           }
         );
       } else if (job.name === JOB_NAMES.STRATEGIZE) {
-        await buildProjectLaunchStrategy(data);
+        await buildProjectLaunchStrategy(baseData);
 
         // Kick off the Render Workflows parent task. It reads every
         // `status='queued'` asset on the project and fans out to the
@@ -87,9 +95,14 @@ const analysisWorker = new Worker(
         // progress event and enqueues the review BullMQ job when
         // every child settles — the analysis handler releases its
         // slot as soon as `startTask` returns the run handle (~1s).
-        await triggerWorkflowGeneration(data.projectId);
+        await triggerWorkflowGeneration(baseData.projectId);
       } else if (job.name === JOB_NAMES.FILTER_WEBHOOK) {
-        await processCommitMarketingRun(data as FilterWebhookJobData);
+        const parsed = FilterWebhookJobDataSchema.safeParse(job.data);
+        if (!parsed.success) {
+          console.error('[Worker:Analysis] Invalid webhook job data:', parsed.error.issues);
+          throw new Error('Invalid filter-webhook job data');
+        }
+        await processCommitMarketingRun(parsed.data);
       }
 
       // Record job completion
@@ -118,9 +131,9 @@ const analysisWorker = new Worker(
       await db
         .update(schema.projects)
         .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(schema.projects.id, data.projectId));
+        .where(eq(schema.projects.id, baseData.projectId));
 
-      await projectProgressPublisher.error(data.projectId, job.name, error.message);
+      await projectProgressPublisher.error(baseData.projectId, job.name, error.message);
 
       throw err;
     }

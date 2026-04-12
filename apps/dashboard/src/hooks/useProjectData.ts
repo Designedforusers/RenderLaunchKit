@@ -85,7 +85,9 @@ export function useProjectDetailData(id: string | undefined) {
   const refresh = useCallback(async () => {
     if (!id) return;
     try {
-      setLoading(true);
+      // Do NOT set loading on subsequent polls — same rationale as
+      // the list hook: flipping `loading` back to `true` causes the
+      // detail page to flash the full skeleton on every 5-second tick.
       const data = await api.getProject(id);
       setProject(data);
       setError(null);

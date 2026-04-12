@@ -162,7 +162,7 @@ The split is deliberate. Mixing the two in one queue would force the worker to b
 
 ### Why the Claude Agent SDK?
 
-The research agent is the only truly agentic component in the pipeline. It runs through `@anthropic-ai/claude-agent-sdk` — Anthropic's official agent runtime, the same engine that powers Claude Code itself. Total implementation: ~130 lines (`apps/worker/src/agents/launch-research-agent.ts`) plus a thin ~150-line runner (`apps/worker/src/lib/agent-sdk-runner.ts`) that wraps `query()` and translates the SDK's event stream into the existing project progress publisher.
+The research agent is the only truly agentic component in the pipeline. It runs through `@anthropic-ai/claude-agent-sdk` — Anthropic's official agent runtime, the same engine that powers Claude Code itself. Total implementation: ~240 lines (`apps/worker/src/agents/launch-research-agent.ts`) plus a ~430-line runner (`apps/worker/src/lib/agent-sdk-runner.ts`) that wraps `query()` and translates the SDK's event stream into the existing project progress publisher.
 
 The Agent SDK gives us a few things that would otherwise be hundreds of lines of bespoke infrastructure:
 

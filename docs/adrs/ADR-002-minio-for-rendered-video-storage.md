@@ -63,32 +63,27 @@ to set `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` via the dashboard secret
 surface and to pin the single bucket name (`launchkit-renders`) as a
 non-secret env var so every service boots with the same reference.
 
-The workflows service's `renderRemotionVideo` task will upload each
-finished MP4 to MinIO via a new shared helper in the
-`@launchkit/asset-generators` package (`packages/asset-generators/src/clients/object-storage.ts`,
-landing in a follow-up commit) built on `@aws-sdk/client-s3` with
-`forcePathStyle: true` — MinIO does not support the virtual-host style S3
-URL layout, and the AWS SDK defaults to virtual-host, so the flag is
-mandatory. The helper exposes a single `uploadRenderedVideo({ assetId,
-version, variant, body })` entry point that handles idempotent bucket
-creation (one `HeadBucket` + `CreateBucket` on cold start), the `PutObject`
-upload with `ContentType: 'video/mp4'` and `ACL: 'public-read'`, and
-returns `{ url, key }` where `url` is the direct MinIO public URL.
+The workflows service's `renderRemotionVideo` task uploads each finished
+MP4 to MinIO via the shared helper in
+`packages/asset-generators/src/clients/object-storage.ts`, built on
+`@aws-sdk/client-s3` with `forcePathStyle: true` — MinIO does not support
+the virtual-host style S3 URL layout, and the AWS SDK defaults to
+virtual-host, so the flag is mandatory. The helper exposes a single
+`uploadRenderedVideo({ assetId, version, variant, body })` entry point
+that handles idempotent bucket creation (one `HeadBucket` + `CreateBucket`
+on cold start), the `PutObject` upload with `ContentType: 'video/mp4'` and
+`ACL: 'public-read'`, and returns `{ url, key }` where `url` is the
+direct MinIO public URL.
 
-After upload, the task persists the URL on a new `rendered_video_url`
-column on the `assets` table (migration lands in the same follow-up
-commit) and returns `{ url, key, cached }` to the web caller.
+After upload, the task persists the URL on the `rendered_video_url` column
+on the `assets` table and returns `{ url, key, cached }` to the caller.
 
-The web service's `/api/assets/:id/video.mp4` handler will be rewritten
-around this column: if `asset.rendered_video_url` is non-null, return a
-`302` redirect to that URL with `Cache-Control: public, max-age=31536000,
-immutable`. If null, trigger the `renderRemotionVideo` workflow via the
-existing `triggerWorkflowGeneration` helper and redirect to the returned
-URL once it settles. The `fileToWebStream` bytes-through-Hono path is
-deleted from the video route entirely. The audio route at
-`apps/web/src/routes/asset-api-routes.ts:250` keeps its existing
-file-streaming path for now — that's a separate migration, tracked
-separately.
+The web service's `/api/assets/:id/video.mp4` handler reads this column:
+if `asset.rendered_video_url` is non-null, it returns a `302` redirect to
+that URL with `Cache-Control: public, max-age=31536000, immutable`. If
+null, it triggers the `renderRemotionVideo` workflow task and redirects to
+the returned URL once it settles. The old `fileToWebStream`
+bytes-through-Hono path has been removed from the video route entirely.
 
 Bucket ACL is `public-read` because the rendered video is the publishable
 output, not private user data: the dashboard already surfaces the video
@@ -185,15 +180,12 @@ protecting anything the asset card doesn't already expose.
 ## References
 
 - [`../../CLAUDE.md`](../../CLAUDE.md) § "Workflows service"
-- `apps/web/src/lib/remotion-render.ts` — the current synchronous render
-  path, to be migrated onto the Workflows service in a follow-up commit
-- `apps/web/src/routes/asset-api-routes.ts:111` — the
-  `/api/assets/:id/video.mp4` handler, to be rewritten as a 302 redirect
-- `render.yaml` — the current service topology; the MinIO service will
-  land here
-- `apps/workflows/src/tasks/render-remotion-video.ts` — the new task
-  will land here
-- `packages/asset-generators/src/clients/object-storage.ts` — the new
-  upload helper will land here
+- `apps/web/src/routes/asset-api-routes.ts` — the
+  `/api/assets/:id/video.mp4` handler (302 redirect to MinIO URL)
+- `render.yaml` — the MinIO service definition
+- `apps/workflows/src/tasks/render-remotion-video.ts` — the Remotion
+  render task that uploads to MinIO
+- `packages/asset-generators/src/clients/object-storage.ts` — the S3
+  upload helper
 - https://github.com/render-examples/minio — Render's official MinIO
   Blueprint example

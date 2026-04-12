@@ -52,12 +52,13 @@ with run chaining, and partial-failure-tolerant fan-in.
 ## Decision
 
 We host the asset generation pipeline on Render Workflows (public beta). The
-`launchkit-workflows` service registers six tasks via the
+`launchkit-workflows` service registers seven tasks via the
 `@renderinc/sdk/workflows` `task(...)` wrapper in
-`apps/workflows/src/index.ts`: one parent (`generateAllAssetsForProject`) and
-five children (`generateWrittenAsset`, `generateImageAsset`,
-`generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`). The import
-list in `apps/workflows/src/index.ts:19-24` is side-effect only because each
+`apps/workflows/src/index.ts`: one parent (`generateAllAssetsForProject`),
+five generation children (`generateWrittenAsset`, `generateImageAsset`,
+`generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`), and one
+render child (`renderRemotionVideo`). The import list in
+`apps/workflows/src/index.ts:66-72` is side-effect only because each
 `task(...)` call self-registers at module load; the SDK keeps the process
 alive and listens for run requests once any task is registered.
 
@@ -162,7 +163,7 @@ environments where the workflow service has not been provisioned yet.
 - **Cost attribution per task.** Per-second compute billing on the Workflows
   side plus per-provider asset costs in `asset_cost_events` gives a clean
   split between "what did LaunchKit pay Render to orchestrate" and "what did
-  LaunchKit pay OpenAI/Anthropic/fal/ElevenLabs/World Labs to generate".
+  LaunchKit pay Anthropic/fal/ElevenLabs/World Labs to generate".
 - **Exhaustive routing enforcement.** The `dispatchChildTask` switch in
   `generate-all-assets-for-project.ts:66-117` is an exhaustiveness-checked
   `switch` over `AssetType`. A new asset type that forgets to add a case is

@@ -342,7 +342,12 @@ projectApiRoutes.patch('/:id/webhook', async (c) => {
   const id = parseUuidParam(c);
   if (!id) return invalidUuidResponse(c);
 
-  const rawBody: unknown = await c.req.json();
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
   const parsedBody = toggleWebhookSchema.safeParse(rawBody);
 
   if (!parsedBody.success) {

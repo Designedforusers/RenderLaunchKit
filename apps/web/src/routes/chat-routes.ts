@@ -414,8 +414,12 @@ function executeToolCall(
       // For now, return a structured instruction that Claude can
       // use to generate inline. In a full implementation, this
       // would call the asset-generators package.
-      const contentType = input['content_type'] as string;
-      const instructions = input['instructions'] as string;
+      const contentType = typeof input['content_type'] === 'string'
+        ? input['content_type']
+        : 'unknown';
+      const instructions = typeof input['instructions'] === 'string'
+        ? input['instructions']
+        : '';
       return {
         status: 'generated_inline',
         content_type: contentType,

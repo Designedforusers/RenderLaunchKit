@@ -3,20 +3,25 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 import { env } from '../env.js';
 import { getWebObjectStorageClient } from './object-storage-client.js';
 
-export type ElevenLabsCharacterAlignment = {
-  characters: string[];
-  character_start_times_seconds: number[];
-  character_end_times_seconds: number[];
-};
+const ElevenLabsCharacterAlignmentSchema = z.object({
+  characters: z.array(z.string()),
+  character_start_times_seconds: z.array(z.number()),
+  character_end_times_seconds: z.array(z.number()),
+});
 
-type ElevenLabsResponse = {
-  audio_base64?: string;
-  alignment?: ElevenLabsCharacterAlignment;
-  normalized_alignment?: ElevenLabsCharacterAlignment;
-};
+export type ElevenLabsCharacterAlignment = z.infer<typeof ElevenLabsCharacterAlignmentSchema>;
+
+const ElevenLabsResponseSchema = z.object({
+  audio_base64: z.string().optional(),
+  alignment: ElevenLabsCharacterAlignmentSchema.optional(),
+  normalized_alignment: ElevenLabsCharacterAlignmentSchema.optional(),
+});
+
+type ElevenLabsResponse = z.infer<typeof ElevenLabsResponseSchema>;
 
 /**
  * Source-of-truth label for where a narration audio blob was found
@@ -210,7 +215,7 @@ export async function synthesizeSpeechWithTimestamps(input: {
 
     return {
       audioBuffer,
-      alignment: JSON.parse(alignmentJson) as ElevenLabsCharacterAlignment,
+      alignment: ElevenLabsCharacterAlignmentSchema.parse(JSON.parse(alignmentJson)),
       cacheSource: 'local',
     };
   }
@@ -242,9 +247,9 @@ export async function synthesizeSpeechWithTimestamps(input: {
     if (audioFromMinio !== null && alignmentFromMinio !== null) {
       let alignment: ElevenLabsCharacterAlignment | null = null;
       try {
-        alignment = JSON.parse(
-          alignmentFromMinio.toString('utf8')
-        ) as ElevenLabsCharacterAlignment;
+        alignment = ElevenLabsCharacterAlignmentSchema.parse(
+          JSON.parse(alignmentFromMinio.toString('utf8'))
+        );
       } catch (err) {
         // A corrupt alignment JSON in MinIO is exactly the kind
         // of thing that should never happen but will eventually.
@@ -344,7 +349,14 @@ export async function synthesizeSpeechWithTimestamps(input: {
     );
   }
 
-  const payload = (await response.json()) as ElevenLabsResponse;
+  const rawPayload: unknown = await response.json();
+  const payloadResult = ElevenLabsResponseSchema.safeParse(rawPayload);
+  if (!payloadResult.success) {
+    throw new Error(
+      `ElevenLabs response failed schema validation: ${payloadResult.error.issues.map((i) => i.message).join('; ')}`
+    );
+  }
+  const payload: ElevenLabsResponse = payloadResult.data;
   const audioBase64 = payload.audio_base64;
   const alignment = payload.alignment;
 

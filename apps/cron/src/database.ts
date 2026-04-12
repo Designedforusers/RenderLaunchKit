@@ -3,5 +3,10 @@ import pg from 'pg';
 import * as schema from '@launchkit/shared';
 import { env } from './env.js';
 
-const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: env.DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+});
 export const database = drizzle(pool, { schema });

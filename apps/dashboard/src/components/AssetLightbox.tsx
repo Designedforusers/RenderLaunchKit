@@ -122,7 +122,7 @@ export function AssetLightbox({ asset, onClose, actions }: AssetLightboxProps) {
               {worldPanoUrl ? (
                 <img src={worldPanoUrl} alt="3D World Scene panorama" className="w-full h-full object-cover" />
               ) : asset.mediaUrl ? (
-                <iframe src={asset.mediaUrl} title="3D World Scene" className="w-full h-full border-0" allow="xr-spatial-tracking" />
+                <iframe src={asset.mediaUrl} title="3D World Scene" className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" allow="xr-spatial-tracking" />
               ) : thumbnailUrl ? (
                 <img src={thumbnailUrl} alt="3D World Scene" className="w-full h-full object-cover" />
               ) : null}

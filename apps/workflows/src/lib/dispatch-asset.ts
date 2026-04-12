@@ -164,9 +164,6 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
     (typeof assetMetadata['generationInstructions'] === 'string'
       ? assetMetadata['generationInstructions']
       : null) ??
-    (typeof assetMetadata['brief'] === 'string'
-      ? assetMetadata['brief']
-      : null) ??
     `Generate a ${asset.type} for this product`;
 
   // Pull optional model preferences off the asset metadata. The
