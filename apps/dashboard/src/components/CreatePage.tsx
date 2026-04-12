@@ -553,7 +553,7 @@ export function CreatePage() {
 
             {generating && (
               <div className="text-center py-16">
-                <div className="w-12 h-12 mx-auto mb-4 border-2 border-accent-500/30 border-t-accent-500 rounded-full animate-spin" />
+                <div className="w-12 h-12 mx-auto mb-4 border-2 border-success-500/30 border-t-success-500 rounded-full animate-spin" />
                 <p className="text-text-secondary text-sm">
                   {mode === 'world' ? 'Building 3D world (this takes ~5 minutes)...' : 'Generating...'}
                 </p>

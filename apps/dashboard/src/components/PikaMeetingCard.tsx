@@ -361,7 +361,7 @@ interface StatusChipProps {
 const STATUS_STYLES: Record<PikaMeetingSession['status'], { text: string; bg: string; dot: string }> = {
   pending: { text: 'text-text-muted', bg: 'bg-surface-800/60', dot: 'bg-surface-500' },
   joining: { text: 'text-amber-300', bg: 'bg-amber-500/12', dot: 'bg-amber-400' },
-  active: { text: 'text-accent-300', bg: 'bg-accent-500/12', dot: 'bg-accent-400' },
+  active: { text: 'text-success-300', bg: 'bg-success-500/12', dot: 'bg-success-400' },
   ending: { text: 'text-orange-300', bg: 'bg-orange-500/12', dot: 'bg-orange-400' },
   ended: { text: 'text-text-muted', bg: 'bg-surface-800/60', dot: 'bg-surface-500' },
   failed: { text: 'text-red-300', bg: 'bg-red-500/12', dot: 'bg-red-400' },

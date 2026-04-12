@@ -45,7 +45,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
           ? { duration: 0.15, ease: 'easeOut' }
           : { type: 'spring', stiffness: 240, damping: 22 }
       }
-      className="relative overflow-hidden rounded-2xl border border-accent-500/40 bg-gradient-to-br from-accent-500/15 via-accent-500/5 to-transparent px-6 py-5 mb-6"
+      className="relative overflow-hidden rounded-2xl border border-success-500/40 bg-gradient-to-br from-success-500/15 via-success-500/5 to-transparent px-6 py-5 mb-6"
     >
       {/* Confetti particles. Each one travels along its own path
           using a CSS-variable seeded translate, with a small spin
@@ -57,7 +57,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
         <div className="flex items-center gap-4">
           {/* Animated check medal */}
           <motion.div
-            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-accent-500 text-white"
+            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-success-500 text-white"
             initial={{ scale: 0.4, rotate: -90 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{
@@ -70,7 +70,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
             {/* Pulsing halo — infinite loop suppressed under reduced-motion */}
             {!shouldReduceMotion && (
               <motion.span
-                className="absolute inset-0 rounded-full bg-accent-500/40"
+                className="absolute inset-0 rounded-full bg-success-500/40"
                 animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
                 transition={{ duration: 2.2, repeat: Infinity }}
               />
@@ -99,7 +99,7 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
 
           <div>
             <motion.p
-              className="label text-accent-300/80"
+              className="label text-success-300/80"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.18 }}
@@ -129,10 +129,10 @@ function CelebrationBanner({ reviewScore }: { reviewScore: number | null }) {
               damping: 22,
             }}
           >
-            <p className="label text-accent-300/70">Reviewer</p>
-            <p className="font-display text-display-lg text-accent-300">
+            <p className="label text-success-300/70">Reviewer</p>
+            <p className="font-display text-display-lg text-success-300">
               {reviewScore.toFixed(1)}
-              <span className="text-accent-500/60 text-heading-lg">/10</span>
+              <span className="text-success-500/60 text-heading-lg">/10</span>
             </p>
           </motion.div>
         )}
@@ -211,12 +211,12 @@ function ConfettiBurst() {
     const radius = 80 + (i % 3) * 18;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius * 0.6;
-    const colors = ['bg-accent-300', 'bg-accent-400', 'bg-emerald-300', 'bg-teal-300'];
+    const colors = ['bg-success-300', 'bg-success-400', 'bg-emerald-300', 'bg-teal-300'];
     return {
       id: i,
       x,
       y,
-      color: colors[i % colors.length] ?? 'bg-accent-400',
+      color: colors[i % colors.length] ?? 'bg-success-400',
       rotate: i * 30,
     };
   });

@@ -212,9 +212,9 @@ export function PipelineStageStrip({
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-accent-500/[0.06] via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-br from-success-500/[0.06] via-transparent to-transparent" />
           {hasActive && (
-            <div className="absolute -top-24 left-1/2 h-48 w-[60%] -translate-x-1/2 rounded-full bg-accent-500/[0.08] blur-3xl" />
+            <div className="absolute -top-24 left-1/2 h-48 w-[60%] -translate-x-1/2 rounded-full bg-success-500/[0.08] blur-3xl" />
           )}
         </motion.div>
       </AnimatePresence>
@@ -247,7 +247,7 @@ export function PipelineStageStrip({
             <span className="text-surface-700" aria-hidden="true">
               ·
             </span>
-            <span ref={pctRef} className="text-accent-300" data-v="0">
+            <span ref={pctRef} className="text-success-300" data-v="0">
               {displayedPct}%
             </span>
           </div>
@@ -270,7 +270,7 @@ export function PipelineStageStrip({
               outer glow. Width grows from 0% to pipelinePct%. */}
           <div
             ref={railFillRef}
-            className="pointer-events-none absolute left-0 z-0 h-px w-0 bg-gradient-to-r from-accent-500 via-accent-400 to-accent-200"
+            className="pointer-events-none absolute left-0 z-0 h-px w-0 bg-gradient-to-r from-success-500 via-success-400 to-success-200"
             style={{
               top: `${RAIL_Y_PX.toString()}px`,
               boxShadow: '0 0 10px rgba(16, 185, 129, 0.55)',
@@ -296,9 +296,9 @@ function StageCard({ stage }: { stage: StageInfo }) {
   // defines the color of the border in all non-active states. When
   // active, the rotating conic gradient below paints over this.
   const borderWrapClass = isActive
-    ? 'bg-accent-500/30'
+    ? 'bg-success-500/30'
     : isComplete
-      ? 'bg-accent-500/25'
+      ? 'bg-success-500/25'
       : isFailed
         ? 'bg-red-500/35'
         : 'bg-surface-800';
@@ -307,7 +307,7 @@ function StageCard({ stage }: { stage: StageInfo }) {
   // rail behind it. The rail should only be visible in the 12px
   // grid gaps, never through a card.
   const cardFillClass = isActive
-    ? 'bg-gradient-to-b from-accent-500/[0.08] via-surface-900 to-surface-900'
+    ? 'bg-gradient-to-b from-success-500/[0.08] via-surface-900 to-surface-900'
     : isComplete
       ? 'bg-surface-900'
       : isFailed
@@ -319,15 +319,15 @@ function StageCard({ stage }: { stage: StageInfo }) {
   const shortLabelClass = isActive
     ? 'text-text-primary'
     : isComplete
-      ? 'text-accent-200'
+      ? 'text-success-200'
       : isFailed
         ? 'text-red-200'
         : 'text-text-muted';
 
   const indexClass = isActive
-    ? 'text-accent-300'
+    ? 'text-success-300'
     : isComplete
-      ? 'text-accent-400/70'
+      ? 'text-success-400/70'
       : isFailed
         ? 'text-red-400/80'
         : 'text-surface-600';
@@ -390,13 +390,13 @@ function StageCard({ stage }: { stage: StageInfo }) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.25 }}
-                  className="absolute inset-x-0 flex items-center justify-center gap-0.5 font-mono text-[10px] text-accent-300/90"
+                  className="absolute inset-x-0 flex items-center justify-center gap-0.5 font-mono text-[10px] text-success-300/90"
                 >
                   <span className="truncate">{stage.detail}</span>
                   {/* Blinking terminal cursor — makes the caption
                       feel like live output. */}
                   <span
-                    className="inline-block h-2 w-[2px] shrink-0 animate-cursor-blink bg-accent-300"
+                    className="inline-block h-2 w-[2px] shrink-0 animate-cursor-blink bg-success-300"
                     aria-hidden="true"
                   />
                 </motion.p>
@@ -442,9 +442,9 @@ function StageNode({
           initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
           animate={{ scale: 1, opacity: 1, rotate: 0 }}
           transition={{ type: 'spring', stiffness: 360, damping: 22 }}
-          className="absolute inset-[6px] flex items-center justify-center rounded-full border border-accent-400/60 bg-accent-500/25 shadow-[0_0_18px_-2px_rgba(16,185,129,0.6)]"
+          className="absolute inset-[6px] flex items-center justify-center rounded-full border border-success-400/60 bg-success-500/25 shadow-[0_0_18px_-2px_rgba(16,185,129,0.6)]"
         >
-          <Check weight="bold" size={16} className="text-accent-100" />
+          <Check weight="bold" size={16} className="text-success-100" />
         </motion.div>
       </div>
     );
@@ -470,11 +470,11 @@ function StageNode({
       <div className="relative h-11 w-11">
         {/* Aurora double-halo — two soft rings pulsing out of phase. */}
         <div
-          className="pointer-events-none absolute inset-0 animate-aurora-outer rounded-full bg-accent-400/30 blur-md"
+          className="pointer-events-none absolute inset-0 animate-aurora-outer rounded-full bg-success-400/30 blur-md"
           aria-hidden="true"
         />
         <div
-          className="pointer-events-none absolute inset-[3px] animate-aurora-inner rounded-full bg-accent-400/35 blur-sm"
+          className="pointer-events-none absolute inset-[3px] animate-aurora-inner rounded-full bg-success-400/35 blur-sm"
           aria-hidden="true"
         />
 
@@ -482,11 +482,11 @@ function StageNode({
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-          className="absolute inset-[6px] flex items-center justify-center rounded-full border-[1.5px] border-accent-400 bg-surface-950/90 shadow-[0_0_24px_-2px_rgba(16,185,129,0.65)]"
+          className="absolute inset-[6px] flex items-center justify-center rounded-full border-[1.5px] border-success-400 bg-surface-950/90 shadow-[0_0_24px_-2px_rgba(16,185,129,0.65)]"
         >
-          <StageIcon weight="bold" size={18} className="text-accent-200" />
+          <StageIcon weight="bold" size={18} className="text-success-200" />
           <span className="pointer-events-none absolute inset-0">
-            <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 animate-orbit-medium rounded-full bg-accent-200 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+            <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 animate-orbit-medium rounded-full bg-success-200 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
           </span>
         </motion.div>
       </div>

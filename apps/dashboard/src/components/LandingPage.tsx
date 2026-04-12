@@ -304,8 +304,8 @@ function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-surface-800 bg-surface-900/60 px-3 py-1 backdrop-blur-sm"
           >
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-accent-500 opacity-60" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-accent-500" />
+              <span className="absolute inset-0 animate-ping rounded-full bg-success-500 opacity-60" />
+              <span className="relative h-1.5 w-1.5 rounded-full bg-success-500" />
             </span>
             <span className="text-label text-text-muted">
               RUNNING ON RENDER WORKFLOWS
@@ -493,8 +493,8 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
           </div>
           <div className="flex items-center gap-2 font-mono text-mono-sm text-text-muted">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-accent-500 opacity-75" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-accent-500" />
+              <span className="absolute inset-0 animate-ping rounded-full bg-success-500 opacity-75" />
+              <span className="relative h-1.5 w-1.5 rounded-full bg-success-500" />
             </span>
             <span>run.launchkit · live</span>
           </div>
@@ -515,7 +515,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                 layout
                 className={`relative flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
                   isActive
-                    ? 'border-accent-500/40 bg-accent-500/[0.06]'
+                    ? 'border-success-500/40 bg-success-500/[0.06]'
                     : isDone
                     ? 'border-surface-800 bg-surface-900/40'
                     : 'border-surface-800/60 bg-transparent'
@@ -538,9 +538,9 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                 <div
                   className={`relative flex h-8 w-8 flex-none items-center justify-center rounded-md border ${
                     isActive
-                      ? 'border-accent-500/50 bg-accent-500/10 text-accent-400'
+                      ? 'border-success-500/50 bg-success-500/10 text-success-400'
                       : isDone
-                      ? 'border-surface-800 bg-surface-900 text-accent-500'
+                      ? 'border-surface-800 bg-surface-900 text-success-500'
                       : 'border-surface-800 bg-surface-950 text-text-muted'
                   }`}
                 >
@@ -550,7 +550,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                     <Icon size={16} weight={isActive ? 'fill' : 'regular'} />
                   )}
                   {isActive && !reducedMotion && (
-                    <span className="absolute inset-0 rounded-md border border-accent-500/40 animate-aurora-outer" />
+                    <span className="absolute inset-0 rounded-md border border-success-500/40 animate-aurora-outer" />
                   )}
                 </div>
 
@@ -559,7 +559,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                   <div
                     className={`font-mono text-[10px] font-semibold tracking-[0.14em] ${
                       isActive
-                        ? 'text-accent-400'
+                        ? 'text-success-400'
                         : isDone
                         ? 'text-text-tertiary'
                         : 'text-text-muted'
@@ -574,7 +574,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                   >
                     {stage.detail}
                     {isActive && !reducedMotion && (
-                      <span className="ml-0.5 inline-block h-3 w-[1px] translate-y-0.5 bg-accent-400 animate-cursor-blink" />
+                      <span className="ml-0.5 inline-block h-3 w-[1px] translate-y-0.5 bg-success-400 animate-cursor-blink" />
                     )}
                   </div>
                 </div>
@@ -583,11 +583,11 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
                 {isActive && !reducedMotion && (
                   <div className="relative h-4 w-4 flex-none">
                     <span className="absolute inset-0 rounded-full border border-surface-800" />
-                    <span className="absolute inset-0 rounded-full border border-accent-500 border-r-transparent animate-[spin_1s_linear_infinite]" />
+                    <span className="absolute inset-0 rounded-full border border-success-500 border-r-transparent animate-[spin_1s_linear_infinite]" />
                   </div>
                 )}
                 {isDone && (
-                  <CheckCircle size={14} weight="fill" className="flex-none text-accent-500" />
+                  <CheckCircle size={14} weight="fill" className="flex-none text-success-500" />
                 )}
               </motion.div>
             );
@@ -601,7 +601,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
             aria-hidden="true"
           >
             <div
-              className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-accent-500/50 to-transparent animate-scan-line"
+              className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-success-500/50 to-transparent animate-scan-line"
               style={{ top: '0%' }}
             />
           </div>
@@ -610,7 +610,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
         {/* Footer meta — feels like a status bar */}
         <div className="mt-5 flex items-center justify-between border-t border-surface-800 pt-4 font-mono text-[10px] tracking-[0.14em] text-text-muted">
           <span>RENDER.WORKFLOWS · 5 CHILD TASKS</span>
-          <span className="text-accent-400">$0.11 SPENT</span>
+          <span className="text-success-400">$0.11 SPENT</span>
         </div>
       </div>
 
@@ -630,7 +630,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
 function AnnotationLabel({ className = '', text }: { className?: string; text: string }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <span className="h-px w-6 bg-accent-500/60" />
+      <span className="h-px w-6 bg-success-500/60" />
       <span className="rounded border border-accent-500/30 bg-surface-950/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-accent-400">
         {text}
       </span>
@@ -788,7 +788,7 @@ function PipelineScene() {
               className="mt-10 rounded-2xl border border-surface-800 bg-surface-900/60 p-6 backdrop-blur-sm"
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-mono-sm text-accent-400">
+                <span className="font-mono text-mono-sm text-success-400">
                   {stage.index} / 04
                 </span>
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted">
@@ -867,7 +867,7 @@ function VisualCanvas({
 
 /** 01 · Reader — a tiny file tree with a scan highlight on README.md */
 function Agent01Reader({ isActive, isDone }: VisualProps) {
-  const activeColor = isActive ? 'rgb(var(--accent-400))' : 'rgb(var(--surface-400))';
+  const activeColor = isActive ? 'rgb(var(--success-400))' : 'rgb(var(--surface-400))';
   const dimColor = 'rgb(var(--surface-300) / 0.95)';
   const mutedColor = 'rgb(var(--surface-400) / 0.85)';
 
@@ -974,7 +974,7 @@ function Agent01Reader({ isActive, isDone }: VisualProps) {
 
 /** 02 · Researcher — radial citation network */
 function Agent02Researcher({ isActive, isDone }: VisualProps) {
-  const activeColor = isActive ? 'rgb(var(--accent-400))' : 'rgb(var(--surface-400))';
+  const activeColor = isActive ? 'rgb(var(--success-400))' : 'rgb(var(--surface-400))';
   const dimColor = 'rgb(var(--surface-300))';
   const mutedColor = 'rgb(var(--surface-400) / 0.85)';
 
@@ -1067,7 +1067,7 @@ function Agent02Researcher({ isActive, isDone }: VisualProps) {
 
 /** 03 · Strategist — top node fans out to 5 compute buckets */
 function Agent03Strategist({ isActive, isDone }: VisualProps) {
-  const activeColor = isActive ? 'rgb(var(--accent-400))' : 'rgb(var(--surface-400))';
+  const activeColor = isActive ? 'rgb(var(--success-400))' : 'rgb(var(--surface-400))';
   const dimColor = 'rgb(var(--surface-300))';
   const mutedColor = 'rgb(var(--surface-400) / 0.85)';
 
@@ -1177,7 +1177,7 @@ function Agent03Strategist({ isActive, isDone }: VisualProps) {
 
 /** 04 · Reviewer — a 270° quality arc with a sweeping progress */
 function Agent04Reviewer({ isActive, isDone }: VisualProps) {
-  const activeColor = isActive ? 'rgb(var(--accent-400))' : 'rgb(var(--surface-400))';
+  const activeColor = isActive ? 'rgb(var(--success-400))' : 'rgb(var(--surface-400))';
   const dimColor = 'rgb(var(--surface-300))';
   const mutedColor = 'rgb(var(--surface-400) / 0.85)';
 
@@ -1271,7 +1271,7 @@ function Agent01ReaderLiving({ isActive, isDone }: VisualProps) {
   return (
     <div
       className={`relative h-full w-full overflow-hidden rounded-md border bg-surface-950/80 font-mono text-[8px] leading-[1.5] transition-opacity ${
-        isActive ? 'border-accent-500/40 opacity-100' : 'border-surface-700 opacity-90'
+        isActive ? 'border-success-500/40 opacity-100' : 'border-surface-700 opacity-90'
       } ${isDone ? 'opacity-95' : ''}`}
     >
       <div className="flex items-center justify-between border-b border-surface-800 px-1.5 py-0.5">
@@ -1292,16 +1292,16 @@ function Agent01ReaderLiving({ isActive, isDone }: VisualProps) {
         </div>
         <div
           className={`-mx-1 flex gap-1.5 px-1 ${
-            isActive || isDone ? 'bg-accent-500/[0.14]' : ''
+            isActive || isDone ? 'bg-success-500/[0.14]' : ''
           }`}
         >
-          <span className={`w-3 text-right ${isActive || isDone ? 'text-accent-400' : 'text-text-muted'}`}>
+          <span className={`w-3 text-right ${isActive || isDone ? 'text-success-400' : 'text-text-muted'}`}>
             14
           </span>
           <span className={isActive || isDone ? 'text-text-primary' : 'text-text-tertiary'}>
             Ship to anywhere
             {isActive && (
-              <span className="ml-0.5 inline-block h-2 w-[1px] -translate-y-[1px] bg-accent-400 align-middle animate-cursor-blink" />
+              <span className="ml-0.5 inline-block h-2 w-[1px] -translate-y-[1px] bg-success-400 align-middle animate-cursor-blink" />
             )}
           </span>
         </div>
@@ -1317,7 +1317,7 @@ function Agent01ReaderLiving({ isActive, isDone }: VisualProps) {
       <div
         className={`absolute bottom-1 right-1 rounded border px-1 py-[1px] text-[6px] font-semibold tracking-[0.14em] transition-opacity ${
           isActive || isDone
-            ? 'border-accent-500/40 bg-accent-500/10 text-accent-400 opacity-100'
+            ? 'border-success-500/40 bg-success-500/10 text-success-400 opacity-100'
             : 'border-surface-700 text-text-muted opacity-50'
         }`}
       >
@@ -1343,7 +1343,7 @@ function Agent02ResearcherLiving({ isActive, isDone }: VisualProps) {
             key={c.domain}
             className={`flex items-center gap-1.5 rounded border px-1.5 py-[3px] ${
               c.fresh && (isActive || isDone)
-                ? 'border-accent-500/40 bg-accent-500/[0.06]'
+                ? 'border-success-500/40 bg-success-500/[0.06]'
                 : 'border-surface-700 bg-surface-900/60'
             }`}
             initial={{ opacity: 0, y: 6 }}
@@ -1352,14 +1352,14 @@ function Agent02ResearcherLiving({ isActive, isDone }: VisualProps) {
           >
             <span
               className={`h-1.5 w-1.5 flex-none rounded-full ${
-                c.fresh && (isActive || isDone) ? 'bg-accent-400' : 'bg-text-muted'
+                c.fresh && (isActive || isDone) ? 'bg-success-400' : 'bg-text-muted'
               }`}
             />
             <span className="flex-none text-text-tertiary">{c.domain}</span>
             <span className="flex-1 truncate italic text-text-muted">&ldquo;{c.quote}&rdquo;</span>
             <span
               className={`flex-none rounded bg-surface-800 px-1 text-[6px] tabular-nums ${
-                c.fresh && (isActive || isDone) ? 'text-accent-400' : 'text-text-muted'
+                c.fresh && (isActive || isDone) ? 'text-success-400' : 'text-text-muted'
               }`}
             >
               [{c.num}]
@@ -1400,8 +1400,8 @@ function Agent03StrategistLiving({ isActive, isDone }: VisualProps) {
                 className={`h-full rounded-sm ${
                   isActive || isDone
                     ? l.done
-                      ? 'bg-accent-500'
-                      : 'bg-accent-400/70'
+                      ? 'bg-success-500'
+                      : 'bg-success-400/70'
                     : 'bg-surface-500'
                 }`}
                 initial={{ width: 0 }}
@@ -1414,11 +1414,11 @@ function Agent03StrategistLiving({ isActive, isDone }: VisualProps) {
       </div>
       {isActive && (
         <motion.div
-          className="pointer-events-none absolute top-[20px] bottom-[12px] w-[1px] bg-accent-400"
+          className="pointer-events-none absolute top-[20px] bottom-[12px] w-[1px] bg-success-400"
           initial={{ left: '18%' }}
           animate={{ left: ['18%', '86%'] }}
           transition={{ duration: 2.6, repeat: Infinity, ease: 'linear' }}
-          style={{ boxShadow: '0 0 6px rgb(var(--accent-500) / 0.8)' }}
+          style={{ boxShadow: '0 0 6px rgb(var(--success-500) / 0.8)' }}
         />
       )}
       <div className="absolute inset-x-1.5 bottom-0 flex justify-between text-[6px] text-text-muted">
@@ -1452,7 +1452,7 @@ function Agent04ReviewerLiving({ isActive, isDone }: VisualProps) {
         <div
           className={`rounded border px-1 py-[1px] text-[6px] font-semibold tracking-[0.14em] ${
             isActive || isDone
-              ? 'border-accent-500/40 bg-accent-500/10 text-accent-400'
+              ? 'border-success-500/40 bg-success-500/10 text-success-400'
               : 'border-surface-700 text-text-muted'
           }`}
         >
@@ -1467,7 +1467,7 @@ function Agent04ReviewerLiving({ isActive, isDone }: VisualProps) {
             className={`flex-1 rounded-t-[1px] ${
               i === 4
                 ? isActive || isDone
-                  ? 'bg-accent-400'
+                  ? 'bg-success-400'
                   : 'bg-surface-400'
                 : isActive || isDone
                 ? 'bg-surface-600'
@@ -1543,9 +1543,9 @@ function StageVisual({
       >
         <defs>
           <linearGradient id="flow" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="rgb(var(--accent-500) / 0)" />
-            <stop offset="50%" stopColor="rgb(var(--accent-500) / 0.7)" />
-            <stop offset="100%" stopColor="rgb(var(--accent-500) / 0)" />
+            <stop offset="0%" stopColor="rgb(var(--success-500) / 0)" />
+            <stop offset="50%" stopColor="rgb(var(--success-500) / 0.7)" />
+            <stop offset="100%" stopColor="rgb(var(--success-500) / 0)" />
           </linearGradient>
         </defs>
         {/* grid */}
@@ -1594,7 +1594,7 @@ function StageVisual({
               key={s.index}
               className={`relative flex flex-col gap-3 rounded-xl border p-4 backdrop-blur-sm transition-all ${
                 isActive
-                  ? 'border-accent-500/60 bg-surface-900'
+                  ? 'border-success-500/60 bg-surface-900'
                   : isDone
                   ? 'border-surface-700 bg-surface-900/70'
                   : 'border-surface-800 bg-surface-900/30'
@@ -1610,7 +1610,7 @@ function StageVisual({
                 <span
                   className={`font-mono text-[10px] font-semibold tracking-[0.16em] ${
                     isActive
-                      ? 'text-accent-400'
+                      ? 'text-success-400'
                       : isDone
                       ? 'text-text-tertiary'
                       : 'text-text-muted'
@@ -1619,12 +1619,12 @@ function StageVisual({
                   AGENT {s.index}
                 </span>
                 {isDone && (
-                  <CheckCircle size={14} weight="fill" className="text-accent-500" />
+                  <CheckCircle size={14} weight="fill" className="text-success-500" />
                 )}
                 {isActive && (
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inset-0 animate-ping rounded-full bg-accent-500 opacity-60" />
-                    <span className="relative h-2 w-2 rounded-full bg-accent-500" />
+                    <span className="absolute inset-0 animate-ping rounded-full bg-success-500 opacity-60" />
+                    <span className="relative h-2 w-2 rounded-full bg-success-500" />
                   </span>
                 )}
               </div>
@@ -1653,7 +1653,7 @@ function StageVisual({
                   className="pointer-events-none absolute inset-0 rounded-xl"
                   style={{
                     boxShadow:
-                      '0 0 0 1px rgb(var(--accent-500) / 0.35), 0 30px 60px -20px rgb(var(--accent-500) / 0.4)',
+                      '0 0 0 1px rgb(var(--success-500) / 0.35), 0 30px 60px -20px rgb(var(--success-500) / 0.4)',
                   }}
                   transition={{ duration: 0.4 }}
                 />
@@ -1780,7 +1780,7 @@ function WrittenPreview() {
         ritual: seven configs, three CI files, two secrets&nbsp;files…
       </p>
       <p className="mt-2 text-text-muted">
-        <span className="text-accent-400">[cited]</span> README.md:14 ·
+        <span className="text-success-400">[cited]</span> README.md:14 ·
         package.json:22
       </p>
       <div className="absolute inset-x-4 bottom-3 h-6 bg-gradient-to-t from-surface-950 to-transparent" />

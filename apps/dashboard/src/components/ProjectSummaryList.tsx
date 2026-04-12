@@ -57,7 +57,7 @@ export function ProjectSummaryList({
             //      presence, no bounce overshoot (damping 26).
             //   3. Opacity fade — 0 → 1 timed to the scale.
             //
-            // Plus a one-shot accent-glow pulse via CSS
+            // Plus a one-shot success-glow pulse via CSS
             // animation (see the `animate-card-glow` span below)
             // that fires ~400 ms after landing and fades over
             // 600 ms. One glow per card, never repeats.
@@ -92,13 +92,13 @@ export function ProjectSummaryList({
             <span
               className="pointer-events-none absolute inset-0 rounded-xl opacity-0 animate-card-glow"
               style={{
-                boxShadow: '0 0 20px 2px var(--color-accent-500)',
+                boxShadow: '0 0 20px 2px var(--color-success-500)',
                 animationDelay: `${String(0.65 + index * 0.12)}s`,
               }}
             />
             <div className="flex items-start justify-between mb-3">
               <div>
-                <h3 className="font-display text-heading-lg text-text-primary group-hover:text-accent-400 transition-colors">
+                <h3 className="font-display text-heading-lg text-text-primary group-hover:text-success-400 transition-colors">
                   {project.repoOwner}/{project.repoName}
                 </h3>
                 <p className="text-text-muted text-body-sm mt-1">
@@ -119,7 +119,7 @@ export function ProjectSummaryList({
                   <div
                     className={`w-2 h-2 rounded-full ${
                       project.reviewScore >= 7
-                        ? 'bg-accent-500'
+                        ? 'bg-success-500'
                         : project.reviewScore >= 5
                           ? 'bg-yellow-500'
                           : 'bg-red-500'
@@ -147,7 +147,7 @@ export function ProjectSummaryList({
               <div className="mt-4">
                 <div className="relative h-1 bg-surface-800 rounded-full overflow-hidden">
                   <motion.div
-                    className="absolute inset-y-0 left-0 bg-accent-500 rounded-full"
+                    className="absolute inset-y-0 left-0 bg-success-500 rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${getProgressPercent(project.status).toString()}%` }}
                     transition={{
@@ -190,7 +190,7 @@ function ProjectListSkeleton() {
         >
           {/* Shimmer sweep across the entire card body */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-accent-500/5 to-transparent" />
+            <div className="absolute inset-y-0 w-1/3 animate-shimmer-sweep bg-gradient-to-r from-transparent via-success-500/5 to-transparent" />
           </div>
           <div className="relative">
             <div className="flex items-start justify-between mb-4">
@@ -205,7 +205,7 @@ function ProjectListSkeleton() {
               <div className="h-3 w-10 animate-pulse rounded-full bg-surface-800/60" />
             </div>
             <div className="mt-5 h-1 w-full overflow-hidden rounded-full bg-surface-800">
-              <div className="h-full w-1/3 animate-shimmer-sweep rounded-full bg-accent-500/40" />
+              <div className="h-full w-1/3 animate-shimmer-sweep rounded-full bg-success-500/40" />
             </div>
           </div>
         </motion.div>
@@ -248,10 +248,10 @@ function ProjectListEmptyState() {
             damping: 18,
           }}
         >
-          <span className="absolute inset-0 rounded-full border border-accent-500/30 animate-breathe" />
-          <span className="absolute inset-2 rounded-full border border-accent-500/40 animate-breathe [animation-delay:0.4s]" />
-          <span className="absolute inset-4 rounded-full bg-accent-500/20" />
-          <span className="absolute inset-[26px] rounded-full bg-accent-400" />
+          <span className="absolute inset-0 rounded-full border border-success-500/30 animate-breathe" />
+          <span className="absolute inset-2 rounded-full border border-success-500/40 animate-breathe [animation-delay:0.4s]" />
+          <span className="absolute inset-4 rounded-full bg-success-500/20" />
+          <span className="absolute inset-[26px] rounded-full bg-success-400" />
         </motion.div>
 
         <motion.p

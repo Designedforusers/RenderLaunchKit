@@ -145,7 +145,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
             <p
               className={`font-display text-display-lg mt-1 ${
                 project.reviewScore >= 7
-                  ? 'text-accent-400'
+                  ? 'text-success-400'
                   : project.reviewScore >= 5
                     ? 'text-amber-400'
                     : 'text-red-400'
@@ -567,7 +567,7 @@ function JobStatusDot({ status }: { status: string }) {
     );
   }
   if (status === 'completed') {
-    return <span className="h-2 w-2 rounded-full bg-accent-500 flex-shrink-0" />;
+    return <span className="h-2 w-2 rounded-full bg-success-500 flex-shrink-0" />;
   }
   if (status === 'failed') {
     return <span className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />;

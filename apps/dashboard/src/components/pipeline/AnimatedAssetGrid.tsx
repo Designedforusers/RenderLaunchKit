@@ -120,7 +120,7 @@ function AssetSkeletonCard({ index }: { index: number }) {
     >
       {/* Shimmer sweep across the skeleton body */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="animate-shimmer-sweep absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-accent-500/5 to-transparent" />
+        <div className="animate-shimmer-sweep absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-success-500/5 to-transparent" />
       </div>
 
       <div className="relative space-y-3">
@@ -137,10 +137,10 @@ function AssetSkeletonCard({ index }: { index: number }) {
         <div className="flex items-center gap-2 pt-3">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400/80" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent-400" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-400/80" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success-400" />
             </span>
-            <span className="label text-accent-400/70">Generating</span>
+            <span className="label text-success-400/70">Generating</span>
           </div>
         </div>
       </div>

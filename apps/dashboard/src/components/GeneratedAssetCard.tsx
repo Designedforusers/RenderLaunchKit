@@ -773,7 +773,7 @@ export function GeneratedAssetCard({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 className={`text-xs flex items-center gap-1.5 ${
-                  asset.userApproved ? 'text-accent-400' : 'text-red-400'
+                  asset.userApproved ? 'text-success-400' : 'text-red-400'
                 }`}
               >
                 <svg
@@ -913,7 +913,7 @@ function QualityScoreRing({ score }: { score: number }) {
   const circumference = 2 * Math.PI * 10;
   const color =
     score >= 7
-      ? 'text-accent-400'
+      ? 'text-success-400'
       : score >= 5
         ? 'text-amber-400'
         : 'text-red-400';

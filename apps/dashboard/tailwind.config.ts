@@ -73,6 +73,23 @@ export default {
           800: '#6f2015',
           900: '#3f120d',
         },
+        // Semantic success/active — emerald green. Used for status indicators,
+        // active-state dots, approval badges, progress bars, and anything that
+        // communicates "this is working / succeeded." Accent (coral) stays for
+        // brand CTAs, hover glows, and decorative elements.
+        success: {
+          DEFAULT: '#10b981',
+          50:  '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3d0',
+          300: '#6ee7b7',
+          400: '#34d399',
+          500: '#10b981',
+          600: '#059669',
+          700: '#047857',
+          800: '#065f46',
+          900: '#064e3b',
+        },
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],

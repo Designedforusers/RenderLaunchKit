@@ -40,7 +40,7 @@ function TypingIndicator() {
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-accent-400/70"
+          className="w-1.5 h-1.5 rounded-full bg-success-400/70"
           animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
           transition={{
             duration: 1,
@@ -457,7 +457,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                   <div className="relative w-9 h-9 rounded-xl bg-accent-500/15 flex items-center justify-center">
                     <Robot weight="fill" size={18} className="text-accent-400" />
                     {/* Online dot */}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent-500 border-2 border-surface-950" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success-500 border-2 border-surface-950" />
                   </div>
                   <div>
                     <h3 className="text-heading-sm text-text-primary leading-none">
@@ -621,7 +621,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                             {stripMarkdown(msg.content)}
                             {msg.isStreaming && (
                               <motion.span
-                                className="inline-block w-1.5 h-4 bg-accent-400 ml-0.5 rounded-sm"
+                                className="inline-block w-1.5 h-4 bg-success-400 ml-0.5 rounded-sm"
                                 animate={{ opacity: [1, 0] }}
                                 transition={{
                                   duration: 0.6,
@@ -743,7 +743,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
     <motion.div
       className={`rounded-lg border overflow-hidden transition-colors duration-200 ${
         isDone
-          ? 'border-accent-500/15 bg-accent-500/[0.03]'
+          ? 'border-success-500/15 bg-success-500/[0.03]'
           : isRunning
             ? 'border-amber-500/20 bg-amber-500/[0.03]'
             : 'border-surface-700 bg-surface-900/40'
@@ -759,12 +759,12 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
         {/* Status icon */}
         {isDone ? (
           <motion.div
-            className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-accent-500/20 flex items-center justify-center"
+            className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-success-500/20 flex items-center justify-center"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.1 }}
           >
-            <Check weight="bold" size={10} className="text-accent-400" />
+            <Check weight="bold" size={10} className="text-success-400" />
           </motion.div>
         ) : isRunning ? (
           <CircleNotch weight="bold" size={14} className="flex-shrink-0 animate-spin text-amber-400" />

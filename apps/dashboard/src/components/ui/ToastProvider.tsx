@@ -109,10 +109,10 @@ const VARIANT_STYLES: Record<
   { border: string; bg: string; icon: string; accent: string; iconPath: string }
 > = {
   success: {
-    border: 'border-accent-500/40',
-    bg: 'from-accent-500/20 via-accent-500/5 to-transparent',
-    icon: 'text-accent-300',
-    accent: 'bg-accent-500',
+    border: 'border-success-500/40',
+    bg: 'from-success-500/20 via-success-500/5 to-transparent',
+    icon: 'text-success-300',
+    accent: 'bg-success-500',
     iconPath: 'M5 13l4 4L19 7',
   },
   error: {

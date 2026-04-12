@@ -34,9 +34,9 @@ const STATUS_CONFIG = {
     kind: 'active',
   },
   generating: {
-    color: 'text-accent-400',
-    bg: 'bg-accent-400/10',
-    dotColor: 'bg-accent-400',
+    color: 'text-success-400',
+    bg: 'bg-success-400/10',
+    dotColor: 'bg-success-400',
     kind: 'active',
   },
   reviewing: {
@@ -52,9 +52,9 @@ const STATUS_CONFIG = {
     kind: 'active',
   },
   complete: {
-    color: 'text-accent-400',
-    bg: 'bg-accent-400/10',
-    dotColor: 'bg-accent-400',
+    color: 'text-success-400',
+    bg: 'bg-success-400/10',
+    dotColor: 'bg-success-400',
     kind: 'complete',
   },
   failed: {
@@ -70,9 +70,9 @@ const STATUS_CONFIG = {
     kind: 'idle',
   },
   approved: {
-    color: 'text-accent-400',
-    bg: 'bg-accent-400/10',
-    dotColor: 'bg-accent-400',
+    color: 'text-success-400',
+    bg: 'bg-success-400/10',
+    dotColor: 'bg-success-400',
     kind: 'complete',
   },
   rejected: {
@@ -171,7 +171,7 @@ function StatusGlyph({ kind, dotColor }: StatusGlyphProps) {
     // signing off on this asset" rather than a static icon.
     return (
       <motion.span
-        className="mr-1.5 inline-flex h-3 w-3 items-center justify-center rounded-full bg-accent-500/15 text-accent-400"
+        className="mr-1.5 inline-flex h-3 w-3 items-center justify-center rounded-full bg-success-500/15 text-success-400"
         initial={{ scale: 0.4, rotate: -45 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', stiffness: 520, damping: 22 }}

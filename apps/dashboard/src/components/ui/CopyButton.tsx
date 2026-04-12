@@ -61,7 +61,7 @@ export function CopyButton({
               fill="none"
               stroke="currentColor"
               strokeWidth={2.5}
-              className="h-3.5 w-3.5 text-accent-400"
+              className="h-3.5 w-3.5 text-success-400"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </motion.svg>

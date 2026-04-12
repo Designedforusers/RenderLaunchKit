@@ -34,7 +34,7 @@ export function StageLoader({ status, detail }: StageLoaderProps) {
     <div className="card relative overflow-hidden">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="label text-accent-400">
+          <p className="label text-success-400">
             Stage {meta.index.toString().padStart(2, '0')}
           </p>
           <h3 className="mt-1 font-display text-heading-lg text-text-primary">
@@ -43,10 +43,10 @@ export function StageLoader({ status, detail }: StageLoaderProps) {
         </div>
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-success-400" />
           </span>
-          <span className="label text-accent-400">Running</span>
+          <span className="label text-success-400">Running</span>
         </div>
       </div>
 
@@ -110,7 +110,7 @@ function AnalyzeBody() {
       {/* Scan line sweeping top to bottom — suppressed under reduced-motion */}
       {!shouldReduceMotion && (
         <motion.div
-          className="pointer-events-none absolute inset-x-0 h-8 bg-gradient-to-b from-transparent via-accent-500/15 to-transparent"
+          className="pointer-events-none absolute inset-x-0 h-8 bg-gradient-to-b from-transparent via-success-500/15 to-transparent"
           animate={{ y: ['-20%', '120%'] }}
           transition={{
             duration: 2.4,
@@ -208,21 +208,21 @@ function ResearchBody() {
       <div ref={ringsRef} className="pointer-events-none absolute inset-0">
         <div
           data-ring
-          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent-500/40"
+          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-success-500/40"
         />
         <div
           data-ring
-          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent-500/40"
+          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-success-500/40"
         />
         <div
           data-ring
-          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent-500/40"
+          className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-success-500/40"
         />
       </div>
 
       {/* Central node */}
-      <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-accent-500/20 ring-2 ring-accent-400/40">
-        <div className="h-3 w-3 animate-breathe rounded-full bg-accent-400" />
+      <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-success-500/20 ring-2 ring-success-400/40">
+        <div className="h-3 w-3 animate-breathe rounded-full bg-success-400" />
       </div>
 
       {/* Orbiting source chips — under reduced-motion the chips land
@@ -234,7 +234,7 @@ function ResearchBody() {
         return (
           <motion.div
             key={chip.label}
-            className="absolute left-1/2 top-1/2 font-mono text-[10px] uppercase tracking-wider text-accent-300"
+            className="absolute left-1/2 top-1/2 font-mono text-[10px] uppercase tracking-wider text-success-300"
             initial={{
               x: 0,
               y: 0,
@@ -260,7 +260,7 @@ function ResearchBody() {
                   }
             }
           >
-            <span className="rounded-full bg-accent-500/10 px-2 py-1 ring-1 ring-accent-500/30">
+            <span className="rounded-full bg-success-500/10 px-2 py-1 ring-1 ring-success-500/30">
               {chip.label}
             </span>
           </motion.div>
@@ -441,7 +441,7 @@ function GenerateBody() {
           >
             {/* Background shimmer */}
             <div className="absolute inset-0 overflow-hidden">
-              <div className="animate-shimmer-sweep absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-accent-500/10 to-transparent" />
+              <div className="animate-shimmer-sweep absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-success-500/10 to-transparent" />
             </div>
             <span className="relative font-mono text-[10px] uppercase tracking-wider text-surface-300">
               {label}
@@ -480,7 +480,7 @@ function ReviewBody() {
               <span className="w-28 truncate text-surface-400">{row.label}</span>
               <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-surface-800">
                 <motion.div
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent-600 via-accent-400 to-accent-300"
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-success-600 via-success-400 to-success-300"
                   initial={{ width: '0%' }}
                   animate={
                     shouldReduceMotion
@@ -502,7 +502,7 @@ function ReviewBody() {
               </div>
               <motion.span
                 className={`w-10 text-right font-semibold ${
-                  row.score >= 8 ? 'text-accent-300' : 'text-amber-300'
+                  row.score >= 8 ? 'text-success-300' : 'text-amber-300'
                 }`}
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={

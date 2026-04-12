@@ -149,7 +149,7 @@ export function AssetLightbox({ asset, onClose, actions }: AssetLightboxProps) {
           )}
           {asset.qualityScore !== null && (
             <Tooltip label={`Quality score: ${asset.qualityScore}/10`}>
-              <span className={`font-mono font-semibold ${asset.qualityScore >= 7 ? 'text-accent-400' : asset.qualityScore >= 5 ? 'text-amber-400' : 'text-red-400'}`}>
+              <span className={`font-mono font-semibold ${asset.qualityScore >= 7 ? 'text-success-400' : asset.qualityScore >= 5 ? 'text-amber-400' : 'text-red-400'}`}>
                 {asset.qualityScore}/10
               </span>
             </Tooltip>
@@ -191,7 +191,7 @@ export function AssetLightbox({ asset, onClose, actions }: AssetLightboxProps) {
             </>
           )}
           {actions && asset.userApproved !== null && (
-            <span className={`text-xs flex items-center gap-1 ${asset.userApproved ? 'text-accent-400' : 'text-red-400'}`}>
+            <span className={`text-xs flex items-center gap-1 ${asset.userApproved ? 'text-success-400' : 'text-red-400'}`}>
               {asset.userApproved ? 'Approved' : 'Rejected'}
             </span>
           )}

@@ -113,7 +113,7 @@ export function RepositoryUrlForm({
                   }}
                   className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-500/15 text-accent-400">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success-500/15 text-success-400">
                     <Check weight="bold" size={12} />
                   </span>
                 </motion.span>

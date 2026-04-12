@@ -102,7 +102,7 @@ function VideoGeneratingPlaceholder() {
             [0, 0.4, 0.8].map((delay) => (
               <motion.span
                 key={delay}
-                className="absolute inset-0 rounded-full border border-accent-500/50"
+                className="absolute inset-0 rounded-full border border-success-500/50"
                 initial={{ scale: 0.6, opacity: 0.6 }}
                 animate={{ scale: [0.6, 1.4, 1.4], opacity: [0.6, 0, 0] }}
                 transition={{
@@ -114,7 +114,7 @@ function VideoGeneratingPlaceholder() {
               />
             ))}
           <motion.svg
-            className="relative h-14 w-14 text-accent-400"
+            className="relative h-14 w-14 text-success-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

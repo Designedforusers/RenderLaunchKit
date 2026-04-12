@@ -72,7 +72,7 @@ export function AgentToolCallStream({
           className="pointer-events-none absolute left-0 right-0 top-0 h-full overflow-hidden"
           aria-hidden="true"
         >
-          <div className="animate-scan-line absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-accent-400/60 to-transparent" />
+          <div className="animate-scan-line absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-success-400/60 to-transparent" />
         </div>
       )}
 
@@ -85,10 +85,10 @@ export function AgentToolCallStream({
           {isStreaming && (
             <span className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-400" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success-400" />
               </span>
-              <span className="label text-accent-400">Live</span>
+              <span className="label text-success-400">Live</span>
             </span>
           )}
         </div>
@@ -125,7 +125,7 @@ export function AgentToolCallStream({
           >
             <span className="font-mono text-mono-sm text-text-muted">&gt;</span>
             <motion.span
-              className="inline-block h-3 w-1.5 bg-accent-400"
+              className="inline-block h-3 w-1.5 bg-success-400"
               animate={shouldReduceMotion ? { opacity: 1 } : { opacity: [1, 0, 1] }}
               transition={
                 shouldReduceMotion
@@ -168,7 +168,7 @@ function ToolCallLine({
     >
       <span
         className={`mt-0.5 select-none ${
-          isFresh ? 'text-accent-400' : 'text-surface-700'
+          isFresh ? 'text-success-400' : 'text-surface-700'
         }`}
       >
         &rarr;
@@ -178,7 +178,7 @@ function ToolCallLine({
           <span
             className={`mr-1.5 rounded px-1 py-0.5 text-[9px] uppercase tracking-wider ${
               isFresh
-                ? 'bg-accent-500/15 text-accent-300'
+                ? 'bg-success-500/15 text-success-300'
                 : 'bg-surface-800/60 text-surface-600'
             }`}
           >
@@ -186,7 +186,7 @@ function ToolCallLine({
           </span>
         )}
         <span
-          className={`font-semibold ${isFresh ? 'text-accent-200' : 'text-surface-500'}`}
+          className={`font-semibold ${isFresh ? 'text-success-200' : 'text-surface-500'}`}
         >
           {entry.toolName}
         </span>
@@ -212,7 +212,7 @@ function EmptyState({ isStreaming }: { isStreaming: boolean }) {
         <div className="mx-auto mb-2.5 w-8 h-8 rounded-lg bg-surface-800/40 flex items-center justify-center">
           {isStreaming ? (
             <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-accent-400"
+              className="w-1.5 h-1.5 rounded-full bg-success-400"
               animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
             />

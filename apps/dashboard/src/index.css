@@ -34,6 +34,18 @@
   --text-secondary: 197 184 216;
   --text-tertiary:  139 123 168;
   --text-muted:     107  93 128;
+
+  /* Semantic success/active — emerald green */
+  --success-50:  236 253 245;
+  --success-100: 209 250 229;
+  --success-200: 167 243 208;
+  --success-300: 110 231 183;
+  --success-400: 52  211 153;
+  --success-500: 16  185 129;
+  --success-600: 5   150 105;
+  --success-700: 4   120  87;
+  --success-800: 6    95  70;
+  --success-900: 6    78  59;
 }
 
 /* FAIRE Octave — variable display font. Trial weights/variable axis
