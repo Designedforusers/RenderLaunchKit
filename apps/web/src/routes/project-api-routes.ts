@@ -160,8 +160,8 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
   }
 
   // Enqueue the analysis pipeline. If the queue is transiently
-  // unavailable, remove the pending row so the next submit retries
-  // cleanly instead of hitting the in-progress guard.
+  // unavailable, mark the row as failed so the next submit sees a
+  // terminal project and can retry cleanly via the rerun path.
   try {
     await enqueueRepositoryAnalysis({
       projectId: project.id,
@@ -170,7 +170,10 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       repoName: project.repoName,
     });
   } catch {
-    await database.delete(projects).where(eq(projects.id, project.id));
+    await database
+      .update(projects)
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where(eq(projects.id, project.id));
     return c.json(
       { error: 'Failed to enqueue analysis — please retry' },
       503
