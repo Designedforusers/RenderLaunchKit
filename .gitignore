@@ -12,7 +12,11 @@ coverage/
 *.tsbuildinfo
 
 # Local editor / agent tooling — not tracked across the team.
-.claude/
+# Exception: .claude/rules/ contains path-conditional project rules
+# that Claude Code loads on demand (checked in so all contributors
+# get them).
+.claude/*
+!.claude/rules/
 
 # `npx skills add` (agentskills.io) install artifacts.
 #

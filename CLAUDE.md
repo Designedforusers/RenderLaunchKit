@@ -1,394 +1,99 @@
 # CLAUDE.md
 
-Project context for [Claude Code](https://claude.com/claude-code) sessions opened against this repo. Auto-loaded by Claude Code on every conversation. Also the canonical engineering spec for any human contributor — start here, then `README.md` for what the product does.
+Project context for [Claude Code](https://claude.com/claude-code) sessions. Start here, then `README.md` for what the product does.
 
 ---
 
 ## What this repo is
 
-LaunchKit is an AI-powered go-to-market teammate. The pipeline:
+LaunchKit is an AI-powered go-to-market teammate. Pipeline: `GitHub URL → Analyze → Research → Strategize → Generate (parallel) → Review → Done`. One TypeScript monorepo, eight Render services. Public showcase for Render — every PR is graded on engineering discipline.
 
 ```
-GitHub URL → Analyze → Research (Agent SDK) → Strategize → Generate (parallel) → Review → Done
+apps/web/                  → Hono API + React dashboard (Vite)
+apps/worker/               → BullMQ processors + AI agents
+apps/workflows/            → Render Workflows asset generation tasks
+apps/cron/                 → Scheduled jobs (feedback aggregation, trending)
+packages/shared/           → Drizzle schema, Zod schemas, shared types
+packages/asset-generators/ → Provider clients (Claude, fal.ai, ElevenLabs, World Labs)
 ```
 
-Eight Render services total — `launchkit-web`, `launchkit-worker`, `launchkit-pika-worker`, `launchkit-cron`, `launchkit-minio`, `launchkit-redis`, `launchkit-db` (seven from the Blueprint), plus `launchkit-workflows` which is a one-time dashboard step because Render Workflows is public beta and the Blueprint syntax doesn't support it yet. One TypeScript monorepo. Public showcase for Render — every PR is graded on engineering discipline as much as product behavior. See `README.md` for the architectural rationale and `CONTRIBUTING.md` for the short-form contribution rules.
+## Verification commands
 
-The `launchkit-workflows` service hosts every asset-generation run in the app on Render Workflows (public beta). Every generation path — strategize → generate, creative-review re-queue, commit-marketing refresh, user-facing "Regenerate" button — calls `render.workflows.startTask('${RENDER_WORKFLOW_SLUG}/generateAllAssetsForProject', [{ projectId }])` via a lazy SDK client. The parent task reads `status='queued'` asset rows from the DB and fans out to five compute-bucketed child tasks via run chaining. The workflows service is created manually in the Render dashboard (not via `render.yaml` Blueprint, which doesn't support workflows yet) — see README § "Create the workflow service" for the one-time setup.
-
----
+```bash
+npm run typecheck    # tsc -b + dashboard tsc --noEmit
+npm run lint         # eslint . --max-warnings=0
+npm run build        # composite tsc + Vite
+npm test             # smoke tests via node:test
+npm run dev          # concurrent web + worker + cron + dashboard
+```
 
 ## Engineering invariants
 
-These are the rules every PR has to clear. They're enforced in CI; they're listed here so you know *why* they're enforced before you fight them.
+### TypeScript strict flags
 
-### TypeScript: all four strict flags on
+`strict: true` plus four extra flags. The two that trip people up:
 
-`tsconfig.base.json` runs with `strict: true` plus:
+- `noUncheckedIndexedAccess` — array/Record reads return `T | undefined`. Narrow with `if (!row)`, never `!`.
+- `exactOptionalPropertyTypes` — `field?: T` won't accept explicit `undefined`. Use the `...(value !== undefined ? { field: value } : {})` spread pattern.
 
-- `noUncheckedIndexedAccess` — array and `Record` reads return `T | undefined`. Narrow with an `if (!row)` guard, not a `!` assertion.
-- `exactOptionalPropertyTypes` — `field?: T` does not accept `undefined` as an explicit value, only as an absent property. Use the `...(value !== undefined ? { field: value } : {})` spread pattern at object literals.
-- `noPropertyAccessFromIndexSignature` — bracket notation required when reading from a `Record<string, X>` (jsonb metadata, headers, lookup tables).
-- `noImplicitOverride` — `override` is mandatory on subclass methods (no inheritance in this repo today, but the flag is on so any future class hierarchy gets it for free).
+If a strict-flag fix needs `as`, you're patching the wrong thing. Narrow honestly.
 
-If a strict-flag fix needs an `as`, you're patching the wrong thing. Read the type, find the real shape, and narrow honestly.
+### ESLint: zero warnings
 
-### ESLint: every rule at `error`, `--max-warnings=0`
-
-`eslint.config.mjs` is at error severity for the entire `recommendedTypeChecked` preset plus the anti-`any` family (`no-explicit-any`, `no-unsafe-assignment`, `no-unsafe-member-access`, `no-unsafe-call`, `no-unsafe-argument`, `no-unsafe-return`). `npm run lint` runs with `--max-warnings=0` so a future warning is a hard CI failure.
-
-Two scoped relaxations:
-
-- `no-misused-promises` is set with `{ checksVoidReturn: { attributes: false } }` for the React surfaces only. Server-side files keep the strict default. (The default forces a `void` wrapper on every `onClick={async () => …}`, which is noise without catching real bugs.)
-- `no-explicit-any` and `no-non-null-assertion` are turned off for `seed.ts` and the config-file glob. Both files type-erase at the boundary on purpose; runtime schemas catch shape mistakes.
+`--max-warnings=0`. The anti-`any` family is on (`no-explicit-any`, `no-unsafe-*`). See `eslint.config.mjs` for the two scoped relaxations.
 
 ### Zod at every runtime boundary
 
-Every external input parses through a Zod schema:
+Every external input (HTTP bodies, LLM responses, env vars, jsonb columns, external APIs, webhooks) parses through a Zod schema. Never read raw input directly.
 
-- HTTP request bodies (`apps/web/src/routes/*.ts` use `zodSchema.safeParse(rawBody)` — never `body.field` directly)
-- Drizzle jsonb columns (the `parseJsonbColumn(Schema, value, context)` helper in `@launchkit/shared`)
-- LLM responses (`generateJSON(Schema, ...)` in `apps/worker/src/lib/anthropic-claude-client.ts`)
-- External API responses (fal.ai, GitHub REST, ElevenLabs)
-- Server-Sent Event payloads on the dashboard
-- `process.env` (the typed `env` modules below)
-- GitHub webhook payloads
-- pgvector raw-SQL row results
+### No new `as unknown as` casts
 
-There are exactly two live `as unknown as` casts in source code, both under `apps/`, both centralised in helpers and both with an explanatory docstring at the cast itself:
+Two exist in centralised helpers (`asAgentSdkTools` and `fileToWebStream`), both with docstrings. Extend one of those helpers before adding a third.
 
-- `apps/worker/src/lib/agent-sdk-runner.ts` (the `asAgentSdkTools()` helper) — SDK contravariance bridging the heterogeneous Zod tool union returned by `tool('name', 'desc', ZodInputShape, handler)` calls to the `Parameters<typeof runAgent>[0]['tools']` shape the Agent SDK accepts. Every agent in the worker (`launch-research-agent.ts`, `trending-signals-agent.ts`, and any future agent) calls `asAgentSdkTools(tools)` instead of inlining the cast — one cast in one place, used by N agents.
-- `apps/web/src/lib/stream-utils.ts` (the `fileToWebStream()` helper) — Node `Readable.toWeb()` returns `ReadableStream<Uint8Array>` from `node:stream/web`, which TypeScript treats as nominally distinct from the WHATWG `ReadableStream<Uint8Array>` the platform `Response` constructor expects. The bridge is centralised in the helper so the file-streaming routes (`/api/assets/:id/video.mp4`, `/api/assets/:id/audio.mp3`, and any future static-file endpoint) share one cast instead of repeating it.
+### Typed env modules
 
-The phrase `as unknown as` also appears inside two narrative doc comments (`apps/worker/src/index.ts`, `packages/shared/src/schemas/index.ts`) plus two "see the helper" pointers in agent call-site comments (`launch-research-agent.ts`, `trending-signals-agent.ts`) and the helper docstrings themselves — none of those are live casts. Only the two listed above are real casts.
+Never read `process.env.X`. Import `env` from the service's `env.ts` and read `env.X`. The dashboard and `@launchkit/shared` intentionally have no env module (browser-buildable).
 
-If you're tempted to add a third live cast, the answer is almost always "extend one of the two helpers to cover your case." The two existing helpers already absorb every cast pattern that has come up in the codebase: SDK contravariance for agent tool unions, and Node-vs-WHATWG nominal-distinct types for file streaming. A genuinely new third pattern would justify a third helper plus a CLAUDE.md update; an inlined cast at a single call site would not.
+### Domain types from Zod
 
-### Typed env modules, lazy parsed
+Write the Zod schema first in `packages/shared/src/schemas/`. Types are `z.infer<>` re-exports in `packages/shared/src/types.ts`. Drizzle pgEnums are the source of truth for status/type unions.
 
-Each backend service has its own env module:
+### Naming conventions
 
-- `apps/web/src/env.ts`
-- `apps/worker/src/env.ts`
-- `apps/cron/src/env.ts`
+- `generationInstructions` = exact instructions for asset creation. Not `brief`, `prompt`, or `description`.
+- `ProjectProgressPublisher` = internal Redis/SSE events. `SocialPublisher` (future) = external platform posting.
+- Agent names (`launch-research-agent`) = AI persona. Processor names (`analyze-project-repository`) = system action.
 
-Each exports a Zod-validated `env` object that lazy-parses `process.env` on first field access via a `Proxy`. The Proxy carries explicit `set`/`deleteProperty` traps and a symbol-key guard in `get`. Never read `process.env.X` directly in backend code — import `env` and read `env.X`.
+### Worker / workflows deliberate code duplication
 
-The dashboard and `@launchkit/shared` intentionally do not get an env module: the dashboard runs in the browser, and `@launchkit/shared` must stay browser-buildable.
-
-### Domain types come from Zod schemas
-
-`packages/shared/src/schemas/*.ts` define every cross-package domain shape. The corresponding TypeScript types are `z.infer<typeof Schema>` re-exports in `packages/shared/src/types.ts`. Drizzle pgEnums are the source of truth for status/type unions (`AssetType`, `AssetStatus`, `ProjectStatus`).
-
-If you need a new domain type, write the Zod schema first.
-
-### Conventions worth knowing
-
-- `ProjectProgressPublisher` means internal Redis/SSE progress events. `SocialPublisher` (future) means external posting to a platform. Don't confuse the two.
-- `generationInstructions` always means the exact instructions used to create or regenerate an asset. It is not a synonym for `brief`, `prompt`, or `description`.
-- Role-based agent names (`launch-research-agent`, `launch-strategy-agent`, `creative-director-agent`) describe the AI persona. Processor names (`analyze-project-repository`, `build-project-launch-strategy`) describe the concrete system action.
-
-### Asset status lifecycle
-
-Every asset row in the `assets` table follows a linear state machine defined by the `asset_status` pgEnum in `packages/shared/src/schema.ts:138-147`:
-
-```
-queued → generating → reviewing → complete
-                          ↓
-                    approved / rejected
-                          ↓
-                    regenerating → queued  (loop)
-                    
-              any state → failed  (escape hatch)
-```
-
-| Status | What's happening | Who drives the transition |
-|---|---|---|
-| `queued` | Asset row exists, waiting for the Render Workflow parent task to pick it up. | `buildProjectLaunchStrategy` (initial), `regenerateAsset` route (re-queue), creative-review re-queue path. |
-| `generating` | Workflow child task (`generateWrittenAsset`, `generateImageAsset`, etc.) is actively running the provider call (Claude, fal.ai, ElevenLabs, World Labs). | `dispatchAsset` in `apps/workflows/src/lib/dispatch-asset.ts`. |
-| `reviewing` | Generation succeeded. The `creative-director-agent` (`apps/worker/src/processors/review-generated-assets.ts`) is scoring the asset for quality, writing Creative Director Notes, and deciding whether to auto-approve or flag for revision. | The review BullMQ job enqueued by the workflow parent task after all children settle. |
-| `approved` | User clicked Approve on the dashboard, or the creative-director-agent auto-approved based on quality score. | `POST /api/assets/:id/approve` or the review processor. |
-| `rejected` | User clicked Reject on the dashboard, or the creative-director-agent rejected based on quality score. Rejected assets may be re-queued for regeneration. | `POST /api/assets/:id/reject` or the review processor. |
-| `complete` | Terminal success state after the full review pass settles. All assets in the kit have been evaluated. | The review processor's finalization step. |
-| `regenerating` | User clicked Regenerate (or the review loop triggered a re-queue). The asset flips back to `queued` on the next workflow trigger. | `POST /api/assets/:id/regenerate` or the creative-review re-queue path. |
-| `failed` | Generation or review errored out. The error message is persisted on the asset row. Partial failures are first-class — other assets in the same kit continue. | `dispatchAsset` catch block or review processor error handler. |
-
-**Key invariant:** the `reviewing` state is an automated AI step, not a user action. A user never manually puts an asset into `reviewing` — the system transitions to it automatically after generation completes. If an asset appears stuck in `reviewing`, either the review BullMQ job hasn't been dequeued yet or the creative-director-agent errored silently.
-
-### Workflows service
-
-`apps/workflows/` is a monorepo workspace that hosts the asset-generation tasks as Render Workflows task definitions. Its library surface mirrors the worker's own (`database.ts` owns a drizzle pool, `project-progress-publisher.ts` owns a Redis pub client, `anthropic-claude-client.ts` is a literal copy of the worker's file keyed to the workflows env, `asset-generators-instance.ts` wires the `@launchkit/asset-generators` package) because each backend service owns its own process-lifecycle infra per the existing convention. The duplication of `anthropic-claude-client.ts` across the worker and workflows services is explicit and intentional: moving it into `packages/asset-generators/` would force the worker's three non-asset-gen agents (`launch-strategy-agent`, `commit-marketability-agent`, `launch-kit-review-agent`) to take a dependency on the asset-generators package, which is semantically wrong.
-
-Five child tasks (`generateWrittenAsset`, `generateImageAsset`, `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`) are grouped by compute profile — `starter` for text, `standard` for images/audio, `pro` for video and 3D — so a 10-minute video render never blocks a 20-second blog post run. The parent task (`generateAllAssetsForProject`) reads `status='queued'` assets from the DB, fans out to the child tasks via `Promise.allSettled` (run chaining), and enqueues the review BullMQ job once every child settles. Partial failures are first-class: failed children mark their asset rows `failed` inside `dispatchAsset`, and the review still runs on whatever succeeded.
-
-**Three call sites trigger the workflow:**
-
-- `apps/worker/src/index.ts` — the strategize handler fires `triggerWorkflowGeneration(projectId)` right after `buildProjectLaunchStrategy` persists the initial asset rows.
-- `apps/worker/src/processors/review-generated-assets.ts` — the creative-review re-queue path flips rejected assets back to `status='queued'` and fires the trigger so the parent task's next iteration picks them up.
-- `apps/worker/src/processors/process-commit-marketing-run.ts` — the Phase 6 commit-marketing refresh path does the same thing (flip to queued, fire trigger) when a new commit lands on a webhook-enabled project.
-
-Plus one on the web side:
-
-- `apps/web/src/routes/asset-api-routes.ts` — the `/api/assets/:id/regenerate` route (the user-facing "Regenerate" button) flips a single asset back to queued and fires `triggerWorkflowGeneration` via its own parallel helper at `apps/web/src/lib/trigger-workflow-generation.ts`. The web's trigger helper is a deliberate 40-line copy of the worker's — each backend service constructs its own lazy Render SDK client from its own typed env module.
-
-Both trigger helpers require `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` at call time. Both env vars are optional at the Zod schema level — the trigger helper throws a structured error at call time if either is missing, rather than failing every service boot when the workflow service hasn't been provisioned yet. Local dev routes through the Render CLI's local task server (`render workflows dev`, port 8120) when `RENDER_USE_LOCAL_DEV=true` is set — the SDK's `get-base-url` helper reads that env var directly in `node_modules/@renderinc/sdk/dist/utils/get-base-url.js`, so the code path is identical between local and prod.
-
-### Cost tracking
-
-Every asset generation records its real provider spend to a per-event log table (`asset_cost_events`) plus a denormalized summary on the `assets` row (`cost_cents`, `cost_breakdown`). The dashboard's "Generated for $X.XX" chip on the project detail page reads a single `SUM(cost_cents) GROUP BY provider` query against the per-event table; the per-asset card label reads the denormalized `cost_cents` field from the existing asset response. Both surfaces hit the same Postgres the asset rows live in — no cross-system join, no external observability backend.
-
-The threading is **`AsyncLocalStorage`-based**, not parameter-passing:
-
-- `apps/workflows/src/lib/dispatch-asset.ts` creates one `CostTracker` per asset generation and runs the agent routing switch inside `runWithCostTracker(tracker, async () => { ... })`.
-- Every upstream client in `packages/asset-generators/src/clients/` (fal, elevenlabs, world-labs) and both copies of `anthropic-claude-client.ts` (worker and workflows) call `recordCost(...)` after their upstream request returns successfully. `recordCost` reads the active tracker from the async-local store; if no tracker is in scope (e.g. the worker's three non-asset-gen agents calling the same Anthropic client), the call is a no-op.
-- After the agent returns, `dispatchAsset` flushes the recorded events to `asset_cost_events` via `persistCostEvents`.
-
-The `AsyncLocalStorage` choice is deliberate: threading a `tracker` parameter through every client signature would have rippled into ~20 files and forced every test to pass a stub. ALS lands the diff in exactly the two places that matter — the dispatch-site wrap and the upstream-call boundaries — and keeps every intermediate agent untouched.
-
-**Non-blocking invariant.** A failure inside `persistCostEvents` MUST NOT fail an asset generation. The helper wraps its DB transaction in a `try/catch` that logs and returns; the caller in `dispatchAsset` additionally wraps the error-path persist call in its own `try/catch` as a belt-and-braces guard. The user's blog post still ships even if the cost write hiccupped, and the operator notices the missing row on the dashboard.
-
-**Cached paths do not record cost.** ElevenLabs cache hits, fal.ai's no-API-key placeholder branch, and World Labs operation polling retries all return before reaching the `recordCost` call. We only charge for what actually hit the upstream.
-
-**Integer cents only.** Pricing constants live in `packages/shared/src/pricing.ts` as compute helpers that return integer cents via `Math.ceil`. The dashboard divides by 100 with `(cents / 100).toFixed(2)` only at display time. No floating-point dollar math at any layer.
-
-**Adding a new provider.** Three steps:
-
-1. Add the rate table and a `compute<Provider>CostCents(...)` helper to `packages/shared/src/pricing.ts`. Match the existing `Record<string, { ... }>` pattern and apply `Math.ceil` at the helper boundary.
-2. Extend the `CostEventProviderSchema` enum in `packages/shared/src/schemas/asset-cost-event.ts` with the new provider name. The DB column is a `varchar(32)` so no migration is needed; the schema enum is the boundary check.
-3. In the client file (`packages/asset-generators/src/clients/<provider>.ts`, or one of the two `anthropic-claude-client.ts` copies), call `recordCost({ provider: '<new-provider>', operation: '...', costCents: compute<Provider>CostCents(...), metadata: { ... } })` after the upstream request returns successfully. **The call must sit BELOW any early-return branches that skip the upstream call** — cache hits, no-API-key placeholder paths, and short-circuit polling retries should `return` before reaching `recordCost` so cached/free outcomes never record a charge. Look at `packages/asset-generators/src/clients/elevenlabs.ts` (cache-hit early return precedes the `recordCost` at line 188) for the canonical pattern.
-
-The tracker sees the new events automatically — no changes to `dispatch-asset.ts`, `persist-cost-events.ts`, or the API route are needed. The `/api/projects/:projectId/costs` route's `GROUP BY provider` query picks up the new provider on its next call.
-
-### Pika video meeting integration
-
-LaunchKit's AI teammate grows a face: a user clicks **Invite AI teammate to a meet** on the project dashboard, drops a Google Meet URL, and the Pika-hosted avatar joins the call as a real video participant that already knows the project's repo, launch strategy, and generated assets.
-
-**What Pika is.** [Pika](https://www.pika.me) is a SaaS product for real-time AI video avatars in meetings. We use their `pikastream-video-meeting` skill — a ~600-line Python CLI that wraps Pika's HTTPS API. All the heavy lifting (headless browser, Google Meet auth, WebRTC, avatar rendering, voice synthesis) runs on Pika's backend. Our side is a short-lived Python subprocess with one dep (`requests>=2.32.5`) — and ONLY for the 90-second join handshake. Every other operation (leave, health poll) is pure-TypeScript `fetch()` with no Python involved.
-
-**Two services, two queues, one responsibility split.** The Pika integration runs across two Render worker services:
-
-| Service | Queue | Job types | Code path |
-|---|---|---|---|
-| `launchkit-pika-worker` (dedicated) | `pika-invite` | `pika-invite` | `apps/worker/src/index.pika.ts` spawns Python for ~90 s per join |
-| `launchkit-worker` (shared) | `pika-control` | `pika-poll`, `pika-leave` | `apps/worker/src/index.ts` runs pure-TS `fetch()` for the control plane |
-
-Both services compile from the **same** `apps/worker` workspace — `dist/index.js` and `dist/index.pika.js` are two entry points sharing every helper, db client, env module, and subprocess wrapper. The split is at the PROCESS boundary, not the code boundary: no duplication, no cross-workspace imports. Only the Python install (`apt-get python3 + pip install requests`) is unique to the pika-worker's `buildCommand`.
-
-**Why the split.** The 90-second Python subprocess burst is the part of the lifecycle that needs isolation guarantees — a heavy analysis job on the shared worker could otherwise contend with the pika subprocess spawn for the Node event loop, adding latency to the user's click → bot joins meeting path. A dedicated dyno with a single-purpose BullMQ Worker keeps click-to-spawn latency under 100 ms regardless of what else is running. The control-plane operations (poll + leave) are single pure-TS HTTPS calls taking <1 s each; they share the shared worker's event loop with analysis/review/trending because there's no contention concern at that size.
-
-**Session lifecycle.** Six states, linear state machine with a `failed` escape hatch:
-
-```
-pending → joining → active → ending → ended
-                 ↘ failed
-```
-
-The flow:
-
-1. **User clicks Invite.** Web service validates the meet URL, inserts a `pika_meeting_sessions` row at `status='pending'`, and enqueues a `pika-invite` job on the PIKA_INVITE queue. The dedicated `launchkit-pika-worker` picks it up within ~100 ms.
-2. **Dedicated worker runs the invite.** Loads the project + assets, builds the per-project system prompt (4 KB cap), flips the row to `joining`, spawns `python3 vendor/pikastream-video-meeting/scripts/pikastreaming_videomeeting.py join ...` with bounded stdio buffers and a 240 s wall-clock. On success, flips the row to `active`, persists `pika_session_id` + `started_at`, and enqueues a `pika-poll` job (5 s delay) on the PIKA_CONTROL queue.
-3. **Shared worker polls every 30 s.** The `pika-poll` processor loads the row, enforces the 60-minute safety cap (age check on `started_at`), fetches Pika's session state via pure-TS `fetchPikaSessionState`, and decides to either re-enqueue itself with a 30 s delay OR enqueue a `pika-leave` job with the appropriate `triggeredBy` value (`safety_cap` | `pika_closed` | `pika_error`).
-4. **Leave is a pure-TS HTTPS DELETE.** The `pika-leave` processor calls `endMeeting` which issues `DELETE https://srkibaanghvsriahb.pika.art/proxy/realtime/session/{id}` directly via `fetch()` — no Python subprocess, no subprocess startup tax. Flips the row to `ended`, computes cost via `computePikaMeetingCostCents(durationSeconds)`, and writes a session-scoped cost event to `asset_cost_events` with `asset_id=NULL`.
-5. **User-initiated End.** Same `pika-leave` handler, `triggeredBy='user'`. Idempotent via terminal-status guard against any concurrent safety-cap leave.
-
-**Exit code → error class mapping** (applies only to the Python subprocess for the join path — leave/poll use typed HTTP errors):
-
-| Exit | Error class | Meaning |
-|---|---|---|
-| 0 | (success) | bot reported `status=ready` or `video && bot` |
-| 1 | `PikaMissingKeyError` | `PIKA_DEV_KEY` missing at subprocess boot |
-| 2 | `PikaValidationError` | bad URL, missing image file, unknown platform |
-| 3 | `PikaHttpError` | non-2xx response from Pika |
-| 4 | `PikaSessionError` | Pika reported `status=error` or `status=closed` |
-| 5 | `PikaTimeoutError` | subprocess reached `--timeout-sec` without ready |
-| 6 | `PikaInsufficientCreditsError` | funding check failed; carries a `checkoutUrl` the dashboard surfaces on the failed session row |
-
-Special rule: `mapExitCodeToError` promotes any run with a captured `checkoutUrl` to `PikaInsufficientCreditsError` regardless of exit code, because `ensure_funded()` polls for payment for up to 300 seconds and our wall-clock kill can beat it to exit. The presence of a checkout URL is a stronger signal than the exit code.
-
-**Env var mapping.** LaunchKit's codebase uses `PIKA_API_KEY` for naming consistency with every other `*_API_KEY`. The upstream Python CLI reads from `PIKA_DEV_KEY`. The wrapper performs the rename at subprocess spawn time (`apps/worker/src/lib/pika-stream.ts:runPikaSubprocess`) so the rest of our code never sees `PIKA_DEV_KEY` and a grep for `PIKA_API_KEY` lands every consumer. `PIKA_AVATAR` is passed through verbatim as the `--image` flag value — the Python CLI handles both local file paths and `https://` URLs transparently.
-
-**Service env var scoping.** Only the dedicated `launchkit-pika-worker` service has `PIKA_AVATAR` set in its envVars (it's the only service that spawns the subprocess). Both services have `PIKA_API_KEY` because the shared worker needs it for the pure-TS leave/poll `Authorization` headers. The web service has NEITHER — it only enqueues BullMQ jobs; Pika secrets never touch the web dyno.
-
-**60-minute safety cap.** The poll processor enforces a 60-minute ceiling on bot runtime as a runaway safety, not a usage limit. Legitimate meetings longer than 60 minutes should be possible by bumping the constant; the cap exists so a forgotten session cannot drain the credit balance overnight. Every poll tick reads `started_at`, compares against `now`, and enqueues a `pika-leave` with `triggeredBy='safety_cap'` if exceeded.
-
-**Cost tracking.** Pika bills at a flat $0.275/minute of bot runtime. The leave processor computes `durationSeconds = ended_at - started_at` (in seconds), passes it through `computePikaMeetingCostCents()` in `packages/shared/src/pricing.ts`, and writes a `provider='pika'` row to `asset_cost_events` with `asset_id=NULL` — the column nullability was relaxed in migration `0010_pika_meeting_sessions.sql` specifically so session-scoped cost events can share the existing aggregation surface without forcing the dashboard's project cost chip to UNION a second table. The chip picks up Pika spend automatically via the existing `GROUP BY provider` query.
-
-**The "do not auto-invoke" invariant.** Pika is never auto-invoked. No strategist heuristic picks it. No review loop spawns it. No cron auto-joins a meet. Every Pika session is triggered by an explicit user click on the dashboard's **Invite AI teammate to a meet** button. This invariant exists because a Pika session burns real money and an unexpected avatar joining a live meeting is a UX disaster — the user must always be the one pressing the button.
-
-**Avatar privacy.** The `PIKA_AVATAR` value is user-private and must NEVER be committed to the repo, echoed in logs, or included in commit messages. The wrapper's error messages deliberately quote the redacted meet URL (`host + pathname`, no query string since Zoom encodes passwords there) and never the avatar ref. The web service's env surface does NOT include `PIKA_AVATAR` — only the dedicated pika-worker reads it at spawn time, so the secret stays scoped to the one service that needs it.
-
-### Self-learning loop (closed end-to-end)
-
-LaunchKit's self-learning loop is a three-layer feedback system that turns every user action on a generated asset into prompt context for the next generation. The loop is **fully closed** as of Phase 7 — Layer 3 produces `strategy_insights` rows AND every consuming agent reads them back into its prompt.
-
-**Layer 1 — stat-based insights.** The 6-hourly cron in `apps/cron/src/aggregate-feedback-insights.ts` reads `asset_feedback_events` rows from the last 30 days and writes `strategy_insights` rows for two patterns: `(asset_type, category)` cells with notably high or low approval rates (`insight_type='approval_rate_by_type'`) and trend-velocity-vs-asset-quality correlations on commit-marketing runs (`insight_type='trend_velocity'`). These join the older boolean-`userApproved` aggregations that ship on `insight_type=NULL`.
-
-**Layer 3 — semantic edit clustering.** Every user edit on an asset writes a row to `asset_feedback_events` with `action='edited'` + the edit text. `apps/worker/src/processors/embed-feedback-event.ts` then renders a Voyage embedding into `edit_embedding` (`vector(1024)`). The 6-hourly cron reads those rows, groups by `(asset_type, category)` cell, and runs a pgvector cosine-similarity union-find clustering pass (`<=> ≥ 0.7` neighbor + ≥ 2 mutual neighbors) inside `clusterEditFeedback`. For each cluster of ≥ 3 members, the cron asks Claude Haiku via the Anthropic SDK to compress the edits into a single imperative-mood directive sentence ("Omit emoji from the intro paragraph", "Tighten the closing CTA to under fifteen words"), and persists it as a `strategy_insights` row with `insight_type='edit_pattern'`. When `ANTHROPIC_API_KEY` is unset OR the SDK call fails, the cron falls back to the longest raw edit text — the cluster row still ships and the strategist still picks it up, only the dashboard readability degrades.
-
-**The read path.** `apps/worker/src/tools/project-insight-memory.ts` exposes two accessors. `getInsightsForCategory(category)` returns the stat-based rows (filtered with `insight_type IS NULL OR insight_type != 'edit_pattern'` to preserve legacy NULL rows) and is consumed by every prompted agent that reads "past insights" today. `getEditPatternsForCategory(category)` returns ONLY `insight_type='edit_pattern'` rows, top-10 by confidence. The two accessors are mirrored verbatim in `apps/workflows/src/lib/project-insight-memory.ts` per the worker/workflows deliberate-copy convention.
-
-Three agents read both signals, each through a dedicated prompt block:
-- `launch-strategy-agent` (`apps/worker/src/agents/launch-strategy-agent.ts`) renders the stat insights as `## Past Insights from Similar Projects` AND the edit patterns as `## Common Edits Reviewers Made`. Its system prompt teaches Claude to bake repeated patterns into the per-asset `assetsToGenerate[].generationInstructions` strings, not into the positioning — the writer agent reads those instructions verbatim.
-- `written-asset-agent` (`packages/asset-generators/src/agents/written.ts`) renders the per-asset-type-filtered edit patterns inside `buildContext`. The cron encodes asset_type in the insight body as `Layer 3 edit pattern (<asset_type>, ...)`, so a substring match on `(<assetType>,` scopes each writer call to its own patterns.
-- `voice-commercial-agent` and `podcast-script-agent` thread `editPatterns` through to the same writer agent via the `WriterInput.editPatterns` field.
-
-**The dispatch site.** `apps/workflows/src/lib/dispatch-asset.ts` loads both signal sets in parallel (`Promise.all([getInsightsForCategory, getEditPatternsForCategory])`) and passes both into the writer / voice / podcast generator branches. Both calls swallow DB errors and return `[]` on failure, so a missing `strategy_insights` row never blocks an asset generation.
-
-**Local demo runbook.** `npm run seed && npm run seed:run-feedback-cron` produces the entire loop end-to-end against your local Postgres. The seed script writes three realistic edit clusters into `asset_feedback_events` (two on launchkit blog_post, one on cal.com twitter_thread) with deterministic 1024-dim `fakeEmbedding` vectors that share enough prefix to cluster cleanly under the 0.7 cosine threshold. `seed:run-feedback-cron` invokes `aggregateFeedbackInsights` once via `apps/cron/src/run-feedback-aggregation.ts` and writes the resulting `strategy_insights` rows. The next strategy-build for a `devtool` or `web_app` project then sees the cluster summaries in its prompt context.
-
-When `ANTHROPIC_API_KEY` is set in `.env`, the cron uses Claude Haiku to write the imperative-mood directive. Without the key, the cron writes the longest raw edit text — the strategist still reads it, the writer still scopes it to the right asset type, the dashboard chip just shows the raw edit instead of the polished one-liner.
-
----
-
-## CI/CD philosophy
-
-The repo runs **two layers of the same chain**:
-
-1. **Local prepush** (`lefthook.yml`) — `npm run typecheck && npm run lint && npm run build && npm test`
-2. **GitHub Actions** (`.github/workflows/ci.yml`) — same four steps, on `push: main` and `pull_request: main`
-
-Two layers, same rules. Local prepush exists so a developer fails fast on their own machine instead of waiting for CI. CI exists because lefthook can be skipped (`LEFTHOOK=0 git push`) and because a fork PR will not have lefthook installed at all. Both layers must be green.
-
-The workflows live in `.github/workflows/`. CI uses `cancel-in-progress: true` so a stale PR run is killed when a new commit lands — CI minutes are not free on a private repo and there is no value in finishing a stale build.
-
-### What CI does *not* do
-
-- **No deployment.** Render handles deploys via the Blueprint in `render.yaml`. CI is a quality gate, not a delivery pipeline.
-- **No coverage gating.** The `tests/` directory contains smoke tests that exercise the import surface and the validators that the agentic loops rely on. Real end-to-end tests against the Agent SDK live in a separate deploy-time integration check, not in this repo.
-- **No auto-merge** (with one exception). Most PRs are merged manually after human + AI review. The exception is Renovate patch updates: see § Dependency updates below.
-
-### Dependency updates (Renovate)
-
-`renovate.json5` at the repo root configures the Renovate GitHub App to keep `package.json` and `package-lock.json` fresh. The file is JSON5 (not JSON) so the rules can carry inline comments — Renovate's official validator accepts it natively. The setup is **intentionally aggressive on grouping** and **intentionally conservative on auto-merge**.
-
-**Grouped families.** Updates that travel together ship as one PR:
-- ESLint stack (`eslint`, `@typescript-eslint/*`, `eslint-plugin-*`, `@eslint/*`)
-- TypeScript + `@types/node`
-- Drizzle (`drizzle-orm`, `drizzle-kit`, `drizzle-zod`)
-- Anthropic SDKs (`@anthropic-ai/*`)
-- Remotion (`remotion`, `@remotion/*`)
-- React (`react`, `react-dom`, `react-router-dom`, `@types/react*`)
-- Hono (`hono`, `@hono/*`)
-- Vite + Tailwind toolchain
-- BullMQ + ioredis
-
-Each group gets one PR per week, opened Monday before 6am Pacific.
-
-**Auto-merge policy.** Only `patch`, `pin`, and `digest` updates auto-merge after CI passes. Every `minor` and `major` update requires a human pressing the merge button. Major updates additionally need a checkbox tick on the dependency dashboard issue before the PR is even opened — the queue stays tidy and major upgrades are deliberate.
-
-**Vulnerability alerts** override every schedule and grouping rule. A published CVE on a current dependency ships its own PR as soon as Renovate's next scheduled run after Mend's advisory database picks up the CVE — typically within a polling cycle of the advisory landing in the database, not on the weekly Monday cadence — labeled `security` so it never sits unread.
-
-**Lockfile maintenance** runs weekly. Even when no versions changed, the lockfile is refreshed so the resolved transitive tree does not silently drift from what semver would resolve today.
-
-**Setup.** Install the [Renovate GitHub App](https://github.com/apps/renovate) on the repo. Renovate auto-detects `renovate.json` and starts opening PRs on its next scheduled run. There is no API key or repo secret to configure — Renovate runs on Mend's infrastructure.
-
-**The dependency dashboard** is a single GitHub issue Renovate keeps up-to-date with every pending and pending-approval update. It is the canonical view of what's outstanding, not the PR list.
-
----
-
-## Code review chain
-
-Every PR goes through **two** review passes before it lands on `main`:
-
-### 1. Local code review (mandatory, runs before push)
-
-The author runs the bundled `code-reviewer` Claude Code subagent against the staged diff before pushing. This is the primary line of defense — the reviewer reads the diff, the surrounding files, and the engineering invariants above, and returns blocking issues / non-blocking nits / a "looks good" list.
-
-**Why it's mandatory:** the cloud reviewer (next section) costs API credits and runs only when explicitly invoked. The local pass is free, runs in seconds, and catches the kind of bugs that would otherwise reach production unnoticed because the human author is too close to the code.
-
-**How to run it (Claude Code session):**
-
-> Use the `code-reviewer` subagent to review the staged diff against `main`. Focus on:
-> 1. Strict-flag soundness — no new `any`, no unsafe member access, no non-null assertion regressions
-> 2. Boundary validation — every new external input parses through a Zod schema
-> 3. Real bugs the diff might mask — silently dropped behavior, broken error paths, async race conditions
-> 4. CLAUDE.md alignment — call out drift from the conventions documented here
->
-> Be specific. Quote `file:line` for every issue. Reply with blocking issues first, then non-blocking nits, then a "looks good" list.
-
-The reviewer is a Claude Code feature. If you're not using Claude Code, the cloud reviewer below is your alternative.
-
-### 2. On-demand cloud review (`@claude review`)
-
-`.github/workflows/claude-review.yml` wires up [`anthropics/claude-code-action@v1`](https://github.com/anthropics/claude-code-action). Comment `@claude review` (case-sensitive — `contains()` in GitHub Actions expressions does not lowercase) anywhere on the PR conversation tab and the action posts a review back as a PR comment. The action only fires on comments containing the literal string `@claude review`, so casual `@claude` mentions in conversation do not burn API credits.
-
-**When to invoke:**
-
-- After a tricky refactor — second opinion on the local reviewer's pass.
-- On a PR opened by a contributor who isn't using Claude Code locally.
-- Before a high-risk merge (large diff, security-sensitive change, schema migration) — pay the credits, get the second pair of eyes.
-
-**Setup:** the GitHub App is installed via `claude /install-github-app` from a local Claude Code session. That command walks through the App install and the `ANTHROPIC_API_KEY` repository secret in one step.
-
-### Why both, and why local first
-
-The local reviewer is **fast, free, and contextual** — it reads the diff alongside `CLAUDE.md` and the surrounding files in the same conversation, so it catches drift from project conventions. The cloud reviewer is **independent, asynchronous, and visible to the team** — its review lands as a PR comment that anyone can read, and it runs in a clean environment without the author's working-tree state biasing it. They catch different bugs, so we use both.
-
-The order matters: local first (always) → cloud on demand (sometimes). Reversing the order would mean the cloud reviewer becomes the only check, which is both more expensive and less aligned to the codebase conventions.
-
-### Setting this up in your own repo
-
-The pattern generalizes. To copy it:
-
-1. **Local reviewer.** No setup beyond having Claude Code installed. The `code-reviewer` subagent ships with Claude Code.
-2. **Cloud reviewer — install the GitHub App.** From a Claude Code session in your repo, run `claude /install-github-app`. The command is mandatory, not optional: it installs the Claude GitHub App on the repo and configures the `ANTHROPIC_API_KEY` repository secret in one step. Without it, the workflow file in step 3 will fail with a missing-secret error on first invocation.
-3. **Cloud reviewer — drop the workflow.** Copy `.github/workflows/claude-review.yml` from this repo as a starting point. The `prompt:` field is project-specific — adapt it to call out the conventions your codebase cares about (strict-flag soundness, boundary validation, naming conventions, etc.).
-4. **Discipline.** Add a CONTRIBUTING.md or similar file that says "run the local reviewer before push." Without that, the workflow becomes "I'll just push and let CI tell me." The whole point is to fail fast on your own machine.
-
----
+Each backend service owns its own `database.ts`, `anthropic-claude-client.ts`, and `project-insight-memory.ts`. This duplication is intentional — do not extract into a shared package.
 
 ## Local development
 
 ```bash
-git clone <your-fork>
-cd renderlaunchkit
-npm install              # also installs lefthook + git hooks via `prepare`
-docker compose up -d     # local Postgres + Redis
-cp .env.example .env     # then fill in your API keys
-npm run db:push          # apply schema
-npm run seed             # demo data
-npm run dev              # web, worker, cron, dashboard concurrently
+npm install && docker compose up -d && cp .env.example .env
+npm run db:push && npm run seed && npm run dev
 ```
 
-The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`.
-
-### Useful scripts
+Dashboard: `http://localhost:5173` — API: `http://localhost:3000`
 
 | Script | What it does |
 |---|---|
-| `npm run dev` | Concurrent web + worker + cron + dashboard with HMR |
-| `npm run build` | Composite tsc for backends + Vite build for the dashboard |
-| `npm run typecheck` | `tsc -b` + dashboard `tsc --noEmit` (the prepush gate) |
-| `npm run lint` | `eslint . --max-warnings=0` (the prepush gate) |
-| `npm test` | Smoke tests via `node:test` against compiled worker output |
 | `npm run db:push` | Apply Drizzle schema to the local database |
 | `npm run db:studio` | Open Drizzle Studio against the local database |
-| `npm run seed` | Reseed the local database with the demo project + insights |
+| `npm run seed` | Reseed with demo project + feedback insights |
 
----
+## Anti-patterns
 
-## Anti-patterns (do not do these)
+- Adding `as any` or `as unknown as X` casts
+- Reading `process.env.X` directly
+- Skipping prepush with `LEFTHOOK=0` (CI catches the same failure, only slower)
+- Squash-merging (history is linear via rebase-merge)
+- Adding feature flags or error handling for impossible cases
+- Auto-formatting unrelated code in a PR
 
-- **Adding `as any` or `as unknown as X` casts.** The boundary-validation pass already deleted every cast in the repo. The two remaining casts are documented at the call site. Adding a third without first proving the underlying type is wrong is a regression.
-- **Reading `process.env.X` directly.** Use the typed `env` modules.
-- **Skipping the prepush hook with `LEFTHOOK=0`.** CI will catch the same failure on the server, only slower.
-- **Squash-merging.** History is linear via rebase-merge.
-- **Adding a feature flag for code that already works.** Trust internal code; validate at system boundaries only. Don't ship "just in case" toggles.
-- **Adding error handling for impossible cases.** If the type system says the value can't be null and the code path proves it, don't add a defensive check that pollutes the diff. Validate at the boundary and trust the rest.
-- **Auto-formatting unrelated code in a PR.** Reviewers cannot read 200 lines of whitespace changes. Keep the diff focused.
+## Reference docs
 
----
-
-## Where the spec lives
-
-- `README.md` — what the product does, the architecture overview, and the 4-step deploy runbook
-- `CONTRIBUTING.md` — short-form contribution rules (points back here)
-- `CLAUDE.md` (this file) — engineering invariants and the review chain
-- `docs/cost-tracking.md` — long-form cost tracking explainer (the AsyncLocalStorage rationale, the four guard layers behind the non-blocking invariant, the schema, the recipe for adding a new provider)
-- `.github/workflows/ci.yml` — the CI gate
-- `.github/workflows/claude-review.yml` — the on-demand cloud reviewer
-- `lefthook.yml` — the local prepush gate
-- `eslint.config.mjs` — every lint rule with rationale comments
-- `tsconfig.base.json` — every strict flag
-
-If something is documented in two places, the file closest to the code wins. If you change a convention, update this file in the same PR.
+- `README.md` — architecture overview and deploy runbook
+- `CONTRIBUTING.md` — contribution rules and review workflow
+- `docs/cost-tracking.md` — AsyncLocalStorage cost tracking design
