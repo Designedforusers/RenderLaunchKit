@@ -614,26 +614,6 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
         </div>
       </div>
 
-      {/* Blueprint annotations — tiny mono callouts pointing to the card */}
-      <AnnotationLabel
-        className="absolute -left-3 -top-6 hidden md:block"
-        text="parallel fanout"
-      />
-      <AnnotationLabel
-        className="absolute -right-4 bottom-12 hidden rotate-3 md:block"
-        text="real cost tracked per call"
-      />
-    </div>
-  );
-}
-
-function AnnotationLabel({ className = '', text }: { className?: string; text: string }) {
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <span className="h-px w-6 bg-success-500/60" />
-      <span className="rounded border border-accent-500/30 bg-surface-950/90 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-accent-400">
-        {text}
-      </span>
     </div>
   );
 }
@@ -1388,8 +1368,8 @@ function Agent03StrategistLiving({ isActive, isDone }: VisualProps) {
   return (
     <div className="relative h-full w-full overflow-hidden px-1.5 py-1 font-mono text-[7px]">
       <div className="flex items-center justify-between pb-1">
-        <span className="text-text-tertiary">PARALLEL FANOUT</span>
-        <span className="text-text-muted">5 LANES</span>
+        <span className="text-text-tertiary">RENDER WORKFLOWS</span>
+        <span className="text-text-muted">5 TASKS</span>
       </div>
       <div className="space-y-[3px]">
         {lanes.map((l) => (
