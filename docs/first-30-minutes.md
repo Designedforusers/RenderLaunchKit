@@ -63,7 +63,7 @@ real Render deployment to see the fan-out.
 ## Minutes 5-15 — Run the full pipeline
 
 1. Click **New Project** on the dashboard.
-2. Paste a small-ish GitHub URL — `https://github.com/sindresorhus/nanoid` is
+2. Paste a small-ish GitHub URL — `https://github.com/sindresorhus/slugify` is
    a good one because the analysis stays under a few seconds.
 3. Watch the live progress feed in the project detail view roll through
    `analyze` → `research` → `strategize` → `generating` → `reviewing` →

@@ -65,12 +65,10 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
 
   // Check if project already exists. In-progress projects return
   // 200 to prevent double work. Terminal-state projects (complete /
-  // failed) are replaced: we delete the old row AFTER the new one
-  // is successfully inserted so the prior run survives if the
-  // insert or enqueue fails. The unique constraint requires the
-  // delete to happen first in practice (see the 23505 catch below),
-  // but structuring the logic this way means the old project is
-  // never removed unless a replacement is guaranteed to exist.
+  // failed) are replaced inside a transaction so the prior run
+  // survives if the insert fails. If the enqueue also fails after
+  // the transaction commits, the new row is cleaned up (see the
+  // catch block below).
   const existing = await database.query.projects.findFirst({
     where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
   });
@@ -90,31 +88,39 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
         200
       );
     }
-    // Terminal state — delete old run so the unique constraint
-    // allows the insert below. ON DELETE CASCADE cleans up child
-    // rows (assets, jobs, cost events, feedback events).
-    await database.delete(projects).where(eq(projects.id, existing.id));
   }
 
-  // Create new project. The unique index on (lower(repo_owner),
-  // lower(repo_name)) turns a concurrent duplicate insert into a
-  // Postgres 23505 error instead of a silent second row.
+  // Create new project (or replace a terminal-state run). The unique
+  // index on (lower(repo_owner), lower(repo_name)) turns a concurrent
+  // duplicate insert into a Postgres 23505 error instead of a silent
+  // second row. Reruns wrap the delete + insert in a transaction so
+  // the prior run survives if the insert fails for any reason.
+  const newProjectValues = {
+    repoUrl: buildRepoUrl(repo.owner, repo.name),
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    status: 'pending' as const,
+    // `exactOptionalPropertyTypes` forbids an explicit `undefined`
+    // on an optional column, so only spread the field when we have
+    // a ciphertext to store. Null-valued public-repo projects get
+    // the column default (NULL) from the migration.
+    ...(githubTokenEncrypted !== null ? { githubTokenEncrypted } : {}),
+  };
   let project;
   try {
-    [project] = await database
-      .insert(projects)
-      .values({
-        repoUrl: buildRepoUrl(repo.owner, repo.name),
-        repoOwner: repo.owner,
-        repoName: repo.name,
-        status: 'pending',
-        // `exactOptionalPropertyTypes` forbids an explicit `undefined`
-        // on an optional column, so only spread the field when we have
-        // a ciphertext to store. Null-valued public-repo projects get
-        // the column default (NULL) from the migration.
-        ...(githubTokenEncrypted !== null ? { githubTokenEncrypted } : {}),
-      })
-      .returning();
+    if (existing) {
+      // Terminal rerun — atomic delete + insert. ON DELETE CASCADE
+      // cleans up child rows (assets, jobs, cost events, feedback).
+      [project] = await database.transaction(async (tx) => {
+        await tx.delete(projects).where(eq(projects.id, existing.id));
+        return tx.insert(projects).values(newProjectValues).returning();
+      });
+    } else {
+      [project] = await database
+        .insert(projects)
+        .values(newProjectValues)
+        .returning();
+    }
   } catch (err) {
     // Unique constraint violation — a concurrent insert won the race.
     // Return the existing project instead of a 500.
