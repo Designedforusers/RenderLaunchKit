@@ -216,6 +216,34 @@ export const generateAllAssetsForProject = task<
       }
     }
 
+    // ── Short-circuit when every generation failed — enqueuing a
+    //    review job would find zero reviewable assets and leave the
+    //    project stuck in `reviewing` forever.
+    if (succeededCount === 0) {
+      await db
+        .update(schema.projects)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(schema.projects.id, projectId));
+
+      await projectProgressPublisher.error(
+        projectId,
+        'generate',
+        'All asset generations failed'
+      );
+
+      console.log(
+        `[Workflows:Parent] Project ${projectId} all ${queuedAssets.length} assets failed — marking project as failed`
+      );
+
+      return {
+        projectId,
+        queuedCount: queuedAssets.length,
+        succeededCount: 0,
+        failedCount,
+        reviewEnqueued: false,
+      };
+    }
+
     // ── Enqueue the review BullMQ job with every asset id on the
     //    project, not just the freshly-generated subset. This is a
     //    deliberate parity preservation with the worker's

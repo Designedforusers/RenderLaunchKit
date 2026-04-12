@@ -47,11 +47,11 @@ export async function cleanupStaleLaunchData(): Promise<void> {
   }
 
   // Clean Redis cache entries
-  try {
-    const redis = new Redis(env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-    });
+  const redis = new Redis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+  });
 
+  try {
     const cacheKeys = await redis.keys('github:cache:*');
     if (cacheKeys.length > 100) {
       // Only clean if cache is large
@@ -63,15 +63,14 @@ export async function cleanupStaleLaunchData(): Promise<void> {
         );
       }
     }
-
-    // ioredis `disconnect()` is synchronous (returns void). The
-    // earlier `await` was a no-op the linter correctly flagged.
-    redis.disconnect();
   } catch (err) {
     console.error(
       '[Cron:CleanupStaleLaunchData] Redis cleanup error:',
       err instanceof Error ? err.message : err
     );
+  } finally {
+    // ioredis `disconnect()` is synchronous (returns void).
+    redis.disconnect();
   }
 
   console.log('[Cron:CleanupStaleLaunchData] Cleanup complete');

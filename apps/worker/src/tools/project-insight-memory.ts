@@ -116,7 +116,9 @@ export async function getInsightsForCategory(
       insight: i.insight,
       confidence: i.confidence,
       sampleSize: i.sampleSize,
+      dataPoints: i.dataPoints,
       insightType: i.insightType,
+      updatedAt: i.updatedAt,
     }));
   } catch (err) {
     console.error('[Memory] Error getting insights:', err);
@@ -159,7 +161,9 @@ export async function getEditPatternsForCategory(
       insight: i.insight,
       confidence: i.confidence,
       sampleSize: i.sampleSize,
+      dataPoints: i.dataPoints,
       insightType: i.insightType,
+      updatedAt: i.updatedAt,
     }));
   } catch (err) {
     console.error('[Memory] Error getting edit patterns:', err);

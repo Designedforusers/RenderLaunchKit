@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import * as schema from '@launchkit/shared';
 import {
@@ -300,33 +300,43 @@ async function upsertInsight(data: {
   // and the dashboard treats them as legacy "general" insights.
   insightType?: string;
 }): Promise<void> {
-  // Check if a similar insight already exists
-  const existing = await database.query.strategyInsights.findFirst({
-    where: eq(schema.strategyInsights.category, data.category),
-  });
+  await database.transaction(async (tx) => {
+    // Check if a similar insight already exists for the same
+    // (category, insightType) pair. Scoping by insightType prevents
+    // Layer 1 stat rows from colliding with Layer 3 edit-pattern
+    // rows in the same category.
+    const existing = await tx.query.strategyInsights.findFirst({
+      where: and(
+        eq(schema.strategyInsights.category, data.category),
+        data.insightType !== undefined
+          ? eq(schema.strategyInsights.insightType, data.insightType)
+          : undefined,
+      ),
+    });
 
-  if (existing && existing.insight.includes(data.insight.split(' ').slice(0, 5).join(' '))) {
-    // Update existing insight
-    await database
-      .update(schema.strategyInsights)
-      .set({
+    if (existing && existing.insight.includes(data.insight.split(' ').slice(0, 5).join(' '))) {
+      // Update existing insight
+      await tx
+        .update(schema.strategyInsights)
+        .set({
+          insight: data.insight,
+          confidence: data.confidence,
+          sampleSize: data.sampleSize,
+          ...(data.insightType !== undefined ? { insightType: data.insightType } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.strategyInsights.id, existing.id));
+    } else {
+      // Insert new insight
+      await tx.insert(schema.strategyInsights).values({
+        category: data.category,
         insight: data.insight,
         confidence: data.confidence,
         sampleSize: data.sampleSize,
         ...(data.insightType !== undefined ? { insightType: data.insightType } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.strategyInsights.id, existing.id));
-  } else {
-    // Insert new insight
-    await database.insert(schema.strategyInsights).values({
-      category: data.category,
-      insight: data.insight,
-      confidence: data.confidence,
-      sampleSize: data.sampleSize,
-      ...(data.insightType !== undefined ? { insightType: data.insightType } : {}),
-    });
-  }
+      });
+    }
+  });
 }
 
 // ── Phase 7: Layer 1 + Layer 3 extensions ─────────────────────────

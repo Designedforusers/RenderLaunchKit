@@ -114,7 +114,7 @@ export function ProjectSummaryList({
                 {project.completedAssets}/{project.assetCount} assets
               </div>
 
-              {project.reviewScore && (
+              {project.reviewScore != null && (
                 <div className="flex items-center gap-1.5 text-body-sm">
                   <div
                     className={`w-2 h-2 rounded-full ${

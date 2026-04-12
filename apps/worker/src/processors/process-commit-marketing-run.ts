@@ -451,6 +451,8 @@ export async function processCommitMarketingRun(
         reviewNotes: null,
         revisionInstructions: commitRevisionContext,
         qualityScore: null,
+        renderedVideoUrl: null,
+        renderedVideoKey: null,
         metadata: nextMetadata,
         version: asset.version + 1,
         updatedAt: new Date(),

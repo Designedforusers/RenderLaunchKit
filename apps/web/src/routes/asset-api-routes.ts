@@ -33,6 +33,7 @@ import {
   parseVoiceoverScript,
   projects,
 } from '@launchkit/shared';
+import type { FeedbackAction } from '@launchkit/shared';
 
 const assetApiRoutes = new Hono();
 
@@ -333,6 +334,18 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
     );
   }
 
+  // Redirect to durable object storage when available (deployed topology).
+  // The workflows service uploads the MP3 to MinIO after ElevenLabs
+  // synthesis and stores the public URL on metadata.audioObjectUrl.
+  // This short-circuits before the local-disk path so production
+  // dynos never 404 on a missing local file. The local-disk fallback
+  // below remains for local dev without MinIO.
+  const assetMetadata = asset.metadata as Record<string, unknown> | null;
+  const audioObjectUrl = assetMetadata?.['audioObjectUrl'];
+  if (typeof audioObjectUrl === 'string' && audioObjectUrl.length > 0) {
+    return c.redirect(audioObjectUrl, 302);
+  }
+
   const parsed = audioMetadataSchema.safeParse(asset.metadata);
   if (!parsed.success) {
     // Distinct status from the file-missing 404 below: a 422 says
@@ -403,7 +416,7 @@ interface FeedbackEventResult {
 
 async function writeFeedbackEvent(input: {
   assetId: string;
-  action: 'approved' | 'rejected' | 'edited' | 'regenerated';
+  action: FeedbackAction;
   editText: string | null;
 }): Promise<FeedbackEventResult | null> {
   // The insert is a side effect for the four legacy routes
@@ -556,6 +569,12 @@ assetApiRoutes.put('/:id/content', async (c) => {
 
 const regenerateAssetSchema = z.object({
   instructions: z.string().optional(),
+  modelPreferences: z
+    .object({
+      imageModel: z.enum(['auto', 'flux-pro-ultra', 'nano-banana-pro']).optional(),
+      videoModel: z.enum(['auto', 'kling-v3', 'seedance-2']).optional(),
+    })
+    .optional(),
 });
 
 assetApiRoutes.post('/:id/regenerate', async (c) => {
@@ -606,8 +625,13 @@ assetApiRoutes.post('/:id/regenerate', async (c) => {
     .set({
       status: 'queued',
       version: asset.version + 1,
+      renderedVideoUrl: null,
+      renderedVideoKey: null,
       ...(body.instructions !== undefined
         ? { revisionInstructions: body.instructions }
+        : {}),
+      ...(body.modelPreferences !== undefined
+        ? { metadata: { ...((asset.metadata as Record<string, unknown>) ?? {}), modelPreferences: body.modelPreferences } }
         : {}),
       updatedAt: new Date(),
     })

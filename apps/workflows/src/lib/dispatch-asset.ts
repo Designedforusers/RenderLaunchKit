@@ -1,6 +1,9 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
 import {
+  composeMinioEndpoint,
   parseJsonbColumn,
   RepoAnalysisSchema,
   ResearchResultSchema,
@@ -10,8 +13,13 @@ import {
   resolveVideoModel,
 } from '@launchkit/shared';
 import type { AssetType } from '@launchkit/shared';
-import { CostTracker, runWithCostTracker } from '@launchkit/asset-generators';
+import {
+  CostTracker,
+  createObjectStorageClient,
+  runWithCostTracker,
+} from '@launchkit/asset-generators';
 import { database as db } from './database.js';
+import { env } from '../env.js';
 import { projectProgressPublisher } from './project-progress-publisher.js';
 import { assetGenerators } from './asset-generators-instance.js';
 import {
@@ -368,6 +376,64 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
         metadata = result.metadata;
       }
     });
+
+    // ── Upload audio MP3 to durable object storage ──
+    //
+    // The ElevenLabs client writes rendered MP3s to the local-disk
+    // cache at `.cache/elevenlabs-rendered/<cacheKey>.mp3`. On Render
+    // the workflows and web services run on separate dynos, so the
+    // web service cannot read the workflows dyno's filesystem. We
+    // hoist the MP3 to MinIO (same pattern as the Remotion render
+    // task) and store the public URL on `metadata.audioObjectUrl`.
+    // The web route's `GET /:id/audio.mp3` handler checks this field
+    // first and 302-redirects to MinIO, falling back to local disk
+    // only when the URL is absent (local dev without MinIO).
+    //
+    // Non-blocking: a MinIO upload failure logs and continues — the
+    // asset is still usable in local dev and the web route degrades
+    // to the local-disk path. On deployed Render the local-disk path
+    // 404s, but the operator sees the log line and can re-trigger.
+    const rawAudioCacheKey = metadata['audioCacheKey'];
+    if (
+      (assetType === 'voice_commercial' || assetType === 'podcast_script') &&
+      typeof rawAudioCacheKey === 'string'
+    ) {
+      try {
+        const endpoint = composeMinioEndpoint(env.MINIO_ENDPOINT_HOST);
+        if (
+          endpoint !== null &&
+          env.MINIO_ROOT_USER !== undefined &&
+          env.MINIO_ROOT_PASSWORD !== undefined
+        ) {
+          const audioCacheKey = rawAudioCacheKey;
+          const localPath = path.resolve(
+            '.cache/elevenlabs-rendered',
+            `${audioCacheKey}.mp3`
+          );
+          const audioBytes = await readFile(localPath);
+
+          const storage = createObjectStorageClient({
+            endpoint,
+            bucket: env.MINIO_BUCKET,
+            accessKeyId: env.MINIO_ROOT_USER,
+            secretAccessKey: env.MINIO_ROOT_PASSWORD,
+          });
+
+          const storageKey = `audio/${assetId}-${audioCacheKey}.mp3`;
+          const uploaded = await storage.uploadAudio(storageKey, audioBytes);
+          metadata = { ...metadata, audioObjectUrl: uploaded.url };
+
+          console.log(
+            `[Workflows:Dispatch] uploaded audio to MinIO: ${uploaded.url} (${String(uploaded.sizeBytes)} bytes)`
+          );
+        }
+      } catch (uploadErr) {
+        console.error(
+          '[Workflows:Dispatch] audio MinIO upload failed (non-blocking):',
+          uploadErr instanceof Error ? uploadErr.message : String(uploadErr)
+        );
+      }
+    }
 
     // ── Persist the generated content and flip status to reviewing
     await db

@@ -64,3 +64,5 @@ coverage/
 # so it does NOT match `.agents/skills/`, which we explicitly track.
 /skills/
 docker-compose.override.yml
+migrations/meta/
+test-results/

@@ -221,6 +221,15 @@ services:
       # private-repo analyze job to the unauthenticated path.
       - key: GITHUB_TOKEN_SECRET
         sync: false
+      # Voyage AI embedding model for the self-learning loop. Drives
+      # pgvector similarity clustering in feedback aggregation and
+      # project-similarity search. Both are optional — the worker
+      # boots without them but edit-pattern clustering and project
+      # embedding skip silently.
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: VOYAGE_MODEL
+        value: voyage-3-large
       # Render API key used by `trigger-workflow-generation.ts` to
       # call `render.workflows.startTask` for every asset-generation
       # run. Required — every fan-out (strategize → generate, review

@@ -80,6 +80,7 @@ export const AssetResponseSchema = z.object({
   reviewNotes: z.string().nullable(),
   userApproved: z.boolean().nullable(),
   userEdited: z.boolean(),
+  userEditedContent: z.string().nullable(),
   version: z.number().int().nonnegative(),
   // ── Cost tracking (Phase 9) ──
   //

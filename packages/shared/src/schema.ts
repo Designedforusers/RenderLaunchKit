@@ -13,7 +13,7 @@ import {
   pgEnum,
   index,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 // pgvector column helper — uses raw SQL for the vector type
 import { customType } from 'drizzle-orm/pg-core';
 import { EMBEDDING_DIMENSIONS } from './constants.js';
@@ -175,6 +175,10 @@ export const projects = pgTable(
   (table) => [
     index('projects_repo_url_idx').on(table.repoUrl),
     index('projects_status_idx').on(table.status),
+    uniqueIndex('projects_repo_owner_repo_name_unique_idx').on(
+      sql`lower(${table.repoOwner})`,
+      sql`lower(${table.repoName})`
+    ),
   ]
 );
 

@@ -97,17 +97,6 @@ export function formatDuration(ms: number): string {
 }
 
 /**
- * Sanitize text for safe display (strip potential XSS vectors).
- */
-export function sanitizeText(text: string): string {
-  return text
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
-}
-
-/**
  * Parse a Redis URL into the connection object shape BullMQ expects.
  *
  * Browser-safe: uses the platform `URL` constructor, no Node imports.

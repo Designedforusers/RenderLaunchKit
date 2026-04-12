@@ -17,11 +17,13 @@ export const StrategyInsightSchema = z.object({
   insight: z.string(),
   confidence: z.number().min(0).max(1),
   sampleSize: z.number().int().nonnegative(),
+  dataPoints: z.unknown().nullable(),
   // Phase 2: discriminator added so the strategist can query Layer 1
   // stat-based insights and Layer 3 edit-cluster insights separately.
   // Existing rows from before Phase 2 have NULL — the cron at
   // `apps/cron/src/aggregate-feedback-insights.ts` starts setting it
   // explicitly in Phase 7.
   insightType: z.string().nullable(),
+  updatedAt: z.date(),
 });
 export type StrategyInsight = z.infer<typeof StrategyInsightSchema>;

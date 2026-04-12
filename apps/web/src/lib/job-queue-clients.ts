@@ -139,4 +139,3 @@ export async function enqueuePikaLeave(data: PikaLeaveJobData): Promise<void> {
   });
 }
 
-console.log('[JobQueues] BullMQ queues initialized');

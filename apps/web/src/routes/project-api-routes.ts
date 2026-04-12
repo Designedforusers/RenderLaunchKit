@@ -79,21 +79,51 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
     );
   }
 
-  // Create new project
-  const [project] = await database
-    .insert(projects)
-    .values({
-      repoUrl: buildRepoUrl(repo.owner, repo.name),
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      status: 'pending',
-      // `exactOptionalPropertyTypes` forbids an explicit `undefined`
-      // on an optional column, so only spread the field when we have
-      // a ciphertext to store. Null-valued public-repo projects get
-      // the column default (NULL) from the migration.
-      ...(githubTokenEncrypted !== null ? { githubTokenEncrypted } : {}),
-    })
-    .returning();
+  // Create new project. The unique index on (lower(repo_owner),
+  // lower(repo_name)) turns a concurrent duplicate insert into a
+  // Postgres 23505 error instead of a silent second row.
+  let project;
+  try {
+    [project] = await database
+      .insert(projects)
+      .values({
+        repoUrl: buildRepoUrl(repo.owner, repo.name),
+        repoOwner: repo.owner,
+        repoName: repo.name,
+        status: 'pending',
+        // `exactOptionalPropertyTypes` forbids an explicit `undefined`
+        // on an optional column, so only spread the field when we have
+        // a ciphertext to store. Null-valued public-repo projects get
+        // the column default (NULL) from the migration.
+        ...(githubTokenEncrypted !== null ? { githubTokenEncrypted } : {}),
+      })
+      .returning();
+  } catch (err) {
+    // Unique constraint violation — a concurrent insert won the race.
+    // Return the existing project instead of a 500.
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code: string }).code === '23505'
+    ) {
+      const raceWinner = await database.query.projects.findFirst({
+        where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
+      });
+      if (raceWinner) {
+        return c.json({
+          id: raceWinner.id,
+          repoUrl: raceWinner.repoUrl,
+          repoOwner: raceWinner.repoOwner,
+          repoName: raceWinner.repoName,
+          status: raceWinner.status,
+          createdAt: raceWinner.createdAt.toISOString(),
+          message: 'Project already exists',
+        });
+      }
+    }
+    throw err;
+  }
 
   if (!project) {
     // Drizzle's `.returning()` is typed as `T[]`, so the strict
@@ -172,6 +202,9 @@ projectApiRoutes.get('/', async (c) => {
 
 projectApiRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  if (!z.string().uuid().safeParse(id).success) {
+    return c.json({ error: 'Invalid project ID format' }, 400);
+  }
 
   const project = await database.query.projects.findFirst({
     where: eq(projects.id, id),
@@ -214,6 +247,7 @@ projectApiRoutes.get('/:id', async (c) => {
       reviewNotes: a.reviewNotes,
       userApproved: a.userApproved,
       userEdited: a.userEdited,
+      userEditedContent: a.userEditedContent,
       version: a.version,
       costCents: a.costCents,
       costBreakdown: a.costBreakdown,

@@ -54,7 +54,12 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     }));
 
   if (assetsForReview.length === 0) {
-    console.log(`[Review] No assets to review for project ${projectId}`);
+    console.log(`[Review] No assets to review for project ${projectId} — marking as failed`);
+    await db
+      .update(schema.projects)
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId));
+    await projectProgressPublisher.error(projectId, 'review', 'No reviewable assets found');
     return;
   }
 
@@ -174,6 +179,8 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
         .set({
           status: 'queued',
           version: asset.version + 1,
+          renderedVideoUrl: null,
+          renderedVideoKey: null,
           updatedAt: new Date(),
         })
         .where(eq(schema.assets.id, asset.id));

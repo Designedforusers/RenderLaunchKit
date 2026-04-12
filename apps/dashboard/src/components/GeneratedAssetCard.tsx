@@ -71,6 +71,10 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   product_video: 'Product Video',
   voiceover_script: 'Voiceover',
   video_storyboard: 'Storyboard',
+  tips: 'Tips',
+  voice_commercial: 'Voice Commercial',
+  podcast_script: 'Podcast Script',
+  per_commit_teaser: 'Commit Teaser',
   world_scene: '3D World Scene',
 };
 

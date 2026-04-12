@@ -1,9 +1,18 @@
 import { Queue } from 'bullmq';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
 import * as schema from '@launchkit/shared';
 import { GITHUB_API_BASE, JOB_NAMES, QUEUE_NAMES, parseRedisUrl } from '@launchkit/shared';
 import { database } from './database.js';
 import { env } from './env.js';
+
+const GitHubCommitSchema = z.object({
+  sha: z.string(),
+  commit: z.object({
+    message: z.string(),
+    author: z.object({ name: z.string() }),
+  }),
+});
 
 const analysisQueue = new Queue(QUEUE_NAMES.ANALYSIS, {
   connection: parseRedisUrl(env.REDIS_URL),
@@ -51,13 +60,10 @@ export async function syncGitHubProjectActivity(): Promise<void> {
 
       if (!response.ok) continue;
 
-      const [latestCommit] = (await response.json()) as Array<{
-        sha: string;
-        commit: {
-          message: string;
-          author: { name: string };
-        };
-      }>;
+      const raw: unknown = await response.json();
+      const commits = z.array(GitHubCommitSchema).safeParse(raw);
+      if (!commits.success) continue;
+      const latestCommit = commits.data[0];
       if (!latestCommit) continue;
 
       const latestSha = latestCommit.sha;
@@ -82,11 +88,16 @@ export async function syncGitHubProjectActivity(): Promise<void> {
             projectId: project.id,
             eventType: 'push',
             payload: {
-              source: 'cron-poll',
-              commit: {
-                sha: latestSha,
+              repository: {
+                html_url: `https://github.com/${project.repoOwner}/${project.repoName}`,
+              },
+              after: latestSha,
+              head_commit: {
+                id: latestSha,
                 message: latestCommit.commit.message,
-                author: latestCommit.commit.author.name,
+                author: {
+                  name: latestCommit.commit.author.name,
+                },
               },
             },
             commitSha: latestSha,

@@ -1,11 +1,10 @@
 import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import * as schema from '@launchkit/shared';
-import { JOB_NAMES, QUEUE_CONFIG, QUEUE_NAMES } from '@launchkit/shared';
+import { JOB_NAMES, QUEUE_CONFIG, QUEUE_NAMES, ReviewJobDataSchema } from '@launchkit/shared';
 import type {
   AnalyzeRepoJobData,
   FilterWebhookJobData,
-  ReviewJobData,
   JobData,
 } from '@launchkit/shared';
 import { analyzeProjectRepository } from './processors/analyze-project-repository.js';
@@ -203,7 +202,12 @@ const pikaControlWorker = new Worker(
 const reviewWorker = new Worker(
   QUEUE_NAMES.REVIEW,
   async (job) => {
-    const data = job.data as ReviewJobData;
+    const parsed = ReviewJobDataSchema.safeParse(job.data);
+    if (!parsed.success) {
+      console.error('[Worker:Review] Invalid job data:', parsed.error.issues);
+      throw new Error('Invalid review job data');
+    }
+    const data = parsed.data;
     const startTime = Date.now();
 
     console.log(`[Worker:Review] Reviewing project ${data.projectId}`);
@@ -238,6 +242,13 @@ const reviewWorker = new Worker(
           duration: Date.now() - startTime,
         })
         .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
+
+      await db
+        .update(schema.projects)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(schema.projects.id, data.projectId));
+
+      await projectProgressPublisher.error(data.projectId, job.name, error.message);
 
       throw err;
     }

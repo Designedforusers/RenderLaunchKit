@@ -70,9 +70,9 @@ const ChatRequestSchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1),
+      content: z.string().min(1).max(100_000),
     })
-  ),
+  ).max(200),
   // Optional model override — defaults to the env ANTHROPIC_MODEL
   // (claude-sonnet-4-6) when absent. The dashboard's model
   // selector sends this field with every request so switching

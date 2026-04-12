@@ -187,53 +187,6 @@ export const JOB_TIMEOUTS = {
   [JOB_NAMES.PIKA_LEAVE]: 30_000,
 } as const;
 
-// ── Asset Type Labels ──
-
-export const ASSET_TYPE_LABELS: Record<string, string> = {
-  blog_post: 'Blog Post',
-  twitter_thread: 'Twitter Thread',
-  linkedin_post: 'LinkedIn Post',
-  product_hunt_description: 'Product Hunt',
-  hacker_news_post: 'Hacker News',
-  faq: 'FAQ',
-  changelog_entry: 'Changelog',
-  og_image: 'OG Image',
-  social_card: 'Social Card',
-  product_video: 'Product Video',
-  voiceover_script: 'Voiceover Script',
-  video_storyboard: 'Storyboard',
-};
-
-// ── Status Colors (for dashboard) ──
-
-export const STATUS_COLORS: Record<string, string> = {
-  pending: '#94a3b8',
-  analyzing: '#60a5fa',
-  researching: '#a78bfa',
-  strategizing: '#f59e0b',
-  generating: '#10b981',
-  reviewing: '#ec4899',
-  revising: '#f97316',
-  complete: '#10b981',
-  failed: '#ef4444',
-  queued: '#94a3b8',
-  approved: '#10b981',
-  rejected: '#ef4444',
-  regenerating: '#f97316',
-};
-
-// ── Phase Order ──
-
-export const PHASE_ORDER = [
-  'pending',
-  'analyzing',
-  'researching',
-  'strategizing',
-  'generating',
-  'reviewing',
-  'complete',
-] as const;
-
 // ── GitHub API ──
 
 export const GITHUB_API_BASE = 'https://api.github.com';

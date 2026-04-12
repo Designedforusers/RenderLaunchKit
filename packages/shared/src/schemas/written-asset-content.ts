@@ -18,13 +18,6 @@ import { z } from 'zod';
  * Rollout is per-type. PR 1 ships the infra plus Product Hunt as a
  * proof; remaining written asset types follow in subsequent PRs and
  * fall through to the existing markdown-blob path in the meantime.
- *
- * TODO: Upgrade `generateJSON` to use Anthropic's native structured
- * outputs API (`output_config.format`) once the SDK version in the
- * worker + workflows copies of `anthropic-claude-client.ts` support
- * it. Current implementation is prompt-and-parse with Zod, which
- * gives us the same schema guarantees at the boundary but slightly
- * higher latency variance than a grammar-constrained decoder.
  */
 
 // =====================================================================
