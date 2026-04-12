@@ -2,7 +2,7 @@ services:
   - type: web
     name: launchkit-web
     runtime: node
-    plan: starter
+    plan: pro
     rootDir: .
     # Plain npm build — no more Chrome headless-shell install. The
     # web service no longer renders Remotion videos locally: the
@@ -145,7 +145,7 @@ services:
   - type: worker
     name: launchkit-worker
     runtime: node
-    plan: starter
+    plan: pro
     rootDir: .
     # The worker uses the Claude Agent SDK for the research agent. The
     # SDK ships a self-contained `claude` binary inside its npm package
@@ -304,7 +304,7 @@ services:
   - type: worker
     name: launchkit-pika-worker
     runtime: node
-    plan: starter
+    plan: pro
     rootDir: .
     # Python 3 + `requests` install lives here, NOT on the shared
     # worker. The vendored CLI's only Python dep is `requests>=2.32.5`.
@@ -355,7 +355,7 @@ services:
   - type: cron
     name: launchkit-cron
     runtime: node
-    plan: starter
+    plan: pro
     rootDir: .
     buildCommand: npm ci && npm run build
     startCommand: npm run start:cron
@@ -425,7 +425,7 @@ services:
   - type: web
     name: launchkit-minio
     runtime: image
-    plan: starter
+    plan: pro
     # Pinned to a specific RELEASE tag rather than `:latest` so a
     # future breaking MinIO release cannot silently trash the
     # on-disk format during a routine redeploy. Bumping this is a
@@ -449,7 +449,7 @@ services:
 
   - type: keyvalue
     name: launchkit-redis
-    plan: starter
+    plan: pro
     maxmemoryPolicy: noeviction
     ipAllowList:
       - source: 0.0.0.0/0
@@ -457,5 +457,5 @@ services:
 
 databases:
   - name: launchkit-db
-    plan: basic_256mb
+    plan: pro_4gb
     postgresMajorVersion: 16
