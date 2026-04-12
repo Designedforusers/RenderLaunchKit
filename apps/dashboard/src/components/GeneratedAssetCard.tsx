@@ -596,7 +596,7 @@ export function GeneratedAssetCard({
               : {})}
           />
         </div>
-      ) : asset.content ? (
+      ) : (asset.userEdited && asset.userEditedContent) || asset.content ? (
         <div className="mb-4 relative">
           {/* Copy affordances in the top-right corner of the
               content area. Shows a "Copy as markdown" button for
@@ -607,7 +607,7 @@ export function GeneratedAssetCard({
             {markdownForCopy !== null && (
               <CopyButton value={markdownForCopy} label="Copy markdown" />
             )}
-            <CopyButton value={asset.content} />
+            <CopyButton value={(asset.userEdited ? asset.userEditedContent : asset.content) ?? ''} />
           </div>
           <motion.div
             layout

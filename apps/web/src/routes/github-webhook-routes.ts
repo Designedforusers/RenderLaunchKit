@@ -6,6 +6,7 @@ import { database } from '../lib/database.js';
 import { analysisJobQueue } from '../lib/job-queue-clients.js';
 import {
   GitHubWebhookPayloadSchema,
+  parseRepoUrl,
   projects,
   webhookEvents,
 } from '@launchkit/shared';
@@ -110,16 +111,20 @@ githubWebhookRoutes.post(
       return c.json({ ok: true, skipped: true, reason: 'Unhandled event type' });
     }
 
-    // Find matching project. `repository.html_url` is a required
-    // field on `GitHubWebhookPayloadSchema`, so the safeParse above
-    // already rejected any payload without it — no fallback guard
-    // needed here.
-    // Lowercase the incoming URL so it matches the canonical form
-    // stored by project creation (which lowercases owner/name).
-    const repoUrl = event.repository.html_url.toLowerCase();
+    // Match by normalised owner/name columns — immune to URL format
+    // differences and consistent with the unique index on
+    // (lower(repo_owner), lower(repo_name)).
+    const repo = parseRepoUrl(event.repository.html_url);
+    if (!repo) {
+      return c.json({ ok: true, skipped: true, reason: 'Unparseable repo URL' });
+    }
 
     const project = await database.query.projects.findFirst({
-      where: and(eq(projects.repoUrl, repoUrl), eq(projects.webhookEnabled, true)),
+      where: and(
+        eq(projects.repoOwner, repo.owner.toLowerCase()),
+        eq(projects.repoName, repo.name.toLowerCase()),
+        eq(projects.webhookEnabled, true),
+      ),
     });
 
     if (!project) {

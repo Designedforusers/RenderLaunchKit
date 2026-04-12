@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { database } from '../lib/database.js';
 import { enqueueRepositoryAnalysis } from '../lib/job-queue-clients.js';
 import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
@@ -79,8 +79,14 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
   // survives if the insert fails. If the enqueue also fails after
   // the transaction commits, the new row is cleaned up (see the
   // catch block below).
+  // Look up by the normalised owner/name columns — these match the
+  // DB's unique index on (lower(repo_owner), lower(repo_name)) and
+  // are immune to URL-formatting differences.
   const existing = await database.query.projects.findFirst({
-    where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
+    where: and(
+      eq(projects.repoOwner, repo.owner),
+      eq(projects.repoName, repo.name),
+    ),
   });
 
   if (existing) {
@@ -141,7 +147,10 @@ projectApiRoutes.post('/', expensiveRouteRateLimit, async (c) => {
       (err as { code: string }).code === '23505'
     ) {
       const raceWinner = await database.query.projects.findFirst({
-        where: eq(projects.repoUrl, buildRepoUrl(repo.owner, repo.name)),
+        where: and(
+          eq(projects.repoOwner, repo.owner),
+          eq(projects.repoName, repo.name),
+        ),
       });
       if (raceWinner) {
         return c.json({

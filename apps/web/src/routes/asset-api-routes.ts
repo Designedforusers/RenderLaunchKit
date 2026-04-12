@@ -584,7 +584,12 @@ assetApiRoutes.put('/:id/content', async (c) => {
   const id = parseUuidParam(c);
   if (!id) return invalidUuidResponse(c);
 
-  const rawBody: unknown = await c.req.json();
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
   const parsed = editAssetContentSchema.safeParse(rawBody);
 
   if (!parsed.success) {

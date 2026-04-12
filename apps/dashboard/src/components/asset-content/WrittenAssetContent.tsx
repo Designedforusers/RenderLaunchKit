@@ -235,12 +235,14 @@ export function WrittenAssetContent({ asset }: WrittenAssetContentProps) {
     return <>{renderStructured(structured)}</>;
   }
 
-  // Fallback — render the plain-text `content` field. For
-  // structured assets the plain-text form is already clean
-  // (no markdown), and for legacy pre-migration assets we keep
-  // the previous `<pre>` renderer so nothing in the archive
-  // disappears.
-  return <FallbackTextBody content={asset.content} />;
+  // Fallback — render the plain-text content. Prefer
+  // `userEditedContent` when the user has edited the asset so
+  // their changes are visible in the primary body, not just
+  // in the edit drawer.
+  const displayContent = (asset.userEdited && asset.userEditedContent)
+    ? asset.userEditedContent
+    : asset.content;
+  return <FallbackTextBody content={displayContent} />;
 }
 
 // =====================================================================
