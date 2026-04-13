@@ -398,10 +398,15 @@ export async function dispatchAsset(input: DispatchAssetInput): Promise<void> {
       try {
         const endpoint = composeMinioEndpoint(env.MINIO_ENDPOINT_HOST);
         if (
-          endpoint !== null &&
-          env.MINIO_ROOT_USER !== undefined &&
-          env.MINIO_ROOT_PASSWORD !== undefined
+          endpoint === null ||
+          env.MINIO_ROOT_USER === undefined ||
+          env.MINIO_ROOT_PASSWORD === undefined
         ) {
+          console.warn(
+            '[Workflows:Dispatch] skipping audio MinIO upload — MINIO env vars not configured. ' +
+              'The web service will 404 on /api/assets/:id/audio.mp3 in deployed topologies.'
+          );
+        } else {
           const audioCacheKey = rawAudioCacheKey;
           const localPath = path.resolve(
             '.cache/elevenlabs-rendered',

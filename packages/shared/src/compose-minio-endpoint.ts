@@ -22,6 +22,13 @@
  */
 export function composeMinioEndpoint(host: string | undefined): string | null {
   if (host === undefined || host.length === 0) return null;
+
+  // If the caller already passed a full URL (e.g. "https://host.com"),
+  // return it directly instead of double-wrapping with a second scheme.
+  if (host.startsWith('http://') || host.startsWith('https://')) {
+    return host;
+  }
+
   const isLocal =
     host.startsWith('localhost') ||
     host.startsWith('127.0.0.1') ||
