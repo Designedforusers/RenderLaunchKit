@@ -22,7 +22,7 @@ services:
     # `LaunchKitVideoPropsSchema` from `@launchkit/video` (via the
     # package's browser-safe top-level export) for client-side
     # prop validation.
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     preDeployCommand: npm run db:migrate
     startCommand: npm run start:web
     buildFilter:
@@ -168,7 +168,7 @@ services:
     # web trigger helper (`apps/web/src/lib/trigger-workflow-generation.ts`)
     # both read `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` from
     # their respective service env pages.
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start:worker
     buildFilter:
       paths:
@@ -313,7 +313,7 @@ services:
     # by default — fine here because the Render container has no
     # competing Python environment and the install is scoped to
     # the container lifetime.
-    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci && npm run build
+    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci --include=dev && npm run build
     startCommand: npm run start:pika-worker
     buildFilter:
       paths:
@@ -357,7 +357,7 @@ services:
     runtime: node
     plan: pro
     rootDir: .
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start:cron
     schedule: "0 */6 * * *"
     buildFilter:
