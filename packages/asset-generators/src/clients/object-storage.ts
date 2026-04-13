@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   NoSuchBucket,
   NoSuchKey,
+  PutBucketPolicyCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 
@@ -161,12 +162,28 @@ export function createObjectStorageClient(
 
   const ensuredBuckets = new Set<string>();
 
+  // MinIO ignores per-object ACLs (`public-read` on PutObject) under
+  // the default bucket-ownership-enforced mode. A bucket-level policy
+  // grants anonymous GetObject so the web service's 302 redirect to
+  // the public URL actually works. Applied once per process on the
+  // first upload, whether the bucket already existed or was just
+  // created — idempotent on the MinIO side.
+  const publicReadPolicy = JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: { AWS: ['*'] },
+        Action: ['s3:GetObject'],
+        Resource: [`arn:aws:s3:::${config.bucket}/*`],
+      },
+    ],
+  });
+
   async function ensureBucket(): Promise<void> {
     if (ensuredBuckets.has(config.bucket)) return;
     try {
       await s3.send(new HeadBucketCommand({ Bucket: config.bucket }));
-      ensuredBuckets.add(config.bucket);
-      return;
     } catch (err: unknown) {
       // Distinguish "bucket doesn't exist yet" (→ CreateBucket) from
       // "everything else" (→ re-throw with the original cause). AWS
@@ -199,9 +216,16 @@ export function createObjectStorageClient(
           'httpStatusCode' in err.$metadata &&
           err.$metadata.httpStatusCode === 404);
       if (!isBucketMissing) throw err;
+
+      await s3.send(new CreateBucketCommand({ Bucket: config.bucket }));
     }
 
-    await s3.send(new CreateBucketCommand({ Bucket: config.bucket }));
+    await s3.send(
+      new PutBucketPolicyCommand({
+        Bucket: config.bucket,
+        Policy: publicReadPolicy,
+      })
+    );
     ensuredBuckets.add(config.bucket);
   }
 
