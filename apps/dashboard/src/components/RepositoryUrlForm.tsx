@@ -33,8 +33,7 @@ export function RepositoryUrlForm({
   // subsequent route change with a different `?repo=` query still
   // lands on a remount of this component, so the seed still applies.
   const [url, setUrl] = useState(initialUrl ?? '');
-  const [token, setToken] = useState('');
-  const [showTokenField, setShowTokenField] = useState(false);
+  const [token] = useState('');
   const [state, setState] = useState<SubmissionState>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -63,8 +62,6 @@ export function RepositoryUrlForm({
       setTimeout(() => {
         onProjectCreated(result.id);
         setUrl('');
-        setToken('');
-        setShowTokenField(false);
         setState('idle');
       }, 320);
     } catch (err) {
@@ -198,60 +195,9 @@ export function RepositoryUrlForm({
           </motion.button>
         </div>
 
-        <div className="mt-2 flex items-center justify-between text-body-sm">
-          <button
-            type="button"
-            onClick={() => { setShowTokenField((v) => !v); }}
-            className="text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-50"
-            disabled={isSubmitting || state === 'success'}
-          >
-            {showTokenField ? '− Hide private-repo options' : '+ Private repo? Use an access token'}
-          </button>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {showTokenField && (
-            <motion.div
-              key="token-field"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="overflow-hidden"
-            >
-              <div className="mt-3">
-                <label htmlFor="github-token" className="label mb-2 block">
-                  GitHub personal access token
-                </label>
-                <input
-                  id="github-token"
-                  type="password"
-                  value={token}
-                  onChange={(e) => { setToken(e.target.value); }}
-                  placeholder="github_pat_..."
-                  className="input w-full font-mono text-body-sm"
-                  autoComplete="off"
-                  spellCheck={false}
-                  disabled={isSubmitting || state === 'success'}
-                />
-                <p className="mt-2 text-body-xs text-text-muted">
-                  Create a fine-grained token at{' '}
-                  <a
-                    href="https://github.com/settings/personal-access-tokens/new"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-gray-300"
-                  >
-                    github.com/settings/personal-access-tokens
-                  </a>
-                  {' '}with read access to the target repo. Stored encrypted at
-                  rest (AES-256-GCM) and used only to fetch this project&apos;s
-                  metadata.
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <p className="mt-2 text-body-xs text-text-muted">
+          Provide a public repo. Use an access token.
+        </p>
 
         <AnimatePresence>
           {error && (
