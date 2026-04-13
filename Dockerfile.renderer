@@ -15,9 +15,10 @@ WORKDIR /app
 # The monorepo workspace links need the full source tree for
 # npm ci to resolve @launchkit/* packages correctly.
 COPY . .
-RUN npm ci --include=dev && \
-    npx remotion browser ensure && \
-    npm run build
+RUN npm ci --include=dev && npm run build
+# Chrome Headless Shell is downloaded at runtime by ensureBrowser()
+# on first render request. Skipping npx remotion browser ensure here
+# avoids npx path resolution issues in the Docker build context.
 
 EXPOSE 10000
 
