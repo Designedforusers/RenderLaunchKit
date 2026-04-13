@@ -649,7 +649,7 @@ export function GeneratedAssetCard({
           )}
         </div>
       ) : asset.status === 'failed' ? (
-        <FailedAssetBody />
+        <FailedAssetBody onRegenerate={handleRegenerate} regenerating={regenerating} />
       ) : null}
 
       {asset.type === 'product_video' && videoError ? (
@@ -1001,7 +1001,13 @@ function InProgressBody({ tintText }: { tintText: string }) {
   );
 }
 
-function FailedAssetBody() {
+function FailedAssetBody({
+  onRegenerate,
+  regenerating,
+}: {
+  onRegenerate?: () => void;
+  regenerating?: boolean;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -1028,9 +1034,19 @@ function FailedAssetBody() {
         <p className="text-body-sm text-red-300/80 font-medium">
           Generation failed
         </p>
-        <p className="text-body-xs text-text-muted mt-1">
-          Try regenerating this asset
-        </p>
+        {onRegenerate ? (
+          <button
+            onClick={onRegenerate}
+            disabled={regenerating}
+            className="mt-2 rounded-lg bg-accent-500/15 px-4 py-1.5 text-body-xs font-medium text-accent-400 transition-all hover:bg-accent-500/25 disabled:opacity-50"
+          >
+            {regenerating ? 'Regenerating...' : 'Regenerate'}
+          </button>
+        ) : (
+          <p className="text-body-xs text-text-muted mt-1">
+            Try regenerating this asset
+          </p>
+        )}
       </div>
     </motion.div>
   );
