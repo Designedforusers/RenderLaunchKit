@@ -78,7 +78,7 @@ trendsApiRoutes.get('/search', async (c) => {
   // Fan out to all three providers in parallel
   const [googleResult, exaResult, signalsResult] = await Promise.allSettled([
     searchGoogleTrends(query),
-    searchExa(`${query} trending 2026`, 8),
+    searchExa(`${query} trending developer tools open source 2026`, 8),
     searchExistingSignals(query),
   ]);
 
@@ -123,15 +123,15 @@ trendsApiRoutes.get('/search', async (c) => {
 
 // ── GET /api/trends/discover ──────────────────────────────────────
 //
-// Broad trending topics via Exa. Not dev-centric — covers culture,
-// business, entertainment, consumer tech, social trends. Three
-// parallel Exa searches with different angles, deduplicated by URL.
+// Trending developer tools, frameworks, and apps via Exa. Three
+// parallel searches covering different angles of the dev ecosystem,
+// deduplicated by URL.
 
 trendsApiRoutes.get('/discover', async (c) => {
   const queries = [
-    'trending topics this week viral popular',
-    'biggest news stories trending culture entertainment 2026',
-    'consumer trends popular products going viral',
+    'trending developer tools frameworks libraries this week site:github.com OR site:news.ycombinator.com OR site:devto.dev',
+    'new open source projects trending 2026 site:github.com OR site:producthunt.com',
+    'trending apps developer tools AI APIs shipping this week site:techcrunch.com OR site:theverge.com OR site:news.ycombinator.com',
   ];
 
   const results = await Promise.allSettled(
