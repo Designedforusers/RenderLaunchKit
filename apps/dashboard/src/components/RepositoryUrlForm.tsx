@@ -88,7 +88,7 @@ export function RepositoryUrlForm({
                 setUrl(e.target.value);
                 if (state === 'error') setState('idle');
               }}
-              placeholder="https://github.com/owner/repo"
+              placeholder="Paste a public GitHub repo URL"
               className="input w-full text-body-lg font-mono pr-10"
               disabled={isSubmitting || state === 'success'}
               autoFocus
@@ -196,7 +196,7 @@ export function RepositoryUrlForm({
         </div>
 
         <p className="mt-2 text-body-xs text-text-muted">
-          Provide a public repo. Use an access token.
+          Public repos only. Paste the full GitHub URL.
         </p>
 
         <AnimatePresence>
