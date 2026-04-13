@@ -1,16 +1,8 @@
-# Deploying a TypeScript Monorepo with Remotion on Render --- 7 Things I Learned
+# Deploying a TypeScript Monorepo with Remotion on Render — 7 Things I Learned
 
-> **Format:** Practical developer tutorial / blog post
-> **Audience:** TypeScript developers deploying non-trivial apps to Render for the first time
-> **Pitch angle:** "Here's a piece of content I'd create in week one at Render."
+LaunchKit is a TypeScript monorepo with nine services: a Hono API server, a React dashboard, BullMQ workers, Render Workflows tasks, a cron scheduler, and a Docker-based Remotion video renderer. Locally, everything was clean — 170 tests passing, typecheck, lint, and build all green.
 
----
-
-## Intro (2--3 paragraphs)
-
-LaunchKit is a TypeScript monorepo with 9 services: an Hono API server, a React dashboard, BullMQ workers, Render Workflows tasks, a cron scheduler, and a Docker-based Remotion render service. Locally, everything was clean --- 170 tests passing, typecheck/lint/build all green. Zero code bugs.
-
-Every single deploy failure was an infrastructure configuration issue. None of them required changing application code. That distinction matters: it means the platform is doing its job (enforcing production constraints), and the developer just needs to know what those constraints are.
+Every single deploy failure was a configuration issue. None of them required changing application code. That distinction matters: the platform was enforcing production constraints that my local environment didn't surface. The code worked. The config needed to catch up.
 
 Here are the seven things I learned, with the exact error messages so you can ctrl-F your way here when it happens to you.
 
@@ -254,6 +246,10 @@ The seven fixes above took a few hours total. A blog post like this takes that d
 
 ---
 
-## Closing (1 paragraph)
+## The pattern
 
-Deploying a monorepo to any cloud platform is a negotiation between your local assumptions and the platform's production constraints. The errors are predictable, the fixes are small, and once you've seen them, you don't hit them again. If you're deploying a TypeScript monorepo to Render, bookmark this page. You'll need at least three of these.
+Every failure in this list is a configuration issue. Not one of them required changing application code. The 170 tests that passed locally before the first deploy? They still pass.
+
+Deploying a monorepo to any cloud platform is a negotiation between your local assumptions and the platform's production constraints. The errors are predictable, the fixes are small, and once you've seen them, you don't hit them again.
+
+If you're deploying a TypeScript monorepo to Render, bookmark this page. You'll need at least three of these.

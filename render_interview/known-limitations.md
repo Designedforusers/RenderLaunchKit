@@ -1,6 +1,6 @@
 # Known Limitations
 
-Things to be honest about if asked.
+Production trade-offs and what the next iteration addresses.
 
 ## 1. SSE stream is unauthenticated
 

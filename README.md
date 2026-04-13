@@ -269,9 +269,13 @@ npm run setup:local      # tracked local stack + migrations + demo seed
 npm run dev              # web, worker, cron, dashboard concurrently
 ```
 
-`npm run setup:local` boots the tracked Docker stack from `docker-compose.yml`:
-Postgres on `localhost:5432`, Redis on `localhost:6379`, and MinIO on
-`localhost:9000` / `localhost:9001`.
+`npm run setup:local` boots the tracked Docker stack from
+`docker-compose.yml`, waits on the ports declared in your `.env`, then
+runs migrations and seeds the demo project. With the checked-in defaults
+that means Postgres on `localhost:5432`, Redis on `localhost:6379`, and
+MinIO on `localhost:9000` / `localhost:9001`. If you use a local-only
+`docker-compose.override.yml` to remap ports, keep `.env` in sync and
+the bootstrap script follows it.
 
 The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`.
 
