@@ -6,9 +6,27 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY . .
+# Copy lockfile + every workspace package.json first so npm ci
+# is cached until a dependency actually changes. All manifests
+# are needed because the root workspaces glob resolves them all.
+COPY package.json package-lock.json ./
+COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
+COPY apps/workflows/package.json apps/workflows/
+COPY apps/cron/package.json apps/cron/
+COPY apps/dashboard/package.json apps/dashboard/
+COPY packages/shared/package.json packages/shared/
+COPY packages/video/package.json packages/video/
+COPY packages/asset-generators/package.json packages/asset-generators/
+
+# Install Python deps + Node deps in one layer (cached on lockfile changes)
+COPY vendor/pikastream-video-meeting/requirements.txt vendor/pikastream-video-meeting/
 RUN pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && \
-    npm ci --include=dev && \
-    npm run build
+    npm ci --include=dev
+
+# Now copy the rest of the source
+COPY . .
+
+RUN npm run build
 
 CMD ["npm", "run", "start:pika-worker"]

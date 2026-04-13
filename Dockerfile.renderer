@@ -26,11 +26,25 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy source (node_modules excluded via .dockerignore)
+# Copy lockfile + every workspace package.json first so npm ci
+# is cached until a dependency actually changes. All manifests
+# are needed because the root workspaces glob resolves them all.
+COPY package.json package-lock.json ./
+COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
+COPY apps/workflows/package.json apps/workflows/
+COPY apps/cron/package.json apps/cron/
+COPY apps/dashboard/package.json apps/dashboard/
+COPY packages/shared/package.json packages/shared/
+COPY packages/video/package.json packages/video/
+COPY packages/asset-generators/package.json packages/asset-generators/
+
+RUN npm ci --include=dev
+
+# Now copy the rest of the source (node_modules excluded via .dockerignore)
 COPY . .
 
-# Install dependencies and build
-RUN npm ci --include=dev && npm run build
+RUN npm run build
 
 EXPOSE 10000
 
