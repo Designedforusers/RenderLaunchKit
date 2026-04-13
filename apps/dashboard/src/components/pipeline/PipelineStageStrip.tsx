@@ -270,10 +270,10 @@ export function PipelineStageStrip({
               outer glow. Width grows from 0% to pipelinePct%. */}
           <div
             ref={railFillRef}
-            className="pointer-events-none absolute left-0 z-0 h-px w-0 bg-gradient-to-r from-success-500 via-success-400 to-success-200"
+            className="pointer-events-none absolute left-[10%] z-0 h-px w-0 rounded-full bg-gradient-to-r from-success-500 via-success-400 to-success-200"
             style={{
               top: `${RAIL_Y_PX.toString()}px`,
-              boxShadow: '0 0 10px rgba(16, 185, 129, 0.55)',
+              boxShadow: '0 0 8px rgba(16, 185, 129, 0.45)',
             }}
             aria-hidden="true"
           />
