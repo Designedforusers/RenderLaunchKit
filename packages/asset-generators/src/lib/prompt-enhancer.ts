@@ -227,38 +227,56 @@ function hasTextureDetail(prompt: string): boolean {
   return TEXTURE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+// Comprehensive negative prompt assembled from the fal.ai Kling 3.0
+// prompting guide and community best practices. Covers anatomical
+// artifacts, temporal coherence, motion physics, and branding safety.
+// Source: https://blog.fal.ai/kling-3-0-prompting-guide/
+//         https://pollo.ai/hub/kling-ai-best-negative-prompts
 const KLING_DEFAULT_NEGATIVE =
-  'blur, distort, low quality, face distortion, warping, morphing, ' +
-  'floating objects, extra limbs, sliding feet, cartoonish, ' +
-  'smooth plastic skin, deformed hands, glitches, flicker';
+  'blur, distort, low quality, motion blur, face distortion, warping, morphing, ' +
+  'inconsistent physics, floating objects, unnatural movements, extra limbs, ' +
+  'sliding feet, deformed hands, incorrect finger count, asymmetrical facial features, ' +
+  'unnatural joint angles, background shifting, temporal flickering, color banding, ' +
+  'text warping, logo distortion, brand color shifts, ' +
+  'cartoonish, 3D render, smooth plastic skin, glitches';
 
+/**
+ * Kling 3.0 enhancement. Prompts should read like a continuous take
+ * directed at a cinematographer, not a keyword list. The model
+ * understands cinematic intent — describe how the shot evolves over
+ * time rather than listing static visual attributes.
+ *
+ * Source: https://blog.fal.ai/kling-3-0-prompting-guide/
+ */
 export function enhanceForKlingV3(
   rawPrompt: string,
   ctx: VideoPromptContext
 ): KlingEnhancedPrompt {
   let prompt = stripSdNoise(rawPrompt);
 
-  // Add camera direction if missing — default to a slow cinematic dolly
+  // Camera direction — describe camera BEHAVIOR over time, not just
+  // a keyword. Kling 3.0 responds to explicit motion instructions
+  // including tracking, following, freezing, panning.
   if (!hasCameraDirection(prompt)) {
-    prompt = `Slow dolly forward. ${prompt}`;
+    prompt = `Camera begins with a slow dolly forward, gradually revealing the scene. ${prompt}`;
   }
 
-  // Add lighting if missing
+  // Lighting — single highest-impact quality lever after camera.
   if (!hasLightingDescription(prompt)) {
-    prompt += '. Soft cinematic lighting with natural contrast';
+    prompt += '. Soft cinematic rim lighting with natural contrast and subtle volumetric haze';
   }
 
-  // Add texture details for realism if missing
+  // Texture/realism — film grain and material detail sell realism.
   if (!hasTextureDetail(prompt)) {
-    prompt += '. Subtle film grain, realistic material textures';
+    prompt += '. Shot on 35mm film with subtle grain, realistic material textures and surface detail';
   }
 
-  // Append quality directive — Kling responds well to these
-  prompt += '. Cinematic quality, smooth motion';
+  // Quality directive — Kling responds well to cinematic anchors.
+  prompt += '. Cinematic quality, smooth controlled motion, 4K detail';
 
-  // Image-to-video needs higher prompt adherence to preserve the
-  // source frame's composition; text-to-video benefits from more
-  // creative latitude.
+  // CFG scale: i2v needs higher adherence to preserve the source
+  // frame; t2v benefits from more creative latitude. The fal.ai
+  // default is 0.5 — we push slightly tighter for consistency.
   const cfgScale = ctx.hasImageUrl === true ? 0.7 : 0.6;
 
   return {
@@ -271,16 +289,24 @@ export function enhanceForKlingV3(
 // ── Seedance 2.0 ───────────────────────────────────────────────────
 
 /**
- * Seedance follows the 6-part director formula:
- * Subject → Action → Camera → Scene → Style → Constraints
+ * Seedance 2.0 enhancement following the official 6-part director
+ * formula: Subject → Action → Environment → Camera → Style → Constraints.
  *
- * Returns the enhanced prompt with an appended constraint block
- * (Seedance has no negative_prompt parameter — constraints go inline).
+ * Key findings from the official prompt guide:
+ * - Lighting descriptions have the LARGEST impact on quality
+ * - Separate camera movement from subject movement (mixing causes jitter)
+ * - Use only ONE primary camera instruction
+ * - Avoid "fast" — it degrades quality; use "smooth, controlled, gradual"
+ * - Use positive constraints instead of negatives (no negative_prompt param)
+ * - Aim for 60-100 words total
+ *
+ * Source: https://help.apiyi.com/en/seedance-2-0-prompt-guide-video-generation-camera-style-tips-en.html
  */
 
 const SEEDANCE_CONSTRAINTS =
+  'Detailed anatomy, anatomically correct hands. ' +
   'Avoid jitter, avoid bent limbs, avoid identity drift, avoid temporal flicker. ' +
-  'Smooth, stable output. Text remains sharp.';
+  'Smooth, stable, controlled output. Text remains sharp and legible throughout.';
 
 export function enhanceForSeedance(
   rawPrompt: string,
@@ -288,17 +314,22 @@ export function enhanceForSeedance(
 ): string {
   let prompt = stripSdNoise(rawPrompt);
 
-  // Add camera direction if missing
+  // Camera direction — ONE primary instruction only. Mixing camera
+  // and subject movement causes uncontrollable jitter in Seedance.
   if (!hasCameraDirection(prompt)) {
-    prompt = `${prompt}. Smooth, steady camera with gentle push-in`;
+    prompt = `${prompt}. Camera holds a smooth, steady push-in with controlled pace`;
   }
 
-  // Add lighting if missing
+  // Lighting — the single highest-leverage quality element per the
+  // official guide. One good lighting line outweighs multiple adjectives.
   if (!hasLightingDescription(prompt)) {
-    prompt += '. Cinematic lighting with controlled contrast';
+    prompt += '. Golden hour rim lighting with soft natural diffusion';
   }
 
-  // Append quality and constraint block
+  // Style anchors — cinematic language Seedance responds to best.
+  prompt += '. Cinematic 35mm film tone, 4K detail, realistic textures';
+
+  // Constraint block — positive framing + explicit exclusions.
   const durationNote = ctx.duration !== undefined ? `${ctx.duration} seconds, ` : '';
   prompt += `. ${durationNote}16:9, ${SEEDANCE_CONSTRAINTS}`;
 
