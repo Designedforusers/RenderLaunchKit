@@ -68,7 +68,37 @@ export async function reviewGeneratedProjectAssets(data: ReviewJobData): Promise
     project.strategy,
     'project.strategy'
   );
-  const review = await reviewLaunchKitAssets(strategy, assetsForReview);
+
+  let review;
+  try {
+    review = await reviewLaunchKitAssets(strategy, assetsForReview);
+  } catch (err) {
+    // The LLM review call can fail (timeout, rate limit, network).
+    // Assets are already in `reviewing` status — reset them to
+    // `complete` so they don't get stuck, and finalize the project
+    // without a review score rather than leaving it in limbo.
+    const message = err instanceof Error ? err.message : 'Unknown review error';
+    console.error(`[Review] Creative director review failed for project ${projectId}: ${message}`);
+
+    for (const asset of assetsForReview) {
+      await db
+        .update(schema.assets)
+        .set({ status: 'complete', updatedAt: new Date() })
+        .where(eq(schema.assets.id, asset.id));
+    }
+
+    await db
+      .update(schema.projects)
+      .set({ status: 'complete', updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId));
+
+    await projectProgressPublisher.phaseComplete(
+      projectId,
+      'reviewing',
+      'Review skipped due to error — assets auto-approved'
+    );
+    return;
+  }
 
   // Update each asset with its review. Two columns are in play:
   //
