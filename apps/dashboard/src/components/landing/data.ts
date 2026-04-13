@@ -129,7 +129,7 @@ export const SCROLL_STAGES: readonly ScrollStage[] = [
   {
     index: '03',
     title: 'Strategizes — then fans out',
-    body: 'The strategist writes 17 asset briefs, then Render Workflows spins up five compute-bucketed child tasks so a 20-second blog post never waits for a 10-minute video render.',
+    body: 'The strategist writes up to 16 asset briefs, then Render Workflows spins up five compute-bucketed child tasks so a 20-second blog post never waits for a 10-minute video render.',
     mono: 'build-project-launch-strategy.ts',
   },
   {
@@ -147,7 +147,7 @@ export const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: 'What does a full kit actually cost?',
-    a: 'A full kit — 17 assets across text, image, video and audio — typically runs $1–6 in provider cost depending on which models and asset types you enable. The dashboard shows the real cost on every project card. No subscription, no markup.',
+    a: 'A full kit — up to 16 assets across text, image, video, audio, and 3D — typically runs $1–6 in provider cost depending on which models and asset types you enable. The dashboard shows the real cost on every project card. No subscription, no markup.',
   },
   {
     q: 'Can I regenerate a single asset without re-running everything?',
@@ -159,7 +159,7 @@ export const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: 'How does it handle long runs without timeouts?',
-    a: 'Render Workflows. The parent task fans out to six child tasks via run chaining, each sized to the work: starter dynos for text, pro dynos for video renders and 3D. A 10-minute Remotion render never blocks a 20-second blog post.',
+    a: 'Render Workflows. The parent task fans out to five child tasks via run chaining, each sized to the work: starter instances for text, standard for images and audio, pro for video and 3D. A 10-minute Remotion render never blocks a 20-second blog post.',
   },
 ] as const;
 

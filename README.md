@@ -46,7 +46,7 @@ Eight of the nine come from a single `render.yaml` Blueprint. The ninth (`launch
 
 Three Render primitives made this architecture possible:
 
-- **Render Workflows** gave us per-task compute isolation. Five child tasks run on hardware sized for their workload (`starter` for blog posts, `pro` for Kling video renders) via run chaining — calling a child task function inside a parent task body spawns a new run on a new instance. Without this, we'd need one oversized worker for every job type, or a separate queue-and-dispatch layer.
+- **Render Workflows** gave me per-task compute isolation. Five child tasks run on hardware sized for their workload (`starter` for blog posts, `pro` for Kling video renders) via run chaining — calling a child task function inside a parent task body spawns a new run on a new instance. Without this, I'd need one oversized worker for every job type, or a separate queue-and-dispatch layer.
 - **Blueprints** provision seven services from one `render.yaml`. Fork, click, fill in your API keys, done. The entire topology — web, worker, cron, Redis, Postgres, MinIO, Pika worker — deploys in one shot.
 - **Render Disks** let us run MinIO as a Render-native S3-compatible store for rendered video bytes. No external storage account, no cross-cloud credentials. The web service 302-redirects clients to the MinIO public URL instead of streaming bytes through Node.
 

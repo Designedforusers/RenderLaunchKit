@@ -153,7 +153,7 @@ export function TechStackStrip() {
           <span className="h-px w-6 bg-accent-500/40" />
         </div>
         <h2 className="mt-4 font-display text-display-md leading-[1.08] tracking-[-0.02em] text-text-primary">
-          No toy APIs. The actual providers we call.
+          No toy APIs. The actual providers under the hood.
         </h2>
       </div>
 
