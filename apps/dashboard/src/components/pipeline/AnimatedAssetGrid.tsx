@@ -79,6 +79,7 @@ export function AnimatedAssetGrid({
               opacity: 0,
               scale: 0.96,
               filter: 'blur(4px)',
+              pointerEvents: 'none' as const,
             }}
             transition={{
               type: 'spring',
