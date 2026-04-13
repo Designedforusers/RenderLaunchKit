@@ -331,7 +331,7 @@ function VerticalOutro({
     fontFamily: 'Inter',
     fontWeight: '800',
   });
-  const taglineFontSize = Math.min(taglineFit.fontSize, 80);
+  const taglineFontSize = Math.min(taglineFit.fontSize, 110);
 
   return (
     <AbsoluteFill
@@ -346,8 +346,8 @@ function VerticalOutro({
       <div
         style={{
           position: 'absolute',
-          width: 360,
-          height: 360,
+          width: 480,
+          height: 480,
           borderRadius: '50%',
           border: `2px solid ${accentColor}`,
           transform: makeTransform([scaleTransform(glow.scale)]),
@@ -361,7 +361,7 @@ function VerticalOutro({
           width: '85%',
           display: 'flex',
           flexDirection: 'column',
-          gap: 28,
+          gap: 40,
           alignItems: 'center',
           textAlign: 'center',
           transform: makeTransform([scaleTransform(outroScale)]),
@@ -372,7 +372,7 @@ function VerticalOutro({
         <div
           style={{
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 24,
+            fontSize: 36,
             textTransform: 'uppercase',
             letterSpacing: 1.4,
             color: accentColor,
@@ -413,7 +413,7 @@ function VerticalOutro({
         <p
           style={{
             margin: 0,
-            fontSize: 36,
+            fontSize: 48,
             lineHeight: 1.3,
             color: 'rgba(226, 232, 240, 0.88)',
             fontFamily: 'Inter, sans-serif',
