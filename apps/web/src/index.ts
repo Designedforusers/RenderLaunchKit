@@ -221,3 +221,18 @@ serve({
   fetch: app.fetch,
   port,
 });
+
+// Warm up MinIO: ensure the bucket exists and has the public-read
+// policy so 302 redirects to object URLs work immediately. Non-blocking
+// — a failure here is logged but does not prevent the server from
+// serving requests; the audio route degrades to its local-disk fallback.
+import { getWebObjectStorageClient } from './lib/object-storage-client.js';
+const minioClient = getWebObjectStorageClient();
+if (minioClient) {
+  minioClient.warmup().catch((err: unknown) => {
+    console.warn(
+      '[Web] MinIO warmup failed (non-blocking):',
+      err instanceof Error ? err.message : String(err)
+    );
+  });
+}

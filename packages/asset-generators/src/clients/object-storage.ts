@@ -136,6 +136,13 @@ export interface ObjectStorageClient {
    * upstream. Pure string composition — safe to call in hot paths.
    */
   getPublicUrl(key: string): string;
+
+  /**
+   * Ensure the bucket exists and has the public-read policy applied.
+   * Idempotent and cached per process. Call at service startup so
+   * the first user request doesn't pay the latency.
+   */
+  warmup(): Promise<void>;
 }
 
 /**
@@ -343,5 +350,6 @@ export function createObjectStorageClient(
     uploadAudio,
     getObject,
     getPublicUrl,
+    warmup: ensureBucket,
   };
 }
