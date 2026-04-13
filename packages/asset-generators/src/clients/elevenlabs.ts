@@ -140,7 +140,7 @@ export function createElevenLabsClient(
         body: JSON.stringify({
           text: input.text,
           ...(config.modelId ? { model_id: config.modelId } : {}),
-          output_format: 'mp3_44100_128',
+          output_format: 'mp3_44100_192',
         }),
       }
     );
@@ -319,7 +319,7 @@ export function createElevenLabsClient(
       }));
 
       const response = await fetch(
-        `${ELEVENLABS_API_BASE}/text-to-dialogue?output_format=mp3_44100_128`,
+        `${ELEVENLABS_API_BASE}/text-to-dialogue?output_format=mp3_44100_192`,
         {
           method: 'POST',
           headers: {

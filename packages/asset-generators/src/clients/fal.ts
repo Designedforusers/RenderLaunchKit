@@ -201,7 +201,7 @@ export function createFalMediaClient(
         prompt: enhanced,
         aspect_ratio: aspectRatio,
         output_format: 'png' as const,
-        resolution: '1K' as const,
+        resolution: '2K' as const,
       },
       logs: true,
       onQueueUpdate: (update) => {
