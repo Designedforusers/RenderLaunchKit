@@ -6,6 +6,7 @@ import {
   useLocation,
   useSearchParams,
   Link,
+  Navigate,
 } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { RocketLaunch } from '@phosphor-icons/react';
@@ -249,6 +250,7 @@ export default function App() {
           <Route path="/trends" element={<TrendsPageWrapper />} />
           <Route path="/create" element={<CreatePageWrapper />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
