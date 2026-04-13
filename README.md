@@ -32,7 +32,7 @@ LaunchKit runs eight services on Render. Each one exists for a specific reason.
 |---|---|---|
 | `launchkit-web` | Web | Hono API + React SPA + SSE stream + GitHub webhooks. Sub-second response budget. |
 | `launchkit-worker` | Worker | BullMQ processor for the agentic loops (30s–5min each). These can't run in HTTP handlers. |
-| `launchkit-pika-worker` | Worker | Isolated dyno for the Pika meeting-join subprocess. Click-to-avatar latency stays under 100ms regardless of what else is running. |
+| `launchkit-pika-worker` | Worker | Isolated instance for the Pika meeting-join subprocess. Click-to-avatar latency stays under 100ms regardless of what else is running. |
 | `launchkit-cron` | Cron | Trending signal ingestion + feedback insight clustering, every 6 hours. |
 | `launchkit-workflows` | Workflows | Per-asset generation with per-task compute sizing — `starter` for text, `standard` for images and audio, `pro` for video and 3D. |
 | `launchkit-minio` | Docker | S3-compatible object store on a Render Disk for rendered video bytes. |
@@ -160,7 +160,7 @@ The "why" behind the service topology — these are the decisions a developer wo
 
 ### Why BullMQ for some things and Render Workflows for others?
 
-**BullMQ** runs the analyze → research → strategize chain and the review pipeline. Short, cheap, retryable jobs that share a common compute profile. Sharing them on one worker dyno is cost-efficient.
+**BullMQ** runs the analyze → research → strategize chain and the review pipeline. Short, cheap, retryable jobs that share a common compute profile. Sharing them on one worker instance is cost-efficient.
 
 **Render Workflows** runs the asset generation fan-out. Long, expensive, compute-heterogeneous jobs — a 10-minute video render and a 20-second blog post on the same priority. Per-task compute sizing is the right model. Mixing both in one queue would force the worker to be sized for the worst case (video) and waste the cycles on text.
 
@@ -170,7 +170,7 @@ The migration shipped in four PRs you can read top-to-bottom: [`6eca706`](https:
 
 **Web ↔ Worker separation** is non-negotiable. AI agentic loops take 30–180 seconds. They cannot run in HTTP request handlers. The shared worker exists so the web service stays snappy.
 
-**The dedicated Pika worker** exists because click-to-avatar-in-meeting latency must stay under 100ms regardless of what else is running. A heavy analysis job on the shared dyno would contend with a Python subprocess spawn for the Node event loop. Same `apps/worker` workspace, different `dist/` entry point — process isolation without code duplication. Full rationale in [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md).
+**The dedicated Pika worker** exists because click-to-avatar-in-meeting latency must stay under 100ms regardless of what else is running. A heavy analysis job on the shared instance would contend with a Python subprocess spawn for the Node event loop. Same `apps/worker` workspace, different `dist/` entry point — process isolation without code duplication. Full rationale in [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md).
 
 **The cron service** handles periodic work that doesn't belong in request handlers or job queues: trending signal ingestion every 6 hours, nightly feedback insight aggregation, and a fallback webhook poller.
 
@@ -194,7 +194,7 @@ Strategy and content agents are *prompted* — single Claude call with rich cont
 
 This repo is a working multi-service AI app. If you read it cover to cover, you'll see these patterns in working code:
 
-- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out via run chaining. A separate `renderRemotionVideo` task handles MP4 rendering on its own pro dyno and uploads bytes to MinIO. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
+- **Per-task compute isolation on Render Workflows.** Five compute-bucketed child tasks (`starter` for text, `standard` for images and audio, `pro` for video and 3D) fan out via run chaining. A separate `renderRemotionVideo` task handles MP4 rendering on its own pro instance and uploads bytes to MinIO. See [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md).
 
 - **AsyncLocalStorage for cross-cutting concerns without parameter pollution.** Cost tracking threads through every upstream API call without touching a single agent signature, by reading the active `CostTracker` from `node:async_hooks` at the call boundary. The intermediate ~20 files are completely unaware that cost tracking exists. See [`docs/cost-tracking.md`](docs/cost-tracking.md).
 

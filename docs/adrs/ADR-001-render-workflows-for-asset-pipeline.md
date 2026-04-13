@@ -22,7 +22,7 @@ call that finishes in 10-30 seconds and needs maybe 200 MB of resident RAM. A
 `product_video` hits the Kling v3 model on fal.ai and holds a subscribe
 polling loop open for ~10 minutes while the render completes. A `world_scene`
 polls the World Labs Marble API for ~5 minutes. An audio podcast concatenates
-18-30 ElevenLabs TTS buffers before writing a final MP3. Sizing a single dyno
+18-30 ElevenLabs TTS buffers before writing a final MP3. Sizing a single instance
 for the worst case and paying pro-tier compute for text generation is 5-25x
 more expensive than it needs to be. Sizing for the common case and letting
 video renders contend with cheap text jobs for the Node event loop turns
@@ -35,9 +35,9 @@ to grade what shipped, not abort on the first rejection. That rules out any
 fan-out primitive that short-circuits on error.
 
 The pre-migration architecture was a BullMQ fan-out running inside the shared
-`launchkit-worker` dyno. The strategy processor wrote the queued asset rows,
+`launchkit-worker` instance. The strategy processor wrote the queued asset rows,
 then the worker's `index.ts` read them back and enqueued one BullMQ job per
-asset onto a single `asset-generation` queue consumed by the same dyno. Every
+asset onto a single `asset-generation` queue consumed by the same instance. Every
 asset type ran on the same `standard` instance. A 10-minute video render
 blocked three or four text jobs behind it. Concurrency was tuned conservatively
 to avoid OOM on the video path. The review-enqueue trigger had to be a
@@ -156,7 +156,7 @@ environments where the workflow service has not been provisioned yet.
 - **Native observability.** Every task run shows up in the Render dashboard
   as a first-class resource with its own logs, duration, retries, and run
   chain topology. The BullMQ path had a single shared log stream on the
-  worker dyno where 15 concurrent jobs interleaved stdout.
+  worker instance where 15 concurrent jobs interleaved stdout.
 - **Render-native.** No external orchestrator (Temporal, Airflow, Inngest) to
   deploy, upgrade, keep in sync with secrets, or debug. The control plane is
   the Render dashboard every other service already uses.
@@ -201,7 +201,7 @@ environments where the workflow service has not been provisioned yet.
   lines of boilerplate is more abstraction cost than it saves.
 - **Cold start overhead.** ~1 second per child task run per the Render docs.
   For a 9-asset launch that is ~9 seconds of wall-clock overhead that a
-  single-dyno BullMQ path did not pay. This is load-bearing against
+  single-instance BullMQ path did not pay. This is load-bearing against
   text-only kits where the individual jobs are fast; it is invisible
   against video and 3D.
 
@@ -226,7 +226,7 @@ environments where the workflow service has not been provisioned yet.
 
 ## Alternatives considered
 
-- **BullMQ fan-out on the shared worker dyno** (the pre-migration
+- **BullMQ fan-out on the shared worker instance** (the pre-migration
   architecture): simple, works, one fewer service to deploy. Rejected
   because it forces every task to share compute with the heaviest job in
   flight, has no native fan-in primitive, offers no per-task observability,

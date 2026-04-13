@@ -157,7 +157,7 @@ services:
     # the per-platform checksums) — `npm ci` is enough to land it. No
     # global install or extra build step required at deploy time.
     #
-    # Python is NOT installed on this dyno. The Pika video-meeting
+    # Python is NOT installed on this instance. The Pika video-meeting
     # integration's `join` subprocess runs on the dedicated
     # `launchkit-pika-worker` service below; this shared worker only
     # handles the pika-poll (HTTPS GET) and pika-leave (HTTPS DELETE)
@@ -276,7 +276,7 @@ services:
 
   # ── Pika Invite Worker ─────────────────────────────────────────────
   #
-  # Dedicated single-purpose dyno for the Pika video-meeting JOIN
+  # Dedicated single-purpose instance for the Pika video-meeting JOIN
   # flow. Every job on its `pika-invite` BullMQ queue spawns the
   # vendored Python CLI's `join` subcommand for ~90 seconds to bring
   # a Pika-hosted avatar into a live Google Meet. This is the ONLY
@@ -284,15 +284,15 @@ services:
   # worker above uses pure-TypeScript `fetch()` calls for the
   # control-plane operations (poll + leave).
   #
-  # Why a dedicated dyno for a single queue
+  # Why a dedicated instance for a single queue
   # ---------------------------------------
   #
   # Reliability for the "user clicks Invite, bot joins meeting"
   # UX demands ZERO event-loop contention with the
   # analysis/research/trending jobs that run on the shared worker.
-  # A dedicated dyno with a single-purpose BullMQ Worker keeps
+  # A dedicated instance with a single-purpose BullMQ Worker keeps
   # click-to-subprocess-spawn latency under 100 ms regardless of
-  # what other work is in flight. The dyno exists to sit warm and
+  # what other work is in flight. The instance exists to sit warm and
   # ready to `child_process.spawn('python3', ...)` the instant a
   # job arrives on Redis.
   #
@@ -407,7 +407,7 @@ services:
   # finished MP4 files here; the web service's
   # `/api/assets/:id/video.mp4` handler 302-redirects clients to the
   # public MinIO URL instead of streaming bytes through the web
-  # dyno. The bucket (`launchkit-renders`) is created programmatically
+  # instance. The bucket (`launchkit-renders`) is created programmatically
   # on the first upload via an idempotent `HeadBucket` + `CreateBucket`
   # check in `packages/asset-generators/src/clients/object-storage.ts`
   # so there is no manual setup after the service boots.
@@ -421,7 +421,7 @@ services:
   # hostname when they need to inspect buckets.
   #
   # See ADR-002 for the full decision rationale and rejected
-  # alternatives (Cloudflare R2, AWS S3, dyno-local cache).
+  # alternatives (Cloudflare R2, AWS S3, instance-local cache).
   - type: web
     name: launchkit-minio
     runtime: image

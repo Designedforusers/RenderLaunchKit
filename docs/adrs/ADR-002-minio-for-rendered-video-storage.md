@@ -14,23 +14,23 @@ writes finished renders to `REMOTION_CACHE_DIR` — a hard-coded
 `import.meta.url`. The `/api/assets/:id/video.mp4` route in
 `apps/web/src/routes/asset-api-routes.ts:111` then streams the file back to
 the client through the `fileToWebStream` helper, buffering the bytes through
-the web dyno's Node process on every request.
+the web instance's Node process on every request.
 
 That layout was a reasonable MVP choice when rendering and serving lived on
-the same dyno, but it has three structural problems that get worse the
+the same instance, but it has three structural problems that get worse the
 moment any of the three pressures below show up in production:
 
-1. **The cache is dyno-local.** Render web services scale horizontally. Dyno
-   A rendering a video does nothing for dyno B serving the next request for
+1. **The cache is instance-local.** Render web services scale horizontally. Instance
+   A rendering a video does nothing for instance B serving the next request for
    the same asset — B re-renders the whole thing, wasting 30-60 seconds of
    wall clock and a few cents of CPU. The in-process `renderJobs` dedup map
    at `remotion-render.ts:69` only covers the single-process case.
-2. **The cache dies on every deploy.** Render's dyno filesystem is
+2. **The cache dies on every deploy.** Render's instance filesystem is
    ephemeral. Every push to `main` wipes `.cache/remotion-renders` across
-   every web dyno, so the first request after a deploy pays the full render
+   every web instance, so the first request after a deploy pays the full render
    cost even for a video that rendered five minutes before the deploy.
-3. **Byte-streaming chews the web dyno's budget.** The `fileToWebStream`
-   path keeps memory bounded per request, but the dyno still holds the
+3. **Byte-streaming chews the web instance's budget.** The `fileToWebStream`
+   path keeps memory bounded per request, but the instance still holds the
    socket for the full download, the file handle for the full read, and any
    OS page cache the kernel decides to allocate. On a 512 MB starter plan
    with two concurrent 100 MB downloads, the web process competes with its
@@ -40,16 +40,16 @@ moment any of the three pressures below show up in production:
 The problem doubles once Remotion rendering migrates off the web service
 and onto the Workflows service per the `CLAUDE.md` § "Workflows service"
 architecture. The renderer and the serving surface are no longer the same
-process, which means even the dyno-local cache hit case stops working: the
-workflows dyno writes the bytes, the web dyno can't see them, and there's
+process, which means even the instance-local cache hit case stops working: the
+workflows instance writes the bytes, the web instance can't see them, and there's
 no shared filesystem to bridge them. The web service either has to
 re-download the bytes from the workflows service over HTTP on every
 request (doubling the internal bandwidth cost) or both services have to
 agree on an object store that sits between them.
 
-We need a persistent, URL-addressable video store that survives dyno
+We need a persistent, URL-addressable video store that survives instance
 restarts and deploys, is readable by both the workflows and web services,
-and does not force the web dyno to hold the full payload in memory or
+and does not force the web instance to hold the full payload in memory or
 socket state while a client downloads it.
 
 ## Decision
@@ -110,20 +110,20 @@ protecting anything the asset card doesn't already expose.
   revisited at scale, migration is a config swap and a bucket copy, not
   a rewrite of the upload or read paths.
 - **No per-GB egress fee, no per-request charge.** MinIO on a Render
-  Disk costs the flat dyno plan + the Disk plan, period. A sudden
+  Disk costs the flat instance plan + the Disk plan, period. A sudden
   traffic spike from a viral launch does not produce a surprise bill.
 - **Decouples storage from compute.** The workflows service writes, the
   web service reads, and neither needs to know how the other runs. A
   future background re-render job (e.g., reprocessing every video after
   a composition change) becomes a workflows-only operation with no
   coordination against the web service.
-- **Removes the memory pressure on the web dyno.** A 302 redirect hands
-  the download off to the client's HTTP stack. The web dyno sees a
+- **Removes the memory pressure on the web instance.** A 302 redirect hands
+  the download off to the client's HTTP stack. The web instance sees a
   kilobyte of response headers regardless of video size.
 
 ### Negative
 
-- **Single point of failure.** One MinIO dyno, one Disk. If the dyno
+- **Single point of failure.** One MinIO instance, one Disk. If the instance
   crashes, video serving goes dark until Render restarts it (typically
   <60 s). Acceptable for the public showcase; not acceptable for a
   production SaaS with SLAs. The mitigation if this ever becomes a real
@@ -164,7 +164,7 @@ protecting anything the asset card doesn't already expose.
   `.cache/remotion-renders` and call the current code done. Rejected
   because a Render Disk can only be mounted on one service at a time —
   the workflows service that will own rendering cannot write through
-  the web dyno's Disk. The moment rendering moves to workflows, the
+  the web instance's Disk. The moment rendering moves to workflows, the
   shared-filesystem model stops working, and we'd be back here.
 - **Postgres `bytea` column.** Store the MP4 bytes directly on the
   asset row. Rejected: 5-50 MB per video times hundreds of assets blows

@@ -186,7 +186,7 @@ const trendingWorker = new Worker(
 // The PIKA_INVITE queue (spawns the Python join subprocess) is
 // deliberately NOT registered here — it lives on a dedicated
 // `launchkit-pika-worker` service so the 90-second subprocess
-// burst has an isolated dyno. See `apps/pika-worker/src/index.ts`
+// burst has an isolated instance. See `apps/pika-worker/src/index.ts`
 // (Commit 12) for the invite worker.
 
 const pikaControlWorker = new Worker(

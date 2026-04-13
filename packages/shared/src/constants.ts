@@ -11,7 +11,7 @@ export const QUEUE_NAMES = {
   // Pika video-meeting invite queue. Single-purpose queue consumed
   // ONLY by the dedicated `launchkit-pika-worker` Render service.
   // Every job on this queue spawns the vendored Python CLI's `join`
-  // subcommand for ~90 s. The dedicated dyno exists so the subprocess
+  // subcommand for ~90 s. The dedicated instance exists so the subprocess
   // burst has a warm, single-purpose event loop to spawn into — no
   // contention with analysis/research/trending jobs, no Python
   // install on the shared worker.
@@ -32,7 +32,7 @@ export const QUEUE_NAMES = {
   // Phase 10 note: the `generation` queue was removed when asset
   // generation moved to Render Workflows (`apps/workflows/`). Every
   // generation run now lives on per-task VMs sized per compute
-  // profile rather than sharing the worker dyno's event loop.
+  // profile rather than sharing the worker instance's event loop.
 } as const;
 
 // ── Job Names ──
@@ -61,7 +61,7 @@ export const JOB_NAMES = {
   //
   //   PIKA_INVITE  — spawns the Python `join` subprocess; burst of
   //                  ~90 s compute. Lives on the dedicated
-  //                  launchkit-pika-worker dyno.
+  //                  launchkit-pika-worker instance.
   //   PIKA_POLL    — periodic HTTPS GET to Pika's session endpoint
   //                  to detect closed/error state and enforce the
   //                  60-min safety cap. Lives on the shared worker.
@@ -108,7 +108,7 @@ export const QUEUE_CONFIG = {
     },
   },
   // Pika invite queue — the 90-second Python subprocess burst.
-  // Concurrency of 2 is a deliberate soft cap: a single dyno can
+  // Concurrency of 2 is a deliberate soft cap: a single instance can
   // host up to two active joins at once without saturating the
   // Python subprocess pool or Pika's per-key rate limits.
   // Attempts is 1 because the subprocess wrapper already bounds
