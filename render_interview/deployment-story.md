@@ -1,6 +1,6 @@
 # Deployment Story: LaunchKit on Render
 
-What happened, what we learned, and how to talk about it in the interview.
+What happened, what I learned, and how to talk about it in the interview.
 
 ---
 
@@ -14,7 +14,7 @@ LaunchKit uses Render Workflows for per-asset compute sizing. The parent task fa
 
 This is the strongest technical signal in the submission. Without Workflows, you'd either overprovision one big worker for every job type or build a separate queue-and-dispatch layer. Render Workflows made it a few lines of SDK code.
 
-## The Deployment Issue We Hit
+## The Deployment Issue I Hit
 
 **What worked locally:** Everything. The full monorepo builds, typechecks, lints, and passes 170 tests locally. The Remotion video renderer runs Chrome headless to composite React components into MP4s — product videos, voice commercials, podcast waveforms.
 
@@ -26,7 +26,7 @@ E: List directory /var/lib/apt/lists/partial is missing. - Acquire (30: Read-onl
 
 This affects only ONE of seven tasks — `renderRemotionVideo`. The other six (text, images, video via fal.ai API, audio, world scenes, and the parent fan-out) are pure HTTP API calls that need no system packages.
 
-## How We Solved It
+## How I Solved It
 
 **Architecture split:** Keep Workflows for what it's great at (orchestration + compute-sized API tasks), add a Docker-based web service for the one browser-native workload.
 
@@ -40,20 +40,20 @@ The renderer is a thin Hono HTTP server that wraps the exact same `createRemotio
 The web service's `triggerRemotionRender` helper changed from calling `render.workflows.startTask()` to calling `POST /render` on the renderer service. One file changed, same typed interface.
 
 **Why this is a strong engineering story:**
-- We didn't remove Workflows — it's still the backbone of the generation pipeline
-- We didn't hack around the limitation — we created a clean service boundary
+- I didn't remove Workflows — it's still the backbone of the generation pipeline
+- I didn't hack around the limitation — I created a clean service boundary
 - The split is architecturally coherent: Workflows for orchestration, Docker for system-level runtime needs
 - Render Workflows is in beta — this is exactly the kind of pragmatic workaround that shows real deployment experience
 
 ## Other Deployment Issues Encountered
 
 ### 1. Blueprint validation — IP allow list required
-The TCE-candidate workspace required an explicit `ipAllowList` on the Key-Value service. An empty array `[]` was rejected; we needed `0.0.0.0/0` to allow all.
+The TCE-candidate workspace required an explicit `ipAllowList` on the Key-Value service. An empty array `[]` was rejected; I needed `0.0.0.0/0` to allow all.
 
 **Talking point:** Workspace-level policies can add requirements that vanilla Blueprints don't surface. Always test your Blueprint against the target workspace.
 
 ### 2. Legacy Postgres plan names
-`starter` and `pro` are deprecated. New plans use the format `pro-4gb` (hyphenated with size). We initially tried `pro_4gb` (underscored) — also wrong.
+`starter` and `pro` are deprecated. New plans use the format `pro-4gb` (hyphenated with size). I initially tried `pro_4gb` (underscored) — also wrong.
 
 **Talking point:** Render's plan naming recently changed. The Blueprint spec docs are the source of truth, not cached knowledge.
 
@@ -79,7 +79,7 @@ TOKEN=$(gh auth token) && git -c credential.helper='!f() { echo "username=x-acce
 
 ### "Walk me through a deployment decision you made"
 
-"The most interesting one was the Remotion renderer split. Locally, everything compiled and ran in one process. When we deployed to Render Workflows, we hit a read-only filesystem that blocked Chrome's system library installation. Instead of removing Workflows or hacking around it, we split the workload: Workflows handles the six API-driven generation tasks with per-task compute sizing, and a dedicated Docker service handles the one browser-native rendering task. Same code, different transport. The split actually made the architecture cleaner — it's a real service boundary, not a workaround."
+"The most interesting one was the Remotion renderer split. Locally, everything compiled and ran in one process. When I deployed to Render Workflows, I hit a read-only filesystem that blocked Chrome's system library installation. Instead of removing Workflows or hacking around it, I split the workload: Workflows handles the six API-driven generation tasks with per-task compute sizing, and a dedicated Docker service handles the one browser-native rendering task. Same code, different transport. The split actually made the architecture cleaner — it's a real service boundary, not a workaround."
 
 ### "How do you handle issues you discover in production?"
 

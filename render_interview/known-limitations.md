@@ -8,7 +8,7 @@ The `/api/projects/:id/events` SSE endpoint is open. The browser's EventSource A
 
 ## 2. Render Workflows read-only filesystem
 
-Workflows (beta) blocks `apt-get` during the build. Chrome system libraries can't be installed. We solved this with a Docker-based renderer sidecar. When Workflows exits beta, this can collapse back into a single task.
+Workflows (beta) blocks `apt-get` during the build. Chrome system libraries can't be installed. I solved this with a Docker-based renderer sidecar. When Workflows exits beta, this can collapse back into a single task.
 
 ## 3. No pagination on project list
 

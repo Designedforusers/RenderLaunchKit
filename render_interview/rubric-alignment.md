@@ -43,7 +43,7 @@ Render features used (with architectural justification for each):
 | Disks | MinIO persistence for rendered videos | Durable storage without external S3 |
 | Docker | Renderer + Pika worker | System packages where Node runtime can't |
 
-## Bonus points we hit
+## Bonus points I hit
 
 - [x] Blueprint — 7 services provisioned from one file
 - [x] Background workers — BullMQ on dedicated instances

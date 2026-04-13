@@ -1,4 +1,4 @@
-# Deploying a TypeScript Monorepo with Remotion on Render --- 7 Things We Learned
+# Deploying a TypeScript Monorepo with Remotion on Render --- 7 Things I Learned
 
 > **Format:** Practical developer tutorial / blog post
 > **Audience:** TypeScript developers deploying non-trivial apps to Render for the first time
@@ -12,7 +12,7 @@ LaunchKit is a TypeScript monorepo with 9 services: an Hono API server, a React 
 
 Every single deploy failure was an infrastructure configuration issue. None of them required changing application code. That distinction matters: it means the platform is doing its job (enforcing production constraints), and the developer just needs to know what those constraints are.
 
-Here are the seven things we learned, with the exact error messages so you can ctrl-F your way here when it happens to you.
+Here are the seven things I learned, with the exact error messages so you can ctrl-F your way here when it happens to you.
 
 ---
 
