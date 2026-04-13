@@ -241,8 +241,8 @@ export default function App() {
       <motion.div
         key={location.pathname}
         initial={false}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0, pointerEvents: 'auto' as const }}
+        exit={{ opacity: 0, y: -8, pointerEvents: 'none' as const }}
         transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       >
         <Routes location={location}>
