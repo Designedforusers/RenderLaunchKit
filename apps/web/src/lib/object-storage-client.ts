@@ -51,11 +51,24 @@ export function getWebObjectStorageClient(): ObjectStorageClient | null {
     return null;
   }
 
+  // Render services resolve each other's `.onrender.com` hostname to
+  // an internal IP. MinIO listens on its PORT (9000), not 443, so
+  // HTTPS connections to the internal IP get ECONNREFUSED. Use HTTP
+  // on port 9000 for S3 API calls and keep the HTTPS URL for
+  // browser-facing 302 redirects.
+  const host = env.MINIO_ENDPOINT_HOST ?? '';
+  const isRenderHosted =
+    host.endsWith('.onrender.com') && !host.includes(':');
+  const s3Endpoint = isRenderHosted
+    ? `http://${host}:9000`
+    : endpoint;
+
   instance = createObjectStorageClient({
-    endpoint,
+    endpoint: s3Endpoint,
     bucket: env.MINIO_BUCKET,
     accessKeyId: env.MINIO_ROOT_USER,
     secretAccessKey: env.MINIO_ROOT_PASSWORD,
+    publicUrl: endpoint,
   });
   instanceConfigured = true;
   return instance;
