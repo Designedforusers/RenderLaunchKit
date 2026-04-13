@@ -105,6 +105,10 @@ services:
         sync: false
       - key: RENDER_WORKFLOW_SLUG
         sync: false
+      # Remotion renderer service — Docker-based web service that
+      # runs headless Chrome for video compositing.
+      - key: RENDERER_SERVICE_URL
+        sync: false
       # MinIO object storage. The web service touches MinIO in two
       # places:
       #
@@ -442,6 +446,53 @@ services:
         generateValue: true
       - key: PORT
         value: 9000
+
+  # ── Remotion renderer ──────────────────────────────────────────────
+  #
+  # Docker-based web service for Remotion video compositing. Render
+  # Workflows (beta) has a read-only filesystem that blocks apt-get,
+  # so Chrome system libraries cannot be installed there. This
+  # dedicated service runs node:22-slim with the full Chrome lib set,
+  # exposes POST /render, and uploads finished MP4s to MinIO.
+  #
+  # The web service's `/api/assets/:id/video.mp4` handler calls this
+  # service via HTTP instead of the Workflows SDK for the render step.
+  # The 6 generation tasks stay on Workflows — only Chrome needs Docker.
+  - type: web
+    name: launchkit-renderer
+    runtime: docker
+    plan: pro
+    dockerfilePath: ./Dockerfile.renderer
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: launchkit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: launchkit-redis
+          type: keyvalue
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: MINIO_ENDPOINT_HOST
+        fromService:
+          name: launchkit-minio
+          type: web
+          property: host
+      - key: MINIO_ROOT_USER
+        fromService:
+          name: launchkit-minio
+          type: web
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_ROOT_PASSWORD
+        fromService:
+          name: launchkit-minio
+          type: web
+          envVarKey: MINIO_ROOT_PASSWORD
+      - key: MINIO_BUCKET
+        value: launchkit-renders
 
   - type: keyvalue
     name: launchkit-redis

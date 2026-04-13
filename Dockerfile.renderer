@@ -1,0 +1,34 @@
+FROM node:22-slim
+
+# Chrome system libraries for Remotion's headless Chrome renderer.
+# These are the exact packages Remotion recommends for Linux headless
+# deployments — without them, Chrome crashes on launch with missing
+# shared library errors.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 \
+      libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 \
+      libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 \
+      libcups2 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Node dependencies (includes Remotion + Chrome Headless Shell)
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/video/package.json packages/video/
+COPY packages/asset-generators/package.json packages/asset-generators/
+COPY apps/workflows/package.json apps/workflows/
+RUN npm ci --include=dev
+
+# Download Chrome Headless Shell into node_modules
+RUN npx remotion browser ensure
+
+# Copy source and build
+COPY . .
+RUN npm run build
+
+EXPOSE 10000
+
+CMD ["npm", "run", "start:renderer", "-w", "apps/workflows"]

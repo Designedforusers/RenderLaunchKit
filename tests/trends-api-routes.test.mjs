@@ -21,10 +21,11 @@
 // Those branches are covered end-to-end by the Playwright suite
 // in Phase 5 where the real stack runs against real providers.
 
-// Local docker-compose Postgres runs on port 5433 because 5432
-// is commonly occupied by a host-level Postgres. See
-// `docker-compose.override.yml` (gitignored) for the port mapping.
-process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5433/launchkit';
+// The tracked local docker-compose stack exposes Postgres on 5432.
+// Override `DATABASE_URL` in your shell or `.env` if your machine
+// needs a different port, but the repo defaults to the checked-in
+// compose contract instead of a gitignored override.
+process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5432/launchkit';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 
 import test from 'node:test';
@@ -54,7 +55,7 @@ async function dbReachable() {
 
 test('GET /api/trends: returns trends array with ISO-formatted ingestedAt', async (t) => {
   if (!(await dbReachable())) {
-    t.skip('Postgres not reachable at localhost:5432 — run `docker compose up -d`');
+    t.skip('Postgres not reachable at localhost:5432 — run `npm run infra:up`');
     return;
   }
   const trendsApiRoutes = (

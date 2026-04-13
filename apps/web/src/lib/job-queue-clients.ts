@@ -11,24 +11,22 @@ import { env } from '../env.js';
 
 const connection = parseRedisUrl(env.REDIS_URL);
 
-// BullMQ queues the web service produces to.
-//
-// The asset generation queue is gone as of PR 3 — every consumer now
-// triggers the `generateAllAssetsForProject` Render Workflows task
-// via the lazy SDK client in `./trigger-workflow-generation.ts`
-// (web) or the parallel helper in `apps/worker/src/lib/` (worker).
-//
-// The review queue client used to live here too (as
-// `creativeReviewJobQueue` + `enqueueCreativeReview`) but nothing in
-// the web service ever enqueued to it — the review path was always
-// producer-owned by the worker's `checkAndTriggerReview` (deleted in
-// PR 3) and now by the workflow parent task's
-// `apps/workflows/src/lib/review-enqueue.ts`. Removed in PR 3 with
-// the rest of the dead generation-queue code.
-export const analysisJobQueue = new Queue<JobData>(QUEUE_NAMES.ANALYSIS, {
-  connection,
-  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.ANALYSIS].defaultJobOptions,
-});
+let analysisJobQueue: Queue<JobData> | null = null;
+let trendingJobQueue: Queue<unknown> | null = null;
+let pikaInviteJobQueue: Queue<unknown> | null = null;
+let pikaControlJobQueue: Queue<unknown> | null = null;
+
+// BullMQ queue handles are constructed lazily so importing a route
+// module does not immediately start Redis reconnect loops. This keeps
+// boundary-only tests pure: invalid-UUID requests that never enqueue a
+// job should not need a live Redis instance just to import the route.
+export function getAnalysisJobQueue(): Queue<JobData> {
+  analysisJobQueue ??= new Queue<JobData>(QUEUE_NAMES.ANALYSIS, {
+    connection,
+    defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.ANALYSIS].defaultJobOptions,
+  });
+  return analysisJobQueue;
+}
 
 // Phase 7: trending queue is shared between heterogeneous background
 // job types — the trending-signals cron and the feedback-event
@@ -38,10 +36,13 @@ export const analysisJobQueue = new Queue<JobData>(QUEUE_NAMES.ANALYSIS, {
 // intentionally `unknown`. A typed `Queue<JobData>` would force
 // every consumer to carry a `projectId`, which the embed-feedback
 // job doesn't have.
-export const trendingJobQueue = new Queue<unknown>(QUEUE_NAMES.TRENDING, {
-  connection,
-  defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.TRENDING].defaultJobOptions,
-});
+function getTrendingJobQueue(): Queue<unknown> {
+  trendingJobQueue ??= new Queue<unknown>(QUEUE_NAMES.TRENDING, {
+    connection,
+    defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.TRENDING].defaultJobOptions,
+  });
+  return trendingJobQueue;
+}
 
 // Pika video-meeting queues. Split into two:
 //
@@ -54,24 +55,25 @@ export const trendingJobQueue = new Queue<unknown>(QUEUE_NAMES.TRENDING, {
 // The web service enqueues to BOTH queues depending on the action:
 //   - POST /meetings           → PIKA_INVITE queue
 //   - POST /meetings/:id/leave → PIKA_CONTROL queue (pika-leave)
-export const pikaInviteJobQueue = new Queue<unknown>(
-  QUEUE_NAMES.PIKA_INVITE,
-  {
+function getPikaInviteJobQueue(): Queue<unknown> {
+  pikaInviteJobQueue ??= new Queue<unknown>(QUEUE_NAMES.PIKA_INVITE, {
     connection,
     defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA_INVITE].defaultJobOptions,
-  }
-);
-export const pikaControlJobQueue = new Queue<unknown>(
-  QUEUE_NAMES.PIKA_CONTROL,
-  {
+  });
+  return pikaInviteJobQueue;
+}
+
+function getPikaControlJobQueue(): Queue<unknown> {
+  pikaControlJobQueue ??= new Queue<unknown>(QUEUE_NAMES.PIKA_CONTROL, {
     connection,
     defaultJobOptions: QUEUE_CONFIG[QUEUE_NAMES.PIKA_CONTROL].defaultJobOptions,
-  }
-);
+  });
+  return pikaControlJobQueue;
+}
 
 // Helper to add analysis jobs
 export async function enqueueRepositoryAnalysis(data: AnalyzeRepoJobData) {
-  return analysisJobQueue.add('analyze-repo', data, {
+  return getAnalysisJobQueue().add('analyze-repo', data, {
     priority: 1,
     jobId: `analyze__${data.projectId}`,
   });
@@ -98,7 +100,7 @@ export async function enqueueEmbedFeedbackEvent(
   feedbackEventId: string
 ): Promise<void> {
   const payload: EmbedFeedbackEventJobData = { feedbackEventId };
-  await trendingJobQueue.add(JOB_NAMES.EMBED_FEEDBACK_EVENT, payload, {
+  await getTrendingJobQueue().add(JOB_NAMES.EMBED_FEEDBACK_EVENT, payload, {
     jobId: `embed-feedback-event__${feedbackEventId}`,
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
@@ -118,7 +120,7 @@ export async function enqueueEmbedFeedbackEvent(
 export async function enqueuePikaInvite(
   data: PikaInviteJobData
 ): Promise<void> {
-  await pikaInviteJobQueue.add(JOB_NAMES.PIKA_INVITE, data, {
+  await getPikaInviteJobQueue().add(JOB_NAMES.PIKA_INVITE, data, {
     jobId: `pika-invite__${data.sessionRowId}`,
   });
 }
@@ -134,8 +136,29 @@ export async function enqueuePikaInvite(
  * session and subsequent jobs no-op.
  */
 export async function enqueuePikaLeave(data: PikaLeaveJobData): Promise<void> {
-  await pikaControlJobQueue.add(JOB_NAMES.PIKA_LEAVE, data, {
+  await getPikaControlJobQueue().add(JOB_NAMES.PIKA_LEAVE, data, {
     jobId: `pika-leave-user__${data.sessionRowId}`,
   });
 }
 
+export async function closeJobQueues(): Promise<void> {
+  const queues = [
+    analysisJobQueue,
+    trendingJobQueue,
+    pikaInviteJobQueue,
+    pikaControlJobQueue,
+  ];
+
+  analysisJobQueue = null;
+  trendingJobQueue = null;
+  pikaInviteJobQueue = null;
+  pikaControlJobQueue = null;
+
+  await Promise.all(
+    queues
+      .filter((queue): queue is Queue<unknown> => queue !== null)
+      .map(async (queue) => {
+        await queue.close();
+      })
+  );
+}

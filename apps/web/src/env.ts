@@ -120,6 +120,12 @@ const envSchema = z.object({
   RENDER_WORKFLOW_SLUG: z.string().optional(),
   RENDER_USE_LOCAL_DEV: z.enum(['true', 'false']).optional(),
 
+  // ── Remotion renderer service ───────────────────────────────────
+  // The Docker-based renderer service that runs headless Chrome for
+  // Remotion video compositing. The web route's
+  // `triggerRemotionRender` calls POST /render on this URL.
+  RENDERER_SERVICE_URL: z.string().optional(),
+
   // ── MinIO object storage ───────────────────────────────────────
   // The web service touches MinIO in two places:
   //   1. `/api/assets/:id/video.mp4` READS the stored

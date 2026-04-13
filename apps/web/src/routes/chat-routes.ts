@@ -158,6 +158,11 @@ const TOOLS: Anthropic.Messages.ToolUnion[] = [
 chatRoutes.post(
   '/:projectId/chat',
   bodyLimit({ maxSize: 2 * 1024 * 1024 }),
+  (c, next) => {
+    const projectId = parseUuidParam(c, 'projectId');
+    if (!projectId) return invalidUuidResponse(c);
+    return next();
+  },
   expensiveRouteRateLimit,
   async (c) => {
   const apiKey = env.ANTHROPIC_API_KEY;
@@ -171,8 +176,7 @@ chatRoutes.post(
     );
   }
 
-  const projectId = parseUuidParam(c, 'projectId');
-  if (!projectId) return invalidUuidResponse(c);
+  const projectId = c.req.param('projectId');
 
   const rawBody: unknown = await c.req.json().catch(() => ({}));
   const parsed = ChatRequestSchema.safeParse(rawBody);

@@ -1,7 +1,7 @@
 import type { Store } from 'hono-rate-limiter';
 import { rateLimiter } from 'hono-rate-limiter';
 import type { Context } from 'hono';
-import { redisClient } from '../lib/redis-client.js';
+import { getRedisClient } from '../lib/redis-client.js';
 
 /**
  * Rate-limit middleware for the public API.
@@ -58,6 +58,7 @@ function createRedisStore(prefix: string, windowMs: number): Store {
   return {
     async increment(key) {
       const redisKey = `${prefix}${key}`;
+      const redisClient = getRedisClient();
       const totalHits = await redisClient.incr(redisKey);
       if (totalHits === 1) {
         await redisClient.expire(redisKey, ttlSeconds, 'NX');
@@ -69,10 +70,12 @@ function createRedisStore(prefix: string, windowMs: number): Store {
     },
     async decrement(key) {
       const redisKey = `${prefix}${key}`;
+      const redisClient = getRedisClient();
       await redisClient.decr(redisKey);
     },
     async resetKey(key) {
       const redisKey = `${prefix}${key}`;
+      const redisClient = getRedisClient();
       await redisClient.del(redisKey);
     },
   };

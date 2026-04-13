@@ -6,7 +6,9 @@ import {
   ResearchResultSchema,
 } from '@launchkit/shared';
 import type { JobData } from '@launchkit/shared';
+import { env } from '../env.js';
 import { createLaunchStrategy } from '../agents/launch-strategy-agent.js';
+import { getLaunchStrategyAssetCapabilities } from '../lib/launch-strategy-asset-capabilities.js';
 import { projectProgressPublisher } from '../lib/project-progress-publisher.js';
 import { database as db } from '../lib/database.js';
 
@@ -41,7 +43,15 @@ export async function buildProjectLaunchStrategy(data: JobData): Promise<void> {
     project.research,
     'project.research'
   );
-  const strategy = await createLaunchStrategy(repoAnalysis, research);
+  const strategy = await createLaunchStrategy(repoAnalysis, research, {
+    capabilities: getLaunchStrategyAssetCapabilities({
+      falConfigured: Boolean(env.FAL_API_KEY),
+      elevenLabsConfigured: Boolean(
+        env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID
+      ),
+      worldLabsConfigured: Boolean(env.WORLD_LABS_API_KEY),
+    }),
+  });
 
   // Create asset records for everything the strategist wants to
   // generate. `asset.type` no longer needs an `as any` cast because

@@ -5,13 +5,13 @@
 // tests exercise the compiled Hono route apps via `app.request()`.
 //
 // The UUID check fires first in every handler, so invalid-UUID
-// requests never reach Postgres and these tests do not need a live
-// database connection. However, the route modules DO connect to
-// Postgres and Redis at import time (Drizzle pool + BullMQ client),
-// so we guard each test with a try/catch on the dynamic import and
-// skip when infrastructure is unavailable.
+// requests never reach Postgres. The web-side Redis and BullMQ
+// clients are lazy now, but importing the route modules still
+// constructs the Postgres pool, so we guard each test with a
+// try/catch on the dynamic import and skip when infrastructure is
+// unavailable.
 
-process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5433/launchkit';
+process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5432/launchkit';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 
 import test from 'node:test';
@@ -19,6 +19,40 @@ import assert from 'node:assert/strict';
 
 const INVALID_ID = 'not-a-uuid';
 const VALID_UUID = '00000000-0000-0000-0000-000000000000';
+
+test.after(async () => {
+  const [{ closeJobQueues }, { closeRedisClient }, { databasePool }] =
+    await Promise.all([
+      import('../apps/web/dist/lib/job-queue-clients.js'),
+      import('../apps/web/dist/lib/redis-client.js'),
+      import('../apps/web/dist/lib/database.js'),
+    ]);
+
+  await Promise.allSettled([
+    closeJobQueues(),
+    closeRedisClient(),
+    databasePool.end(),
+  ]);
+});
+
+async function dbReachable() {
+  try {
+    const { default: pg } = await import('pg');
+    const pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 1000,
+    });
+    try {
+      const client = await pool.connect();
+      client.release();
+      return true;
+    } finally {
+      await pool.end();
+    }
+  } catch {
+    return false;
+  }
+}
 
 // ── Helper: try to import a route module, skip if infra unavailable ──
 
@@ -135,14 +169,13 @@ test('POST /api/assets/:id/feedback returns 400 on invalid UUID', async (t) => {
 // passes validation and the handler queries the database.
 
 test('GET /api/assets/:id with valid but nonexistent UUID returns 404 not 400', async (t) => {
-  const mod = await tryImportRoute(t, '../apps/web/dist/routes/asset-api-routes.js');
-  if (!mod) return;
-  const res = await mod.default.request(`/${VALID_UUID}`);
-  // If Postgres is down the handler will 500, not 404 — skip in that case.
-  if (res.status === 500) {
+  if (!(await dbReachable())) {
     t.skip('Postgres not reachable — valid UUID test needs a live database');
     return;
   }
+  const mod = await tryImportRoute(t, '../apps/web/dist/routes/asset-api-routes.js');
+  if (!mod) return;
+  const res = await mod.default.request(`/${VALID_UUID}`);
   // 404 = validation passed, handler ran, asset not found
   assert.equal(res.status, 404);
 });

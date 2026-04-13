@@ -1,10 +1,22 @@
 import { generateJSON } from '../lib/anthropic-claude-client.js';
 import {
+  STRATEGY_ASSET_TYPES,
+  applyLaunchStrategyAssetCapabilities,
+} from '../lib/launch-strategy-asset-capabilities.js';
+import {
   getInsightsForCategory,
   getEditPatternsForCategory,
 } from '../tools/project-insight-memory.js';
 import { StrategyBriefSchema } from '@launchkit/shared';
-import type { RepoAnalysis, ResearchResult, StrategyBrief, StrategyInsight } from '@launchkit/shared';
+import type {
+  RepoAnalysis,
+  ResearchResult,
+  StrategyBrief,
+  StrategyInsight,
+} from '@launchkit/shared';
+import type { LaunchStrategyAssetCapabilities } from '../lib/launch-strategy-asset-capabilities.js';
+
+const STRATEGY_ASSET_TYPE_LIST = STRATEGY_ASSET_TYPES.join('|');
 
 const SYSTEM_PROMPT = `You are a developer marketing strategist. Given research about a product, decide the optimal go-to-market strategy.
 
@@ -22,7 +34,7 @@ You MUST output valid JSON matching this schema:
   ],
   "assetsToGenerate": [
     {
-      "type": "blog_post|twitter_thread|linkedin_post|product_hunt_description|hacker_news_post|faq|changelog_entry|og_image|social_card|product_video|voiceover_script|video_storyboard|tips|voice_commercial|podcast_script|world_scene",
+      "type": "${STRATEGY_ASSET_TYPE_LIST}",
       "generationInstructions": "specific instructions for generating this asset",
       "priority": 1-5
     }
@@ -40,10 +52,12 @@ Key strategic principles:
 - Channel selection should match where the target audience actually spends time.
 - Be opinionated. Weak strategies try everything. Strong strategies focus.
 - Reference the research findings in your reasoning.
+- Choose ONLY from the "Available asset types in this deployment" block in the user prompt.
+- If an unavailable asset would otherwise fit, put it in skipAssets with the provided reason instead of assetsToGenerate.
 - Developer tools → prioritize HN, Twitter, technical blog
 - Full-stack apps → broader distribution, include Product Hunt
 - Libraries → focus on README, Twitter thread, HN
-- Always generate at least: blog_post, og_image, and one social channel
+- Always generate at least: blog_post, one social channel, and og_image when og_image is available in this deployment
 - Video is high-impact but expensive. Only recommend for visually interesting products.
 - Always include "tips" — it's cheap to generate, high utility, and every developer appreciates a concrete "what to do next" list.
 - Recommend "voice_commercial" when the product has a clear single value prop and a developer audience that listens to podcasts or screencasts (DevOps, ML, infra tools).
@@ -62,8 +76,11 @@ Bake the pattern into the assetsToGenerate[].generationInstructions strings, not
 export async function createLaunchStrategy(
   repoAnalysis: RepoAnalysis,
   research: ResearchResult,
-  pastInsights?: StrategyInsight[],
-  editPatterns?: StrategyInsight[]
+  options: {
+    capabilities: LaunchStrategyAssetCapabilities;
+    pastInsights?: StrategyInsight[];
+    editPatterns?: StrategyInsight[];
+  }
 ): Promise<StrategyBrief> {
   // Fetch insights and edit patterns if not provided. The two
   // accessors return disjoint sets — `getInsightsForCategory`
@@ -72,9 +89,18 @@ export async function createLaunchStrategy(
   // `getEditPatternsForCategory` returns ONLY the Layer 3 cluster
   // rows. Both fall back to empty arrays on DB failure.
   const insights =
-    pastInsights ?? (await getInsightsForCategory(repoAnalysis.category));
+    options.pastInsights ?? (await getInsightsForCategory(repoAnalysis.category));
   const edits =
-    editPatterns ?? (await getEditPatternsForCategory(repoAnalysis.category));
+    options.editPatterns ?? (await getEditPatternsForCategory(repoAnalysis.category));
+  const availableAssetsBlock = `## Available asset types in this deployment\n${options.capabilities.availableAssetTypes
+    .map((type) => `- ${type}`)
+    .join('\n')}`;
+  const unavailableAssetsBlock =
+    options.capabilities.unavailableAssets.length > 0
+      ? `\n\n## Asset types unavailable in this deployment\n${options.capabilities.unavailableAssets
+          .map((asset) => `- ${asset.type}: ${asset.reasoning}`)
+          .join('\n')}`
+      : '';
 
   const insightsBlock =
     insights.length > 0
@@ -104,6 +130,9 @@ ${JSON.stringify(repoAnalysis, null, 2)}
 ## Market Research
 ${JSON.stringify(research, null, 2)}
 
+${availableAssetsBlock}
+${unavailableAssetsBlock}
+
 ${insightsBlock}
 
 ${editsBlock}
@@ -122,24 +151,5 @@ Based on this information, create a focused, opinionated strategy. Don't try to 
     { maxTokens: 4096 }
   );
 
-  // Ensure at minimum we have blog + og_image
-  const assetTypes = strategy.assetsToGenerate.map((a) => a.type);
-  if (!assetTypes.includes('blog_post')) {
-    strategy.assetsToGenerate.push({
-      type: 'blog_post',
-      generationInstructions:
-        'Write a technical blog post introducing the product, its key features, and why developers should care.',
-      priority: 1,
-    });
-  }
-  if (!assetTypes.includes('og_image')) {
-    strategy.assetsToGenerate.push({
-      type: 'og_image',
-      generationInstructions:
-        'Create an OG image that communicates the product value at a glance.',
-      priority: 2,
-    });
-  }
-
-  return strategy;
+  return applyLaunchStrategyAssetCapabilities(strategy, options.capabilities);
 }

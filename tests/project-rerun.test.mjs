@@ -3,7 +3,7 @@
 // URL is submitted again. In-progress projects return 200 with a
 // message. Requires live Postgres + Redis.
 
-process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5433/launchkit';
+process.env.DATABASE_URL ??= 'postgresql://launchkit:launchkit@localhost:5432/launchkit';
 process.env.REDIS_URL ??= 'redis://localhost:6379';
 
 import test from 'node:test';
@@ -30,7 +30,7 @@ async function dbReachable() {
 
 test('POST /api/projects returns 200 for in-progress duplicate', async (t) => {
   if (!(await dbReachable())) {
-    t.skip('Postgres not reachable — run `docker compose up -d`');
+    t.skip('Postgres not reachable — run `npm run infra:up`');
     return;
   }
 
@@ -71,7 +71,7 @@ test('POST /api/projects returns 200 for in-progress duplicate', async (t) => {
 
 test('POST /api/projects re-runs terminal-state (complete) project', async (t) => {
   if (!(await dbReachable())) {
-    t.skip('Postgres not reachable — run `docker compose up -d`');
+    t.skip('Postgres not reachable — run `npm run infra:up`');
     return;
   }
 

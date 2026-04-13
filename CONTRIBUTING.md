@@ -10,14 +10,12 @@ LaunchKit is a public Render showcase. Code that lands on `main` is graded as mu
 git clone <your-fork>
 cd renderlaunchkit
 npm install            # also installs lefthook + git hooks via `prepare`
-docker compose up -d   # local Postgres + Redis
 cp .env.example .env   # then fill in your API keys
-npm run db:push
-npm run seed
+npm run setup:local
 npm run dev
 ```
 
-The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`. See `README.md` for the full deployment story.
+The dashboard is at `http://localhost:5173`, the API at `http://localhost:3000`. `npm run setup:local` uses the tracked `docker-compose.yml` stack: Postgres on `localhost:5432`, Redis on `localhost:6379`, and MinIO on `localhost:9000` / `localhost:9001`. See `README.md` for the full deployment story.
 
 ---
 

@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import crypto from 'node:crypto';
 import { eq, and } from 'drizzle-orm';
 import { database } from '../lib/database.js';
-import { analysisJobQueue } from '../lib/job-queue-clients.js';
+import { getAnalysisJobQueue } from '../lib/job-queue-clients.js';
 import {
   GitHubWebhookPayloadSchema,
   parseRepoUrl,
@@ -161,7 +161,7 @@ githubWebhookRoutes.post(
     // the webhook_events row so GitHub's automatic redelivery is
     // not deduped against a delivery we never actually processed.
     try {
-      await analysisJobQueue.add(
+      await getAnalysisJobQueue().add(
         'filter-webhook',
         {
           projectId: project.id,

@@ -638,9 +638,16 @@ const regenerateAssetSchema = z.object({
     .optional(),
 });
 
-assetApiRoutes.post('/:id/regenerate', expensiveRouteRateLimit, async (c) => {
-  const id = parseUuidParam(c);
-  if (!id) return invalidUuidResponse(c);
+assetApiRoutes.post(
+  '/:id/regenerate',
+  (c, next) => {
+    const id = parseUuidParam(c);
+    if (!id) return invalidUuidResponse(c);
+    return next();
+  },
+  expensiveRouteRateLimit,
+  async (c) => {
+  const id = c.req.param('id');
 
   let rawBody: unknown;
   try {

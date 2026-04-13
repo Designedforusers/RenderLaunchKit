@@ -85,9 +85,16 @@ const NON_TERMINAL_STATUSES = [
 
 // ── POST /api/projects/:projectId/meetings ───────────────────────────
 
-pikaRoutes.post('/:projectId/meetings', expensiveRouteRateLimit, async (c) => {
-  const projectId = parseUuidParam(c, 'projectId');
-  if (!projectId) return invalidUuidResponse(c);
+pikaRoutes.post(
+  '/:projectId/meetings',
+  (c, next) => {
+    const projectId = parseUuidParam(c, 'projectId');
+    if (!projectId) return invalidUuidResponse(c);
+    return next();
+  },
+  expensiveRouteRateLimit,
+  async (c) => {
+  const projectId = c.req.param('projectId');
 
   // Parse the body against the Zod schema at the boundary. A
   // malformed POST (missing meetUrl, non-URL value, botName too
