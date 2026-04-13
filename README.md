@@ -35,11 +35,12 @@ LaunchKit runs nine services on Render. Each one exists for a specific reason.
 | `launchkit-pika-worker` | Worker | Isolated instance for the Pika meeting-join subprocess. Click-to-avatar latency stays under 100ms regardless of what else is running. |
 | `launchkit-cron` | Cron | Trending signal ingestion + feedback insight clustering, every 6 hours. |
 | `launchkit-workflows` | Workflows | Per-asset generation with per-task compute sizing — `starter` for text, `standard` for images and audio, `pro` for video and 3D. |
+| `launchkit-renderer` | Docker | Remotion MP4 compositing — headless Chrome renders four video compositions (product video, voice commercial, podcast waveform, vertical video) and uploads to MinIO. |
 | `launchkit-minio` | Docker | S3-compatible object store on a Render Disk for rendered video bytes. |
 | `launchkit-redis` | Key-Value | BullMQ queues + pub/sub for SSE progress + GitHub API cache. Three roles, one service. |
 | `launchkit-db` | Postgres | Durable state + pgvector embeddings for similarity search and feedback clustering. |
 
-Seven of the eight come from a single `render.yaml` Blueprint. The eighth (`launchkit-workflows`) is a one-time dashboard step — Render Workflows is in public beta and the Blueprint syntax doesn't support it yet.
+Eight of the nine come from a single `render.yaml` Blueprint. The ninth (`launchkit-workflows`) is a one-time dashboard step — Render Workflows is in public beta and the Blueprint syntax doesn't support it yet.
 
 ### Why Render was the right platform
 
@@ -322,7 +323,7 @@ To exercise the workflow service locally, run `render workflows dev -- npm run d
 
 ```
 renderlaunchkit/
-├── render.yaml                       # Blueprint — provisions 7 of 8 services
+├── render.yaml                       # Blueprint — provisions 8 of 9 services
 ├── docker-compose.yml                # Local Postgres + Redis
 ├── package.json                      # Workspace root
 ├── seed.ts                           # Demo data
