@@ -1,0 +1,8 @@
+node_modules
+.cache
+.git
+dist
+apps/dashboard/dist
+*.md
+.env
+.env.*
