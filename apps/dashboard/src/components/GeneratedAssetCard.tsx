@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowsClockwise, PencilSimpleLine, Play, Pause, SpeakerHigh } from '@phosphor-icons/react';
+import { ArrowsClockwise, Megaphone, Microphone, PencilSimpleLine, Play, Pause, SpeakerHigh } from '@phosphor-icons/react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AssetLightbox } from './AssetLightbox.js';
 import {
@@ -94,6 +94,13 @@ const ASSET_TYPE_ICONS: Record<string, string> = {
     'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12',
 };
 
+// Phosphor icon overrides for asset types that benefit from a
+// purpose-built icon rather than a generic SVG path.
+const ASSET_TYPE_PHOSPHOR: Record<string, React.ComponentType<{ size?: number; weight?: 'fill' | 'regular' | 'bold' }>> = {
+  podcast_script: Microphone,
+  voice_commercial: Megaphone,
+};
+
 // Tint palette per asset type — drives the icon halo + the quality
 // score ring color. Gives each card a subtly distinct identity so a
 // grid of 8 assets reads as a varied kit, not eight copies.
@@ -149,6 +156,16 @@ const ASSET_TYPE_TINTS: Record<string, { from: string; to: string; text: string 
     from: 'from-fuchsia-500/20',
     to: 'to-fuchsia-500/5',
     text: 'text-fuchsia-300',
+  },
+  voice_commercial: {
+    from: 'from-rose-500/20',
+    to: 'to-rose-500/5',
+    text: 'text-rose-300',
+  },
+  podcast_script: {
+    from: 'from-red-500/20',
+    to: 'to-red-500/5',
+    text: 'text-red-300',
   },
   // Lime for the world_scene — tactile, organic, "the real world".
   // Deliberately distinct from `changelog_entry`'s emerald so two
@@ -278,7 +295,8 @@ export function GeneratedAssetCard({
       ? `/api/assets/${asset.id}/video.mp4?variant=narrated`
       : null;
   const label = ASSET_TYPE_LABELS[asset.type] ?? asset.type;
-  const iconPath = ASSET_TYPE_ICONS[asset.type] ?? ASSET_TYPE_ICONS['blog_post'];
+  const PhosphorIcon = ASSET_TYPE_PHOSPHOR[asset.type];
+  const iconPath = PhosphorIcon ? null : (ASSET_TYPE_ICONS[asset.type] ?? ASSET_TYPE_ICONS['blog_post']);
   const tint = ASSET_TYPE_TINTS[asset.type] ?? DEFAULT_TINT;
   // Structured content is rendered via the per-type body components,
   // which produce richer layouts than the character count of
@@ -474,19 +492,23 @@ export function GeneratedAssetCard({
               whileHover={{ rotate: -6, scale: 1.06 }}
               transition={{ type: 'spring', stiffness: 360, damping: 18 }}
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.75}
-                  d={iconPath}
-                />
-              </svg>
+              {PhosphorIcon ? (
+                <PhosphorIcon size={20} weight="bold" />
+              ) : (
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.75}
+                    d={iconPath ?? ''}
+                  />
+                </svg>
+              )}
             </motion.div>
             <div>
               <h4 className="font-mono font-semibold text-sm text-surface-100">
