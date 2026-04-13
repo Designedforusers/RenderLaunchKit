@@ -60,6 +60,12 @@ const REQUIRED_ASSETS = [
       'Create an OG image that communicates the product value at a glance.',
     priority: 2,
   },
+  {
+    type: 'product_video',
+    generationInstructions:
+      'Generate a cinematic product video showcasing the key features with dynamic visuals and polished motion.',
+    priority: 3,
+  },
 ] as const;
 
 export interface LaunchStrategyCapabilityInput {
