@@ -10,6 +10,8 @@ interface AgentToolCallStreamProps {
   toolCalls: ToolCallEntry[];
   /** Whether the pipeline is still running — controls the trailing caret. */
   isStreaming: boolean;
+  /** The current pipeline phase — used to show contextual empty states. */
+  phase?: string | null | undefined;
   /** Cap the visible list to avoid unbounded scroll in long runs. */
   maxEntries?: number;
 }
@@ -31,6 +33,7 @@ interface AgentToolCallStreamProps {
 export function AgentToolCallStream({
   toolCalls,
   isStreaming,
+  phase,
   maxEntries = 40,
 }: AgentToolCallStreamProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +102,7 @@ export function AgentToolCallStream({
         className="relative mt-4 h-48 space-y-1.5 overflow-y-auto pr-1"
       >
         {visible.length === 0 ? (
-          <EmptyState isStreaming={isStreaming} />
+          <EmptyState isStreaming={isStreaming} phase={phase} />
         ) : (
           <AnimatePresence initial={false}>
             {visible.map((entry, idx) => (
@@ -200,7 +203,17 @@ function ToolCallLine({
   );
 }
 
-function EmptyState({ isStreaming }: { isStreaming: boolean }) {
+/** Phases where the agent does not invoke tools (pure LLM calls). */
+const NO_TOOL_PHASES = new Set(['reviewing', 'generating']);
+
+function getEmptyMessage(isStreaming: boolean, phase?: string | null): string {
+  if (!isStreaming) return 'No agent activity recorded';
+  if (phase && NO_TOOL_PHASES.has(phase)) return 'No tool calls during this phase';
+  return 'Waiting for the first tool call...';
+}
+
+function EmptyState({ isStreaming, phase }: { isStreaming: boolean; phase?: string | null | undefined }) {
+  const message = getEmptyMessage(isStreaming, phase);
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -223,9 +236,7 @@ function EmptyState({ isStreaming }: { isStreaming: boolean }) {
           )}
         </div>
         <p className="font-mono text-mono-sm text-text-muted">
-          {isStreaming
-            ? 'Waiting for the first tool call...'
-            : 'No agent activity recorded'}
+          {message}
         </p>
       </div>
     </motion.div>

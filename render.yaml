@@ -128,11 +128,11 @@ services:
       # itself is created manually in the dashboard because Render
       # Workflows is not yet in the Blueprint syntax — see ADR-002
       # and CLAUDE.md § "Workflows service".
+      # Render's `fromService.property: host` returns the private
+      # hostname which has no TLS on 443. The S3 SDK needs the
+      # public hostname so HTTPS works via Render's ingress.
       - key: MINIO_ENDPOINT_HOST
-        fromService:
-          name: launchkit-minio
-          type: web
-          property: host
+        value: launchkit-minio.onrender.com
       - key: MINIO_ROOT_USER
         fromService:
           name: launchkit-minio
@@ -477,10 +477,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MINIO_ENDPOINT_HOST
-        fromService:
-          name: launchkit-minio
-          type: web
-          property: host
+        value: launchkit-minio.onrender.com
       - key: MINIO_ROOT_USER
         fromService:
           name: launchkit-minio

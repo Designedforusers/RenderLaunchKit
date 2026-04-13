@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Competitor } from '@launchkit/shared';
+import type { LaunchKitVideoProps } from '@launchkit/video';
+import type { Asset } from '../lib/api.js';
 import { useProjectDetailData } from '../hooks/useProjectData.js';
 import { useProjectEventStream } from '../hooks/useProjectEventStream.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
+import { RemotionPreviewCard } from './RemotionPreviewCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import { ProjectCostChip } from './ProjectCostChip.js';
 import { PikaMeetingCard } from './PikaMeetingCard.js';
@@ -44,6 +47,36 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   // loading/error guards is cheap and correct.
   const toolCalls = useMemo(() => toolCallsFromEvents(events), [events]);
   const detailsByPhase = useMemo(() => latestDetailByPhase(events), [events]);
+
+  // Remotion composition cards: product_video assets with
+  // remotionProps get a companion card in the Videos gallery.
+  // Computed before early returns to satisfy rules-of-hooks.
+  const projectAssets = useMemo(() => project?.assets ?? [], [project?.assets]);
+  type GalleryEntry = Asset & { _remotionCard?: true };
+  const remotionAssetIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of projectAssets) {
+      if (
+        a.type === 'product_video' &&
+        a.status !== 'failed' &&
+        a.metadata?.['remotionProps']
+      ) {
+        ids.add(a.id);
+      }
+    }
+    return ids;
+  }, [projectAssets]);
+
+  const galleryAssets = useMemo((): GalleryEntry[] => {
+    const entries: GalleryEntry[] = [];
+    for (const a of projectAssets) {
+      entries.push(a);
+      if (remotionAssetIds.has(a.id)) {
+        entries.push({ ...a, id: `${a.id}__remotion`, _remotionCard: true });
+      }
+    }
+    return entries;
+  }, [projectAssets, remotionAssetIds]);
 
   if (loading && !project) {
     return <ProjectDetailSkeleton />;
@@ -199,6 +232,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               <AgentToolCallStream
                 toolCalls={toolCalls}
                 isStreaming={isInProgress}
+                phase={currentPhase}
               />
             </div>
           </motion.div>
@@ -419,16 +453,33 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                   show as an error in the gallery. */}
               <ProjectCostChip projectId={project.id} />
               <AssetGallery
-                assets={project.assets}
-                expectedCount={expectedAssetCount}
+                assets={galleryAssets}
+                expectedCount={expectedAssetCount + remotionAssetIds.size}
                 isGenerating={isGenerating}
-                renderAsset={(asset) => (
-                  <GeneratedAssetCard
-                    asset={asset}
-                    onRefresh={refresh}
-                    projectAssets={project.assets}
-                  />
-                )}
+                renderAsset={(asset) => {
+                  const entry = asset as GalleryEntry;
+                  if (entry._remotionCard) {
+                    const realAsset = project.assets.find(
+                      (a) => a.id === asset.id.replace('__remotion', '')
+                    );
+                    const props = (realAsset?.metadata as Record<string, unknown> | null)?.['remotionProps'] as LaunchKitVideoProps | undefined;
+                    if (!realAsset || !props) return null;
+                    return (
+                      <RemotionPreviewCard
+                        assetId={realAsset.id}
+                        remotionProps={props}
+                        version={realAsset.version}
+                      />
+                    );
+                  }
+                  return (
+                    <GeneratedAssetCard
+                      asset={asset}
+                      onRefresh={refresh}
+                      projectAssets={project.assets}
+                    />
+                  );
+                }}
               />
               {/* Pika video-meeting card — rendered after the asset
                   gallery so it reads as the "next action" once the

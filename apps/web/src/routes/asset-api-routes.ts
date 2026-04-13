@@ -306,18 +306,26 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
     cacheSeed = narrationSeed;
   }
 
-  // Dispatch to the workflow task and wait for it to finish. The
-  // task handles render + MinIO upload + asset row update; the
-  // helper blocks until the task reaches a terminal state and
-  // parses the result through a Zod schema.
-  const rendered = await triggerRemotionRender({
-    assetId: asset.id,
-    version: asset.version,
-    compositionId: 'LaunchKitProductVideo',
-    inputProps: taskInputProps,
-    variant,
-    ...(cacheSeed !== undefined ? { cacheSeed } : {}),
-  });
+  // Dispatch to the renderer service and wait for it to finish.
+  // The renderer runs headless Chrome, renders the Remotion
+  // composition, uploads the MP4 to MinIO, and returns the URL.
+  // Wrap in try/catch so browser-initiated downloads get a proper
+  // error status instead of the global handler's JSON dump.
+  let rendered: Awaited<ReturnType<typeof triggerRemotionRender>>;
+  try {
+    rendered = await triggerRemotionRender({
+      assetId: asset.id,
+      version: asset.version,
+      compositionId: 'LaunchKitProductVideo',
+      inputProps: taskInputProps,
+      variant,
+      ...(cacheSeed !== undefined ? { cacheSeed } : {}),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown render error';
+    console.error('[video.mp4] Remotion render failed:', message);
+    return c.json({ error: 'Video render failed', detail: message }, 502);
+  }
 
   const redirectUrl = rendered.url;
   c.header('X-Remotion-Cache', rendered.cached ? 'hit' : 'miss');
