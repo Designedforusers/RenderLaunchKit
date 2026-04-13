@@ -151,7 +151,7 @@ function ProjectPage() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/app" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
@@ -181,7 +181,7 @@ function TrendsPageWrapper() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/app" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
@@ -210,7 +210,7 @@ function CreatePageWrapper() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/app" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-3 group">
             <motion.div
               className="w-6 h-6 rounded bg-accent-500 flex items-center justify-center"
               whileHover={{ scale: 1.12, rotate: -6 }}
