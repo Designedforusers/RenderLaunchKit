@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowsClockwise, Megaphone, Microphone, PencilSimpleLine, Play, Pause, SpeakerHigh } from '@phosphor-icons/react';
+import { ArrowsClockwise, DownloadSimple, Megaphone, Microphone, PencilSimpleLine, Play, Pause, SpeakerHigh } from '@phosphor-icons/react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AssetLightbox } from './AssetLightbox.js';
 import {
@@ -182,6 +182,7 @@ const DEFAULT_TINT = {
   to: 'to-surface-700/5',
   text: 'text-surface-300',
 };
+
 
 // ── Model selector options (mirrors @launchkit/shared model registry) ──
 
@@ -447,6 +448,38 @@ export function GeneratedAssetCard({
     }
   };
 
+  const handleDownload = () => {
+    const slug = label.toLowerCase().replace(/\s+/g, '-');
+
+    // Written-only assets (no media file) — download as markdown
+    const hasMedia = Boolean(asset.mediaUrl) || asset.type === 'product_video' || asset.type === 'world_scene';
+    if (!hasMedia) {
+      const text = markdownForCopy
+        ?? (asset.userEdited && asset.userEditedContent ? asset.userEditedContent : asset.content);
+      if (text) {
+        const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `launchkit-${slug}-v${asset.version}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
+      return;
+    }
+
+    // All media assets — same-origin download proxy that streams from
+    // CDN with Content-Disposition: attachment (avoids cross-origin
+    // download attribute being silently ignored by the browser).
+    const a = document.createElement('a');
+    a.href = `/api/assets/${asset.id}/download`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   return (
     <motion.div
       layout
@@ -688,7 +721,19 @@ export function GeneratedAssetCard({
           {/* Thin overlay label bar — replaces the full header for media cards */}
           <div className="absolute bottom-0 inset-x-0 z-[5] flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-t from-black/70 to-transparent rounded-b-lg pointer-events-none">
             <span className="font-mono text-xs font-semibold text-white/90 truncate">{label}</span>
-            <div className="pointer-events-auto">
+            <div className="pointer-events-auto flex items-center gap-2">
+              {asset.type === 'world_scene' ? (
+                <WorldSceneDownloadMenu assetId={asset.id} worldLabsMetadata={worldLabsMetadata} />
+              ) : (
+                <Tooltip label="Download">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                    className="rounded-md p-1 text-white/70 transition-colors hover:text-white hover:bg-white/10"
+                  >
+                    <DownloadSimple size={14} weight="bold" />
+                  </button>
+                </Tooltip>
+              )}
               <LaunchStatusBadge status={asset.status} />
             </div>
           </div>
@@ -912,31 +957,16 @@ export function GeneratedAssetCard({
               </motion.span>
             )}
           </AnimatePresence>
-          {asset.type === 'product_video' && remotionProps ? (
-            <Tooltip label="Download the rendered visual cut">
-              <a
-                href={`/api/assets/${asset.id}/video.mp4?download=1`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-ghost text-surface-400 text-sm flex items-center gap-1.5"
-              >
-                <svg
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                MP4
-              </a>
-            </Tooltip>
-          ) : null}
+          <Tooltip label="Download">
+            <motion.button
+              type="button"
+              onClick={handleDownload}
+              whileTap={{ scale: 0.94 }}
+              className="btn-ghost text-surface-400 text-sm flex items-center gap-1.5"
+            >
+              <DownloadSimple size={14} weight="bold" />
+            </motion.button>
+          </Tooltip>
           {hasNarratedVariant ? (
             <Tooltip label="Toggle between visual and narrated cut">
               <motion.button
@@ -1283,6 +1313,80 @@ function FailedAssetBody({
 // Sandbox on the iframe: we do NOT allow-forms or allow-popups or
 // allow-top-navigation because the embedded viewer should not be
 // able to navigate the host page. The Marble viewer needs
+// World scene download dropdown — offers Marble's three export
+// formats (panorama, Gaussian splat, collider mesh) so the user
+// can pick the one they need instead of a single opaque download.
+function WorldSceneDownloadMenu({
+  assetId,
+  worldLabsMetadata,
+}: {
+  assetId: string;
+  worldLabsMetadata: Record<string, unknown> | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const hasPano =
+    typeof worldLabsMetadata?.['panoUrl'] === 'string' ||
+    typeof worldLabsMetadata?.['thumbnailUrl'] === 'string';
+  const hasSplat = typeof worldLabsMetadata?.['splatUrl'] === 'string';
+  const hasMesh = typeof worldLabsMetadata?.['colliderMeshUrl'] === 'string';
+
+  const options: { format: string; label: string; badge: string }[] = [];
+  if (hasPano) options.push({ format: 'pano', label: '360° Panorama', badge: 'PNG' });
+  if (hasSplat) options.push({ format: 'splat', label: 'Gaussian Splat', badge: 'SPZ' });
+  if (hasMesh) options.push({ format: 'mesh', label: 'Collider Mesh', badge: 'GLB' });
+
+  if (options.length === 0) return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <Tooltip label="Download">
+        <button
+          onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+          className="rounded-md p-1 text-white/70 transition-colors hover:text-white hover:bg-white/10"
+        >
+          <DownloadSimple size={14} weight="bold" />
+        </button>
+      </Tooltip>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full right-0 mb-1.5 min-w-[180px] rounded-lg border border-surface-700 bg-surface-900 shadow-xl overflow-hidden z-50"
+          >
+            {options.map((opt) => (
+              <a
+                key={opt.format}
+                href={`/api/assets/${assetId}/download?format=${opt.format}`}
+                onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-surface-300 hover:bg-surface-800 hover:text-white transition-colors"
+              >
+                <span>{opt.label}</span>
+                <span className="font-mono text-[10px] text-surface-500">{opt.badge}</span>
+              </a>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // `allow-scripts` and `allow-same-origin` to run its WebGL runtime,
 // and we grant those because we trust the marble.worldlabs.ai
 // domain (it's the same domain we POST to from the worker). If

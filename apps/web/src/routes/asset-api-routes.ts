@@ -443,6 +443,118 @@ assetApiRoutes.get('/:id/audio.mp3', async (c) => {
   });
 });
 
+// ── GET /api/assets/:id/download — Download any asset's media ──
+//
+// Same-origin download proxy for the dashboard. Cross-origin CDN
+// URLs (fal.ai images, MinIO audio, Marble panoramas) cannot be
+// downloaded via `<a download>` in the browser — the download
+// attribute is silently ignored for cross-origin responses. This
+// route fetches the media server-side (no CORS) and streams it back
+// with `Content-Disposition: attachment` so the browser saves the
+// file instead of navigating. Product video already has its own
+// render-and-proxy route at `GET /:id/video.mp4?download=1`, so
+// this handler redirects there for that type.
+
+function extFromContentType(type: string): string {
+  if (type.includes('png')) return 'png';
+  if (type.includes('jpeg')) return 'jpg';
+  if (type.includes('webp')) return 'webp';
+  if (type.includes('svg')) return 'svg';
+  if (type.includes('mp4')) return 'mp4';
+  if (type.includes('webm')) return 'webm';
+  if (type === 'audio/mpeg' || type.includes('mp3')) return 'mp3';
+  if (type.includes('wav')) return 'wav';
+  if (type.includes('ogg')) return 'ogg';
+  return 'bin';
+}
+
+assetApiRoutes.get('/:id/download', async (c) => {
+  const id = parseUuidParam(c);
+  if (!id) return invalidUuidResponse(c);
+
+  const asset = await database.query.assets.findFirst({
+    where: eq(assets.id, id),
+  });
+  if (!asset) {
+    return c.json({ error: 'Asset not found' }, 404);
+  }
+
+  // Product video has its own render + proxy route.
+  if (asset.type === 'product_video') {
+    return c.redirect(`/api/assets/${id}/video.mp4?download=1`, 302);
+  }
+
+  // Resolve the actual remote URL to proxy.
+  const metadata = (asset.metadata as Record<string, unknown> | null) ?? null;
+  let sourceUrl: string | null = null;
+  // Override the content-type–derived extension for binary formats
+  // whose CDN serves `application/octet-stream` (splats, meshes).
+  let extOverride: string | null = null;
+
+  if (asset.type === 'voice_commercial' || asset.type === 'podcast_script') {
+    // Audio — durable object storage URL, or fall back to the
+    // streaming route which handles local-disk serving.
+    const audioObjectUrl = metadata?.['audioObjectUrl'];
+    if (typeof audioObjectUrl === 'string' && audioObjectUrl.length > 0) {
+      sourceUrl = audioObjectUrl;
+    } else {
+      return c.redirect(`/api/assets/${id}/audio.mp3?download=1`, 302);
+    }
+  } else if (asset.type === 'world_scene') {
+    // World scene exports: the Marble API provides a 360° panorama
+    // (equirectangular PNG, 2560x1280), Gaussian splats (SPZ), and
+    // a collider mesh (GLB). The `?format` param selects which one.
+    // Do NOT fall back to `asset.mediaUrl` — for world_scene that
+    // is the Marble viewer HTML page, not a downloadable file.
+    const format = c.req.query('format') ?? 'pano';
+    const worldLabs =
+      typeof metadata?.['worldLabs'] === 'object' && metadata['worldLabs'] !== null
+        ? (metadata['worldLabs'] as Record<string, unknown>)
+        : null;
+
+    if (format === 'splat') {
+      const splatUrl = worldLabs?.['splatUrl'];
+      sourceUrl = typeof splatUrl === 'string' ? splatUrl : null;
+      extOverride = 'spz';
+    } else if (format === 'mesh') {
+      const meshUrl = worldLabs?.['colliderMeshUrl'];
+      sourceUrl = typeof meshUrl === 'string' ? meshUrl : null;
+      extOverride = 'glb';
+    } else {
+      sourceUrl =
+        (typeof worldLabs?.['panoUrl'] === 'string' ? worldLabs['panoUrl'] : null) ??
+        (typeof worldLabs?.['thumbnailUrl'] === 'string' ? worldLabs['thumbnailUrl'] : null) ??
+        (typeof metadata?.['thumbnailUrl'] === 'string' ? metadata['thumbnailUrl'] : null);
+    }
+  } else {
+    sourceUrl = asset.mediaUrl;
+  }
+
+  if (!sourceUrl) {
+    return c.json({ error: 'Asset has no downloadable media' }, 404);
+  }
+
+  const upstream = await fetch(sourceUrl);
+  if (!upstream.ok) {
+    return c.json({ error: 'Failed to fetch media from storage' }, 502);
+  }
+
+  const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
+  const ext = extOverride ?? extFromContentType(contentType);
+  const filename = `launchkit-${asset.type.replace(/_/g, '-')}-v${asset.version}.${ext}`;
+
+  c.header('Content-Type', contentType);
+  c.header('Content-Disposition', `attachment; filename="${filename}"`);
+  const contentLength = upstream.headers.get('content-length');
+  if (contentLength !== null) {
+    c.header('Content-Length', contentLength);
+  }
+  if (!upstream.body) {
+    return c.json({ error: 'Storage returned empty body' }, 502);
+  }
+  return c.body(upstream.body);
+});
+
 // ── Phase 7: feedback event log helper ──
 //
 // Every user action (approve / reject / edit / regenerate) writes a

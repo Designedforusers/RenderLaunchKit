@@ -7,6 +7,7 @@ import {
   PikaMeetingSessionListResponseSchema,
   ProjectCostsResponseSchema,
   ProjectResponseSchema,
+  ProjectStatusSchema,
 } from '@launchkit/shared';
 import type {
   AssetResponse,
@@ -74,7 +75,7 @@ const ProjectSummarySchema = z.object({
   repoUrl: z.string(),
   repoOwner: z.string(),
   repoName: z.string(),
-  status: z.string(),
+  status: ProjectStatusSchema,
   reviewScore: z.number().nullable(),
   revisionCount: z.number(),
   webhookEnabled: z.boolean(),

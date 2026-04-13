@@ -16,6 +16,7 @@ import { ProjectDetailView } from './components/ProjectDetailView.js';
 import { TrendsPage } from './components/TrendsPage.js';
 import { CreatePage } from './components/CreatePage.js';
 import { LandingPage } from './components/LandingPage.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { useProjectListData } from './hooks/useProjectData.js';
 
 function HomePage() {
@@ -245,14 +246,16 @@ export default function App() {
         exit={{ opacity: 0, y: -8, pointerEvents: 'none' as const }}
         transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       >
-        <Routes location={location}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/app" element={<HomePage />} />
-          <Route path="/trends" element={<TrendsPageWrapper />} />
-          <Route path="/create" element={<CreatePageWrapper />} />
-          <Route path="/projects/:id" element={<ProjectPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes location={location}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/app" element={<HomePage />} />
+            <Route path="/trends" element={<TrendsPageWrapper />} />
+            <Route path="/create" element={<CreatePageWrapper />} />
+            <Route path="/projects/:id" element={<ProjectPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </motion.div>
     </AnimatePresence>
   );

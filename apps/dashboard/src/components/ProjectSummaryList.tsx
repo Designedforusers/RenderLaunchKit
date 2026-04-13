@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, LinkSimple } from '@phosphor-icons/react';
+import type { ProjectStatus } from '@launchkit/shared';
 import type { ProjectSummary } from '../lib/api.js';
 import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 
@@ -276,8 +277,9 @@ function ProjectListEmptyState() {
   );
 }
 
-function getProgressPercent(status: string): number {
-  const map: Record<string, number> = {
+function getProgressPercent(status: ProjectStatus): number {
+  const map: Record<ProjectStatus, number> = {
+    pending: 0,
     analyzing: 15,
     researching: 30,
     strategizing: 45,
@@ -287,5 +289,5 @@ function getProgressPercent(status: string): number {
     complete: 100,
     failed: 100,
   };
-  return map[status] ?? 0;
+  return map[status];
 }
