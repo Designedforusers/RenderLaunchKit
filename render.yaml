@@ -303,18 +303,14 @@ services:
   # those all live on the shared `launchkit-worker` above.
   - type: worker
     name: launchkit-pika-worker
-    runtime: node
+    runtime: docker
     plan: pro
     rootDir: .
-    # Python 3 + `requests` install lives here, NOT on the shared
-    # worker. The vendored CLI's only Python dep is `requests>=2.32.5`.
-    # The `--break-system-packages` flag is required on Debian 12+
-    # because the system pip refuses to install outside a virtualenv
-    # by default — fine here because the Render container has no
-    # competing Python environment and the install is scoped to
-    # the container lifetime.
-    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --break-system-packages -r vendor/pikastream-video-meeting/requirements.txt && npm ci --include=dev && npm run build
-    startCommand: npm run start:pika-worker
+    dockerfilePath: ./Dockerfile.pika-worker
+    # Docker runtime gives us full OS control — apt-get installs
+    # Python 3 + pip in the Dockerfile, which the Node runtime's
+    # read-only filesystem blocks. The vendored Pika CLI's only
+    # Python dep is `requests>=2.32.5`.
     buildFilter:
       paths:
         - package.json
