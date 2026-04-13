@@ -1,4 +1,5 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
+import { ArrowsClockwise, PencilSimpleLine } from '@phosphor-icons/react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AssetLightbox } from './AssetLightbox.js';
 import {
@@ -193,6 +194,8 @@ export function GeneratedAssetCard({
 }: GeneratedAssetCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [editPromptOpen, setEditPromptOpen] = useState(false);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
   const [videoVariant, setVideoVariant] = useState<'visual' | 'narrated'>('visual');
   const [videoError, setVideoError] = useState<string | null>(null);
   const [exportingNarrated, setExportingNarrated] = useState(false);
@@ -359,6 +362,30 @@ export function GeneratedAssetCard({
     }
   };
 
+  const handleEditRegenerate = async () => {
+    const instructions = editInputRef.current?.value.trim();
+    if (!instructions) return;
+    setRegenerating(true);
+    setEditPromptOpen(false);
+    try {
+      await api.regenerateAsset(asset.id, { instructions });
+      toast({
+        message: 'Regeneration queued with custom instructions',
+        variant: 'info',
+        description: `${label} will refresh shortly`,
+      });
+      onRefresh();
+    } catch (err) {
+      toast({
+        message: 'Regeneration failed',
+        variant: 'error',
+        ...errorDescription(err),
+      });
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const handleExportNarrated = async () => {
     if (!narratedPreviewUrl) {
       return;
@@ -439,7 +466,7 @@ export function GeneratedAssetCard({
           Media cards are content-dominant: the header is replaced by
           a thin overlay label at the bottom of the media preview,
           and all metadata + actions live in the lightbox. */}
-      {!isMedia && (
+      {!isMedia && (<>
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <motion.div
@@ -498,13 +525,71 @@ export function GeneratedAssetCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!isInProgress && asset.status !== 'failed' && (
+              <>
+                <Tooltip label="Regenerate">
+                  <button
+                    onClick={() => void handleRegenerate()}
+                    disabled={regenerating}
+                    className="rounded-md p-1.5 text-surface-500 transition-colors hover:bg-surface-800 hover:text-accent-400 disabled:opacity-50"
+                  >
+                    <ArrowsClockwise size={14} weight="bold" className={regenerating ? 'animate-spin' : ''} />
+                  </button>
+                </Tooltip>
+                <Tooltip label="Edit & regenerate">
+                  <button
+                    onClick={() => setEditPromptOpen(!editPromptOpen)}
+                    className="rounded-md p-1.5 text-surface-500 transition-colors hover:bg-surface-800 hover:text-accent-400"
+                  >
+                    <PencilSimpleLine size={14} weight="bold" />
+                  </button>
+                </Tooltip>
+              </>
+            )}
             {asset.qualityScore !== null && (
               <QualityScoreRing score={asset.qualityScore} />
             )}
             <LaunchStatusBadge status={asset.status} />
           </div>
         </div>
-      )}
+
+        {/* Edit prompt inline */}
+        <AnimatePresence>
+          {editPromptOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="mb-4 overflow-hidden"
+            >
+              <div className="rounded-lg border border-surface-700 bg-surface-900/50 p-3">
+                <textarea
+                  ref={editInputRef}
+                  placeholder="What should be different? e.g. 'Make it more conversational' or 'Focus on the API, not the UI'"
+                  className="w-full resize-none rounded-md bg-transparent text-body-sm text-text-secondary placeholder:text-surface-600 focus:outline-none"
+                  rows={2}
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditPromptOpen(false)}
+                    className="rounded-md px-3 py-1 text-body-xs text-surface-400 hover:text-text-primary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleEditRegenerate()}
+                    disabled={regenerating}
+                    className="rounded-md bg-accent-500/15 px-3 py-1 text-body-xs font-medium text-accent-400 hover:bg-accent-500/25 disabled:opacity-50"
+                  >
+                    {regenerating ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>)}
 
       {/* Content Preview */}
       {isInProgress ? (
