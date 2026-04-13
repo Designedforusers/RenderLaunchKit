@@ -511,10 +511,12 @@ async function generatePodcastScript(
   input: WriterInput
 ): Promise<WriterResult> {
   const systemPrompt = withStructuredPreamble(
-    `Generate a 2-3 minute podcast dialog between two hosts named Alex and Sam discussing this product.
+    `Generate a 90-second podcast dialog between two hosts named Alex and Sam discussing this product.
 
 Guidance:
-- 18-30 alternating dialog lines
+- 12-18 alternating dialog lines
+- Total script MUST stay under 4000 characters (hard limit for audio synthesis)
+- Keep each line under 250 characters — punchy, conversational, not lecture-style
 - Alex asks the questions a curious developer would ask
 - Sam adds technical depth, counterpoints, and specifics
 - The product is the subject throughout
