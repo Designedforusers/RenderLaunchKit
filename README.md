@@ -26,7 +26,7 @@ It's not a prompt template. It's a multi-agent system with a real pipeline, real
 
 ## Built on Render
 
-LaunchKit runs eight services on Render. Each one exists for a specific reason.
+LaunchKit runs nine services on Render. Each one exists for a specific reason.
 
 | Service | Type | Why it exists |
 |---|---|---|
@@ -166,7 +166,7 @@ The "why" behind the service topology — these are the decisions a developer wo
 
 The migration shipped in four PRs you can read top-to-bottom: [`6eca706`](https://github.com/Designedforusers/RenderLaunchKit/commit/6eca706) (extract `packages/asset-generators/`), [`7b7150a`](https://github.com/Designedforusers/RenderLaunchKit/commit/7b7150a) (add workflows behind a feature flag), [`71b8c04`](https://github.com/Designedforusers/RenderLaunchKit/commit/71b8c04) (fix task return types — discovered by local testing against `render workflows dev`), [`33a3790`](https://github.com/Designedforusers/RenderLaunchKit/commit/33a3790) (delete the BullMQ generation queue, −404 lines net).
 
-### Why eight services?
+### Why nine services?
 
 **Web ↔ Worker separation** is non-negotiable. AI agentic loops take 30–180 seconds. They cannot run in HTTP request handlers. The shared worker exists so the web service stays snappy.
 
@@ -287,7 +287,7 @@ To exercise the workflow service locally, run `render workflows dev -- npm run d
 | `npm run build` | Composite tsc for backends + Vite build for the dashboard |
 | `npm run typecheck` | `tsc -b` + dashboard `tsc --noEmit` (the prepush gate) |
 | `npm run lint` | `eslint . --max-warnings=0` (the prepush gate) |
-| `npm test` | Smoke tests via `node:test` against compiled worker output |
+| `npm test` | Smoke tests via `node:test` against compiled output; respects `.env` infra ports for local overrides |
 | `npm run infra:up` | Boot local Postgres + Redis + MinIO from the tracked compose file |
 | `npm run setup:local` | Boot infra, apply SQL migrations, and seed the demo project |
 | `npm run db:migrate` | Apply checked-in SQL migrations to the local database |

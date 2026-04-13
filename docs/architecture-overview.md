@@ -17,7 +17,7 @@ Six stages, each backed by a different agent or processor:
 
 Every dollar spent on AI providers is tracked per-asset via `AsyncLocalStorage`. The dashboard shows real costs, not estimates. When it says "Generated for $0.11," that's the actual Anthropic + fal.ai + ElevenLabs spend.
 
-## Why eight services
+## Why nine services
 
 Each service exists for a specific architectural reason. The project didn't start with eight — it started with three and added five when the deployment constraints demanded it.
 
@@ -60,7 +60,7 @@ The split actually made the architecture cleaner — it's a real service boundar
 - **TypeScript strict mode + four extra flags** — `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`, `noImplicitOverride`. Zero `@ts-ignore`. Two `as unknown as` casts in the entire codebase, both centralized with docstrings.
 - **Zod at every runtime boundary** — HTTP bodies, LLM responses, env vars, `jsonb` columns, external APIs, webhooks. No raw input touches application code.
 - **ESLint at `--max-warnings=0`** with the anti-`any` family enabled.
-- **170 passing tests** covering schemas, pricing helpers, auth middleware, crypto, and API response shapes.
+- **199 passing tests** covering schemas, pricing helpers, auth middleware, crypto, and API response shapes.
 - **`AsyncLocalStorage` cost tracking** — every provider call records actual spend without polluting function signatures. Non-blocking: cost tracking failures never block asset generation (four layers of protection).
 - **Lefthook pre-push** runs typecheck → lint → build before every push. CI mirrors the same chain.
 

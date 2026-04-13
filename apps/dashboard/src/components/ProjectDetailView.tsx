@@ -143,6 +143,15 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               {project.repoOwner}/{project.repoName}
             </motion.h1>
             <LaunchStatusBadge status={project.status} />
+            <Link
+              to="/create"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-surface-700/60 bg-surface-900/50 px-3 py-1.5 text-body-xs font-medium text-text-muted hover:border-accent-500/40 hover:text-accent-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Create manually
+            </Link>
           </div>
           <motion.a
             href={project.repoUrl}
@@ -497,26 +506,6 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
                   (to avoid a flash of empty state), and its Invite
                   button is disabled while a session is in flight. */}
               <PikaMeetingCard projectId={project.id} />
-
-              {/* Creative studio link — lets users generate custom
-                  assets (images, videos, audio, 3D worlds) with their
-                  own prompts, outside the automated pipeline. */}
-              <Link
-                to="/create"
-                className="mt-6 flex items-center justify-between rounded-xl border border-dashed border-surface-700/60 bg-surface-900/30 px-5 py-4 text-sm text-text-muted hover:border-accent-500/40 hover:text-text-secondary transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface-800/60 flex items-center justify-center">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                  </div>
-                  <span>Create custom assets with your own prompts</span>
-                </div>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                </svg>
-              </Link>
             </div>
           )}
         </div>

@@ -34,7 +34,7 @@
     "seed:run-feedback-cron": "tsx apps/cron/src/run-feedback-aggregation.ts",
     "test:narration": "npm run build && node --test tests/narration.test.mjs",
     "test:agent": "npm run build && node --test --test-force-exit tests/agent-sdk-runner.test.mjs",
-    "test": "npm run build && node --test --test-force-exit tests/*.test.mjs",
+    "test": "npm run build && node scripts/run-node-tests.mjs --test --test-force-exit tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test --grep @smoke",

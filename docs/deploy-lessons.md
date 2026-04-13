@@ -1,6 +1,6 @@
 # Deploying a TypeScript Monorepo with Remotion on Render — 7 Things I Learned
 
-LaunchKit is a TypeScript monorepo with nine services: a Hono API server, a React dashboard, BullMQ workers, Render Workflows tasks, a cron scheduler, and a Docker-based Remotion video renderer. Locally, everything was clean — 170 tests passing, typecheck, lint, and build all green.
+LaunchKit is a TypeScript monorepo with nine services: a Hono API server, a React dashboard, BullMQ workers, Render Workflows tasks, a cron scheduler, and a Docker-based Remotion video renderer. Locally, everything was clean — 199 tests passing, typecheck, lint, and build all green.
 
 Every single deploy failure was a configuration issue. None of them required changing application code. That distinction matters: the platform was enforcing production constraints that my local environment didn't surface. The code worked. The config needed to catch up.
 
@@ -236,7 +236,7 @@ If your Blueprint is syntactically valid but the workspace rejects it, check wor
 
 Every failure in this list is a configuration issue. Not one of them required changing application code.
 
-- 170 tests passed locally before the first deploy. They still pass.
+- 199 tests passed locally before the first deploy. They still pass.
 - Zero code changes were needed to get the app running on Render.
 - The app worked on first boot once the config was correct.
 
@@ -248,7 +248,7 @@ The seven fixes above took a few hours total. A blog post like this takes that d
 
 ## The pattern
 
-Every failure in this list is a configuration issue. Not one of them required changing application code. The 170 tests that passed locally before the first deploy? They still pass.
+Every failure in this list is a configuration issue. Not one of them required changing application code. The 199 tests that passed locally before the first deploy? They still pass.
 
 Deploying a monorepo to any cloud platform is a negotiation between your local assumptions and the platform's production constraints. The errors are predictable, the fixes are small, and once you've seen them, you don't hit them again.
 
