@@ -51,7 +51,7 @@ const PIPELINE_STAGES: readonly PipelineStage[] = [
   { icon: Brain,           label: 'RUNNING RESEARCH AGENT', detail: '14 searches · 3 competitors · 12 citations' },
   { icon: Sparkle,         label: 'BUILDING STRATEGY',      detail: 'Positioning · ICP · 17 asset briefs' },
   { icon: Lightning,       label: 'GENERATING IN PARALLEL', detail: 'text · image · video · audio · 3D' },
-  { icon: CheckCircle,     label: 'KIT READY',              detail: '17 assets · $0.11 · 6m 42s' },
+  { icon: CheckCircle,     label: 'KIT READY',              detail: '17 assets · $1.54 · 6m 42s' },
 ] as const;
 
 type AssetKind = 'written' | 'image' | 'video' | 'audio' | 'scene';
@@ -152,7 +152,7 @@ const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: 'What does a full kit actually cost?',
-    a: 'Median kit — 17 assets across text, image, video and audio — runs $0.08 to $0.22 in provider cost. The dashboard shows the real number on the project card. No subscription, no markup.',
+    a: 'A full kit — 17 assets across text, image, video and audio — typically runs $1–6 in provider cost depending on which models and asset types you enable. The dashboard shows the real cost on every project card. No subscription, no markup.',
   },
   {
     q: 'Can I regenerate a single asset without re-running everything?',
@@ -269,6 +269,13 @@ function Nav() {
           </a>
           <Link
             to="/app"
+            className="hidden items-center gap-1.5 rounded-lg bg-accent-500 px-3 py-1.5 text-body-xs font-semibold text-white shadow-sm transition-all hover:bg-accent-400 md:flex"
+          >
+            <Lightning size={14} weight="fill" />
+            <span>Generate</span>
+          </Link>
+          <Link
+            to="/app"
             className="group flex items-center gap-1.5 rounded-lg bg-text-primary px-4 py-2 text-body-sm font-semibold text-surface-950 transition-all hover:bg-white"
           >
             Launch a repo
@@ -365,7 +372,7 @@ function Hero() {
           >
             Paste a repository URL. LaunchKit reads the code, researches the market,
             writes the strategy and generates every asset you need to launch — in
-            parallel, in minutes, for pennies. Not a ChatGPT wrapper.
+            parallel, in minutes, with real-time cost tracking. Not a ChatGPT wrapper.
           </motion.p>
 
           {/* Inline URL form (marketing, not wired) + secondary CTA */}
@@ -435,7 +442,7 @@ function Hero() {
               </span>
               <span className="flex items-center gap-1.5">
                 <CheckCircle size={13} weight="fill" className="text-accent-500" />
-                Pennies per kit
+                Real-time cost tracking
               </span>
               <span className="hidden items-center gap-1.5 sm:flex">
                 <CheckCircle size={13} weight="fill" className="text-accent-500" />
@@ -610,7 +617,7 @@ function LiveRunPanel({ reducedMotion }: { reducedMotion: boolean }) {
         {/* Footer meta — feels like a status bar */}
         <div className="mt-5 flex items-center justify-between border-t border-surface-800 pt-4 font-mono text-[10px] tracking-[0.14em] text-text-muted">
           <span>RENDER.WORKFLOWS · 5 CHILD TASKS</span>
-          <span className="text-success-400">$0.11 SPENT</span>
+          <span className="text-success-400">$1.54 SPENT</span>
         </div>
       </div>
 
@@ -2021,7 +2028,7 @@ function Differentiators() {
 
 function StatsSection() {
   const stats = [
-    { value: '$0.11',  label: 'MEDIAN KIT COST',     icon: CurrencyDollarSimple },
+    { value: '$1.54',  label: 'MEDIAN KIT COST',     icon: CurrencyDollarSimple },
     { value: '6m 42s', label: 'MEDIAN KIT TIME',     icon: Clock },
     { value: '17',     label: 'ASSETS PER KIT',      icon: Stack },
     { value: '5',      label: 'PARALLEL CHILD TASKS', icon: ShareNetwork },
