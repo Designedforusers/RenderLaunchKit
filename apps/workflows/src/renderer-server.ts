@@ -87,7 +87,10 @@ app.post('/render', async (c) => {
 
   const cacheIsStale = existing.version !== parsed.version;
 
+  // Only serve the cache for the landscape product video. Vertical
+  // and other compositions render fresh (no dedicated cache column).
   if (
+    parsed.compositionId === 'LaunchKitProductVideo' &&
     parsed.variant === 'visual' &&
     !cacheIsStale &&
     existing.renderedVideoUrl !== null &&
