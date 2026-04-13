@@ -274,17 +274,6 @@ function Nav() {
             <Lightning size={14} weight="fill" />
             <span>Generate</span>
           </Link>
-          <Link
-            to="/app"
-            className="group flex items-center gap-1.5 rounded-lg bg-text-primary px-4 py-2 text-body-sm font-semibold text-surface-950 transition-all hover:bg-white"
-          >
-            Launch a repo
-            <ArrowRight
-              size={14}
-              weight="bold"
-              className="transition-transform group-hover:translate-x-0.5"
-            />
-          </Link>
         </div>
       </div>
     </motion.nav>
