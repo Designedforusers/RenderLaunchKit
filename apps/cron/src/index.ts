@@ -2,6 +2,7 @@ import { syncGitHubProjectActivity } from './sync-github-project-activity.js';
 import { aggregateFeedbackInsights } from './aggregate-feedback-insights.js';
 import { cleanupStaleLaunchData } from './cleanup-stale-launch-data.js';
 import { ingestTrendingSignals } from './ingest-trending-signals.js';
+import { rescueStuckAssets } from './rescue-stuck-assets.js';
 import { env } from './env.js';
 
 async function main() {
@@ -30,7 +31,12 @@ async function main() {
     // 3. Aggregate learning insights
     await aggregateFeedbackInsights();
 
-    // 4. Clean up stale data
+    // 4. Rescue assets/projects stuck in `reviewing` past the
+    //    threshold. Catches BullMQ review jobs that got lost
+    //    between Workflows completion and worker pickup.
+    await rescueStuckAssets();
+
+    // 5. Clean up stale data
     await cleanupStaleLaunchData();
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
