@@ -70,18 +70,19 @@ function HomePage() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1, duration: 0.4 }}
           >
-            <motion.div
-              className="w-8 h-8 rounded-lg bg-accent-500 flex items-center justify-center relative"
-              whileHover={{ scale: 1.08, rotate: -4 }}
-              transition={{ type: 'spring', stiffness: 360, damping: 20 }}
-            >
-              <RocketLaunch weight="fill" size={18} className="text-white" />
-              {/* Soft glow halo */}
-              <span className="absolute inset-0 rounded-lg bg-accent-500/40 blur-md -z-10" />
-            </motion.div>
-            <h1 className="font-display text-display-md text-text-primary">
-              LaunchKit
-            </h1>
+            <Link to="/" className="flex items-center gap-3 group">
+              <motion.div
+                className="w-8 h-8 rounded-lg bg-accent-500 flex items-center justify-center relative"
+                whileHover={{ scale: 1.08, rotate: -4 }}
+                transition={{ type: 'spring', stiffness: 360, damping: 20 }}
+              >
+                <RocketLaunch weight="fill" size={18} className="text-white" />
+                <span className="absolute inset-0 rounded-lg bg-accent-500/40 blur-md -z-10" />
+              </motion.div>
+              <h1 className="font-display text-display-md text-text-primary group-hover:text-accent-400 transition-colors">
+                LaunchKit
+              </h1>
+            </Link>
           </motion.div>
           <motion.p
             className="text-body-lg text-text-secondary max-w-xl"
