@@ -56,11 +56,11 @@ export function getWebObjectStorageClient(): ObjectStorageClient | null {
   // HTTPS connections to the internal IP get ECONNREFUSED. Use HTTP
   // on port 9000 for S3 API calls and keep the HTTPS URL for
   // browser-facing 302 redirects.
-  const host = env.MINIO_ENDPOINT_HOST ?? '';
-  const isRenderHosted =
-    host.endsWith('.onrender.com') && !host.includes(':');
+  const rawHost = (env.MINIO_ENDPOINT_HOST ?? '')
+    .replace(/^https?:\/\//, '');
+  const isRenderHosted = rawHost.endsWith('.onrender.com');
   const s3Endpoint = isRenderHosted
-    ? `http://${host}:9000`
+    ? `http://${rawHost}:9000`
     : endpoint;
 
   instance = createObjectStorageClient({
