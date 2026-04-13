@@ -5,7 +5,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { LaunchKitVideoPropsSchema } from '@launchkit/video';
+import { LaunchKitVideoPropsSchema, landscapeToVerticalProps } from '@launchkit/video';
 import type { LaunchKitVideoProps } from '@launchkit/video';
 import { database } from '../lib/database.js';
 import { expensiveRouteRateLimit } from '../middleware/rate-limit.js';
@@ -157,6 +157,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   if (!id) return invalidUuidResponse(c);
 
   const variant = getRequestedVariant(c.req.query('variant'));
+  const composition = c.req.query('composition') === 'vertical' ? 'vertical' as const : 'landscape' as const;
   const asset = await database.query.assets.findFirst({
     where: eq(assets.id, id),
   });
@@ -179,6 +180,7 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   // regardless of variant, and cross-variant requests fall
   // through to the workflow call which produces a fresh upload.
   if (
+    composition === 'landscape' &&
     variant === 'visual' &&
     asset.renderedVideoUrl !== null &&
     asset.renderedVideoUrl !== ''
@@ -313,14 +315,23 @@ assetApiRoutes.get('/:id/video.mp4', async (c) => {
   // error status instead of the global handler's JSON dump.
   let rendered: Awaited<ReturnType<typeof triggerRemotionRender>>;
   try {
-    rendered = await triggerRemotionRender({
-      assetId: asset.id,
-      version: asset.version,
-      compositionId: 'LaunchKitProductVideo',
-      inputProps: taskInputProps,
-      variant,
-      ...(cacheSeed !== undefined ? { cacheSeed } : {}),
-    });
+    rendered = composition === 'vertical'
+      ? await triggerRemotionRender({
+          assetId: asset.id,
+          version: asset.version,
+          compositionId: 'LaunchKitVerticalVideo',
+          inputProps: landscapeToVerticalProps(taskInputProps),
+          variant,
+          ...(cacheSeed !== undefined ? { cacheSeed } : {}),
+        })
+      : await triggerRemotionRender({
+          assetId: asset.id,
+          version: asset.version,
+          compositionId: 'LaunchKitProductVideo',
+          inputProps: taskInputProps,
+          variant,
+          ...(cacheSeed !== undefined ? { cacheSeed } : {}),
+        });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown render error';
     console.error('[video.mp4] Remotion render failed:', message);

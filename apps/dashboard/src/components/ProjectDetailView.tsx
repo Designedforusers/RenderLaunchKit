@@ -10,6 +10,7 @@ import { LaunchStatusBadge } from './LaunchStatusBadge.js';
 import { LaunchStrategyCard } from './LaunchStrategyCard.js';
 import { GeneratedAssetCard } from './GeneratedAssetCard.js';
 import { RemotionPreviewCard } from './RemotionPreviewCard.js';
+import { VerticalPreviewCard } from './VerticalPreviewCard.js';
 import { LaunchOutcomeBanner } from './LaunchOutcomeBanner.js';
 import { ProjectCostChip } from './ProjectCostChip.js';
 import { PikaMeetingCard } from './PikaMeetingCard.js';
@@ -52,7 +53,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
   // remotionProps get a companion card in the Videos gallery.
   // Computed before early returns to satisfy rules-of-hooks.
   const projectAssets = useMemo(() => project?.assets ?? [], [project?.assets]);
-  type GalleryEntry = Asset & { _remotionCard?: true };
+  type GalleryEntry = Asset & { _remotionCard?: true; _verticalCard?: true };
   const remotionAssetIds = useMemo(() => {
     const ids = new Set<string>();
     for (const a of projectAssets) {
@@ -73,6 +74,7 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
       entries.push(a);
       if (remotionAssetIds.has(a.id)) {
         entries.push({ ...a, id: `${a.id}__remotion`, _remotionCard: true });
+        entries.push({ ...a, id: `${a.id}__vertical`, _verticalCard: true });
       }
     }
     return entries;
@@ -454,17 +456,24 @@ export function ProjectDetailView({ projectId }: ProjectDetailViewProps) {
               <ProjectCostChip projectId={project.id} />
               <AssetGallery
                 assets={galleryAssets}
-                expectedCount={expectedAssetCount + remotionAssetIds.size}
+                expectedCount={expectedAssetCount + remotionAssetIds.size * 2}
                 isGenerating={isGenerating}
                 renderAsset={(asset) => {
                   const entry = asset as GalleryEntry;
-                  if (entry._remotionCard) {
+                  if (entry._remotionCard || entry._verticalCard) {
+                    const suffix = entry._remotionCard ? '__remotion' : '__vertical';
                     const realAsset = project.assets.find(
-                      (a) => a.id === asset.id.replace('__remotion', '')
+                      (a) => a.id === asset.id.replace(suffix, '')
                     );
                     const props = (realAsset?.metadata as Record<string, unknown> | null)?.['remotionProps'] as LaunchKitVideoProps | undefined;
                     if (!realAsset || !props) return null;
-                    return (
+                    return entry._verticalCard ? (
+                      <VerticalPreviewCard
+                        assetId={realAsset.id}
+                        remotionProps={props}
+                        version={realAsset.version}
+                      />
+                    ) : (
                       <RemotionPreviewCard
                         assetId={realAsset.id}
                         remotionProps={props}

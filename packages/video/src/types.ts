@@ -247,6 +247,29 @@ export function getVerticalVideoDurationInFrames(
   );
 }
 
+/**
+ * Derive vertical video props from landscape props so the same
+ * storyboard data feeds both compositions. The dashboard and the
+ * web route's `?composition=vertical` codepath use this to avoid
+ * duplicating the mapping logic.
+ */
+export function landscapeToVerticalProps(
+  props: LaunchKitVideoProps
+): VerticalVideoProps {
+  const firstShot = props.shots[0];
+  return {
+    productName: props.title,
+    tagline: props.subtitle,
+    accentColor: props.accentColor,
+    backgroundColor: props.backgroundColor,
+    heroImageUrl: firstShot?.imageUrl ?? '',
+    shots: props.shots,
+    outroCta: props.outroCta,
+    ...(props.audioSrc !== undefined ? { audioSrc: props.audioSrc } : {}),
+    ...(props.captions !== undefined ? { captions: props.captions } : {}),
+  };
+}
+
 export const defaultVerticalVideoProps: VerticalVideoProps = {
   productName: 'LaunchKit',
   tagline: 'AI go-to-market teammate',

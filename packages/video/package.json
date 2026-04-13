@@ -20,6 +20,7 @@
     "@remotion/animation-utils": "^4.0.448",
     "@remotion/bundler": "^4.0.448",
     "@remotion/google-fonts": "^4.0.448",
+    "@remotion/layout-utils": "^4.0.448",
     "@remotion/licensing": "^4.0.448",
     "@remotion/media-parser": "^4.0.448",
     "@remotion/media-utils": "^4.0.448",
