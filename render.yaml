@@ -3,6 +3,7 @@ services:
     name: launchkit-web
     runtime: node
     plan: pro
+    healthCheckPath: /api/health
     rootDir: .
     # Plain npm build — no more Chrome headless-shell install. The
     # web service no longer renders Remotion videos locally: the

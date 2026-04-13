@@ -12,10 +12,9 @@
 -- ------------------------
 --
 -- `ALTER TYPE ... ADD VALUE` is explicitly non-transactional in
--- Postgres (see migrations/0004 for the long-form rationale). The
--- enum mutation has to run outside a BEGIN/COMMIT block so a later
--- failure cannot leave the catalog in an inconsistent state. We give
--- it its own migration file rather than appending to 0004 so the
+-- Postgres — the enum mutation has to run outside a BEGIN/COMMIT
+-- block so a later failure cannot leave the catalog in an
+-- inconsistent state. We give it its own migration file so the
 -- additive change is reviewable in isolation and the rollback
 -- footprint is a single statement.
 --
