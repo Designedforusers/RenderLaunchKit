@@ -457,5 +457,5 @@ services:
 
 databases:
   - name: launchkit-db
-    plan: pro_4gb
+    plan: pro
     postgresMajorVersion: 16
