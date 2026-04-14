@@ -48,7 +48,7 @@ Three Render primitives made this architecture possible:
 
 - **Render Workflows** gave me per-task compute isolation. Five child tasks run on hardware sized for their workload (`starter` for blog posts, `pro` for Kling video renders) via run chaining — calling a child task function inside a parent task body spawns a new run on a new instance. Without this, I'd need one oversized worker for every job type, or a separate queue-and-dispatch layer.
 - **Blueprints** provision eight resources from one `render.yaml`: web, worker, pika-worker, cron, Postgres, Redis, MinIO, and the Remotion renderer. Fork, click, fill in your API keys. The Workflows service is a one-time manual step (Render Workflows is in public beta and not yet supported by Blueprint syntax).
-- **Render Disks** let us run MinIO as a Render-native S3-compatible store for rendered video bytes. No external storage account, no cross-cloud credentials. The web service 302-redirects clients to the MinIO public URL instead of streaming bytes through Node.
+- **Render Disks** let us run MinIO as a Render-native S3-compatible store for rendered video bytes. No external storage account, no cross-cloud credentials. The web service 302-redirects clients to the MinIO public URL instead of streaming bytes through Node. When [Render Object Storage](https://feedback.render.com/features/p/cloud-object-storage) (announced March 2026, currently in alpha) goes GA, the `object-storage.ts` S3 client swaps endpoints with a config change — nothing else moves.
 
 ---
 
