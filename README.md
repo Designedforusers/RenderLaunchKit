@@ -4,7 +4,7 @@
 
 [![Watch the 2-minute demo](https://img.youtube.com/vi/7ybMChB4HpI/maxresdefault.jpg)](https://youtu.be/7ybMChB4HpI)
 
-**[Watch the demo](https://youtu.be/7ybMChB4HpI)** · **[Live demo](https://launchkit-web.onrender.com/)** · **[Deploy your own](#deploy-on-render)** · **[Patterns you can steal](#patterns-you-can-steal)**
+**[Live demo](https://launchkit-web.onrender.com/)** · **[Deploy your own](#deploy-on-render)** · **[Patterns you can steal](#patterns-you-can-steal)**
 
 ---
 
