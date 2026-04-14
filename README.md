@@ -8,7 +8,7 @@
 
 <br>
 
-[![Watch the 2-minute demo](https://img.shields.io/badge/Watch%20the%202--minute%20demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/7ybMChB4HpI)
+[![Watch the 5-minute demo](https://img.shields.io/badge/Watch%20the%205--minute%20demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/7ybMChB4HpI)
 &nbsp;&nbsp;
 [![Try the live demo](https://img.shields.io/badge/Try%20the%20live%20demo-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://launchkit-web.onrender.com/)
 &nbsp;&nbsp;
