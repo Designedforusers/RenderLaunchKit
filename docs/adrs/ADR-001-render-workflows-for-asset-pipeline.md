@@ -57,10 +57,18 @@ We host the asset generation pipeline on Render Workflows (public beta). The
 `apps/workflows/src/index.ts`: one parent (`generateAllAssetsForProject`),
 five generation children (`generateWrittenAsset`, `generateImageAsset`,
 `generateVideoAsset`, `generateAudioAsset`, `generateWorldScene`), and one
-render child (`renderRemotionVideo`). The import list in
+on-demand render task (`renderRemotionVideo`) that the web service invokes
+out-of-band when a user requests a video preview. The import list in
 `apps/workflows/src/index.ts:66-72` is side-effect only because each
 `task(...)` call self-registers at module load; the SDK keeps the process
 alive and listens for run requests once any task is registered.
+
+**Important:** `renderRemotionVideo` is NOT part of the generation
+fan-out. The parent task only dispatches to the five generation children.
+The render task runs on its own dedicated Docker service
+(`launchkit-renderer`) reached via HTTP from the web service — Render
+Workflows can't install Chrome system libraries because the build
+filesystem is read-only in beta.
 
 The parent task (`apps/workflows/src/tasks/generate-all-assets-for-project.ts`)
 runs on the cheap `starter` plan, reads the project row plus every
@@ -117,19 +125,21 @@ re-queue path in `apps/worker/src/processors/review-generated-assets.ts`,
 (3) the commit-marketing refresh path in
 `apps/worker/src/processors/process-commit-marketing-run.ts`, and (4) the
 user-facing Regenerate button in `apps/web/src/routes/asset-api-routes.ts`.
-The worker and web services each own their own lazy Render SDK client:
-`apps/worker/src/lib/trigger-workflow-generation.ts` (82 lines) and
-`apps/web/src/lib/trigger-workflow-generation.ts` (71 lines) are deliberate
-copies, not a shared package. The rationale is in CLAUDE.md § "Workflows
-service": each backend service constructs its SDK client from its own typed
-`env` module, and a 40-line helper does not justify a new package-level
+The worker and web services each own their own lazy Render SDK client at
+`apps/worker/src/lib/trigger-workflow-generation.ts` and
+`apps/web/src/lib/trigger-workflow-generation.ts` — deliberate copies, not
+a shared package. The rationale is in CLAUDE.md § "Workflows service":
+each backend service constructs its SDK client from its own typed `env`
+module, and a small helper does not justify a new package-level
 abstraction shared between exactly two consumers.
 
-The workflows service is created manually in the Render dashboard. `render.yaml`
-defines `launchkit-web`, `launchkit-worker`, `launchkit-pika-worker`,
-`launchkit-cron`, Redis, and Postgres as Blueprint resources, but Render's
-Blueprint format does not yet support workflow services — the one-time
-dashboard setup is documented in README § "Create the workflow service". Both
+The workflows service is created manually in the Render dashboard.
+`render.yaml` defines eight resources as Blueprint services: `launchkit-web`,
+`launchkit-worker`, `launchkit-pika-worker`, `launchkit-cron`,
+`launchkit-renderer` (Docker, runs Remotion), `launchkit-minio` (Docker,
+S3-compatible storage), Key-Value (Redis), and Postgres. Render's Blueprint
+format does not yet support workflow services — the one-time dashboard
+setup is documented in README § "Create the workflow service". Both
 `trigger-workflow-generation.ts` helpers throw a structured error at call
 time if `RENDER_API_KEY` or `RENDER_WORKFLOW_SLUG` is missing, rather than
 failing service boot, so analyze → research handlers still start cleanly in

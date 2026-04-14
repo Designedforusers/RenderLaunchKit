@@ -63,27 +63,31 @@ to set `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` via the dashboard secret
 surface and to pin the single bucket name (`launchkit-renders`) as a
 non-secret env var so every service boots with the same reference.
 
-The workflows service's `renderRemotionVideo` task uploads each finished
-MP4 to MinIO via the shared helper in
+The dedicated renderer service (`launchkit-renderer`, a Docker web
+service running headless Chrome) uploads each finished MP4 to MinIO
+via the shared helper in
 `packages/asset-generators/src/clients/object-storage.ts`, built on
 `@aws-sdk/client-s3` with `forcePathStyle: true` — MinIO does not support
 the virtual-host style S3 URL layout, and the AWS SDK defaults to
-virtual-host, so the flag is mandatory. The helper exposes a single
-`uploadRenderedVideo({ assetId, version, variant, body })` entry point
-that handles idempotent bucket creation (one `HeadBucket` + `CreateBucket`
-on cold start), the `PutObject` upload with `ContentType: 'video/mp4'` and
-`ACL: 'public-read'`, and returns `{ url, key }` where `url` is the
-direct MinIO public URL.
+virtual-host, so the flag is mandatory. The helper exposes
+`uploadVideo(key, bytes, contentType?)` and `uploadAudio(key, bytes,
+contentType?)` entry points that handle idempotent bucket creation (one
+`HeadBucket` + `CreateBucket` on cold start) plus a bucket-level
+public-read policy via `PutBucketPolicyCommand` (MinIO ignores per-object
+ACLs in ownership-enforced mode, so the policy is applied at the bucket
+level once during cold start). Each upload returns `{ url, key, sizeBytes }`
+where `url` is the direct MinIO public URL.
 
-After upload, the task persists the URL on the `rendered_video_url` column
-on the `assets` table and returns `{ url, key, cached }` to the caller.
+After upload, the renderer persists the URL on the `rendered_video_url`
+column on the `assets` table and returns `{ url, key, cached, sizeBytes }`
+to the caller.
 
 The web service's `/api/assets/:id/video.mp4` handler reads this column:
 if `asset.rendered_video_url` is non-null, it returns a `302` redirect to
-that URL with `Cache-Control: public, max-age=31536000, immutable`. If
-null, it triggers the `renderRemotionVideo` workflow task and redirects to
-the returned URL once it settles. The old `fileToWebStream`
-bytes-through-Hono path has been removed from the video route entirely.
+that URL. If null, it calls `triggerRemotionRender` which posts to the
+renderer service's `/render` HTTP endpoint and redirects to the returned
+URL once the render settles. The old `fileToWebStream` bytes-through-Hono
+path has been removed from the video route entirely.
 
 Bucket ACL is `public-read` because the rendered video is the publishable
 output, not private user data: the dashboard already surfaces the video

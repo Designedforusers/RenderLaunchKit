@@ -31,7 +31,7 @@ Each service exists for a specific architectural reason. The project didn't star
 
 **MinIO on a Render Disk** provides S3-compatible object storage without leaving the platform. Rendered MP4s upload here; the web service 302-redirects clients to the public MinIO URL instead of streaming bytes through the API.
 
-**Cron** runs every six hours: aggregate user feedback into embedding clusters, refresh trending developer topics from seven sources (Grok live X search, Hacker News, dev.to, Reddit, Product Hunt, GitHub, Exa).
+**Cron** runs every six hours: poll GitHub commits for repos without webhooks, refresh trending developer topics from six primary sources (Grok live X search, Hacker News, dev.to, Reddit, Product Hunt, GitHub) plus optional Exa supplemental searches, aggregate user feedback into embedding clusters, rescue assets stuck in review, and clean up stale data.
 
 | Service | Type | Runtime | Role |
 |---|---|---|---|

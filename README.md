@@ -47,7 +47,7 @@ Eight of the nine come from a single `render.yaml` Blueprint. The ninth (`launch
 Three Render primitives made this architecture possible:
 
 - **Render Workflows** gave me per-task compute isolation. Five child tasks run on hardware sized for their workload (`starter` for blog posts, `pro` for Kling video renders) via run chaining — calling a child task function inside a parent task body spawns a new run on a new instance. Without this, I'd need one oversized worker for every job type, or a separate queue-and-dispatch layer.
-- **Blueprints** provision seven services from one `render.yaml`. Fork, click, fill in your API keys, done. The entire topology — web, worker, cron, Redis, Postgres, MinIO, Pika worker — deploys in one shot.
+- **Blueprints** provision eight resources from one `render.yaml`: web, worker, pika-worker, cron, Postgres, Redis, MinIO, and the Remotion renderer. Fork, click, fill in your API keys. The Workflows service is a one-time manual step (Render Workflows is in public beta and not yet supported by Blueprint syntax).
 - **Render Disks** let us run MinIO as a Render-native S3-compatible store for rendered video bytes. No external storage account, no cross-cloud credentials. The web service 302-redirects clients to the MinIO public URL instead of streaming bytes through Node.
 
 ---
@@ -102,56 +102,68 @@ Open your live URL. Paste `https://github.com/denoland/fresh`. Watch the progres
 ## How it works
 
 ```
-                    ┌──────────────────────────────────────────────────┐
-                    │  Browser  ──── SSE ────  launchkit-web (Hono)    │
-                    │                            │                     │
-                    │                            │ 302 redirect        │
-                    │                            ▼                     │
-                    │                   ┌─────────────────┐            │
-                    │                   │ launchkit-minio │            │
-                    │                   │  (S3-compat)    │            │
-                    │                   └─────────────────┘            │
-                    └────────────────────────┬─────────────────────────┘
-                                             │ enqueue
-                               ┌─────────────▼─────────────┐
-                               │   launchkit-redis         │
-                               │   (BullMQ queues)         │
-                               └──┬────────────────┬──────┬┘
-                         ANALYSIS │          REVIEW│      │ PIKA_INVITE
-              ┌───────────────────▼──┐           ┌─▼──────▼────────────┐
-              │  launchkit-worker    │           │launchkit-pika-worker│
-              │  ─ analyze           │           │ ─ pika-invite       │
-              │  ─ research          │           │   (Python subproc)  │
-              │  ─ strategize        │           └─────────────────────┘
-              │  ─ review            │
-              │  ─ commit-marketing  │
-              │  ─ pika-poll/leave   │
-              └───────────┬──────────┘
-                          │ trigger
-            ┌─────────────▼───────────────────────────────────────┐
-            │   launchkit-workflows  (Render Workflows)           │
-            │   ┌──────────────────────────────────────────────┐  │
-            │   │  generateAllAssetsForProject  [starter]       │  │
-            │   │            │                                  │  │
-            │   │            ├─ generateWrittenAsset  [starter] │  │
-            │   │            ├─ generateImageAsset    [standard]│  │
-            │   │            ├─ generateAudioAsset    [standard]│  │
-            │   │            ├─ generateVideoAsset    [pro]     │  │
-            │   │            └─ generateWorldScene    [pro]     │  │
-            │   │                                                │  │
-            │   │  renderRemotionVideo              [pro] ──────┼──┼──> launchkit-minio
-            │   └──────────────────────────────────────────────┘  │
-            └──────────────────────────┬──────────────────────────┘
-                                       │
-                            ┌──────────▼─────────┐
-                            │  launchkit-db      │
-                            │  Postgres+pgvector │
-                            └────────────────────┘
+       ┌──────────────────────────────────────────────────────────────┐
+       │  Browser  ──── SSE ──── launchkit-web (Hono + React SPA)     │
+       │                              │                               │
+       │                              │ 302 redirect for video bytes  │
+       │                              ▼                               │
+       │                    ┌──────────────────┐                      │
+       │                    │ launchkit-minio  │                      │
+       │                    │  (S3-compat,     │                      │
+       │                    │   Render Disk)   │                      │
+       │                    └──────────────────┘                      │
+       └─────────────────────────────┬────────────────────────────────┘
+                                     │ enqueue
+                       ┌─────────────▼──────────────┐
+                       │     launchkit-redis        │
+                       │ BullMQ queues + pub/sub +  │
+                       │      GitHub API cache      │
+                       └──┬─────────┬──────┬────────┘
+                ANALYSIS  │  REVIEW │      │ PIKA_INVITE
+       ┌──────────────────▼─┐     ┌─▼──────▼─────────────┐
+       │  launchkit-worker  │     │ launchkit-pika-worker│
+       │  ─ analyze         │     │  ─ pika-invite       │
+       │  ─ research        │     │    (Python subproc)  │
+       │  ─ strategize      │     │  ─ pika-poll/leave   │
+       │  ─ review          │     └──────────────────────┘
+       │  ─ commit-marketing│
+       └──────────┬─────────┘
+                  │ trigger
+   ┌──────────────▼──────────────────────────────────┐
+   │  launchkit-workflows  (Render Workflows)        │
+   │   generateAllAssetsForProject       [starter]   │
+   │     ├─ generateWrittenAsset         [starter]   │
+   │     ├─ generateImageAsset           [standard]  │
+   │     ├─ generateAudioAsset           [standard]  │
+   │     ├─ generateVideoAsset           [pro]       │
+   │     └─ generateWorldScene           [pro]       │
+   └─────────────────────────────────────────────────┘
+                  │
+                  │  on-demand HTTP POST /render
+                  ▼
+   ┌─────────────────────────────────────────────────┐
+   │  launchkit-renderer  (Docker, headless Chrome)  │
+   │   Remotion compositions (4 types):              │
+   │    ─ LaunchKitProductVideo (1920x1080)          │
+   │    ─ LaunchKitVerticalVideo (1080x1920)         │
+   │    ─ LaunchKitVoiceCommercial                   │
+   │    ─ LaunchKitPodcastWaveform                   │
+   │   Uploads finished MP4 to launchkit-minio       │
+   └─────────────────────────────────────────────────┘
+
+   ┌─────────────────────────┐    ┌─────────────────────────┐
+   │  launchkit-cron         │    │  launchkit-db           │
+   │  every 6h:              │    │  Postgres + pgvector    │
+   │   ─ trending signals    │    │  (relational state +    │
+   │   ─ feedback insights   │    │   embeddings for        │
+   │   ─ stuck-asset rescuer │    │   similarity search)    │
+   │   ─ stale-data cleanup  │    └─────────────────────────┘
+   └─────────────────────────┘
 ```
 
-The pipeline is event-driven: BullMQ for analyze/research/strategize/review, Render Workflows for the per-asset generation fan-out, Redis pub/sub for the SSE stream that powers the dashboard's live progress feed.
+Event-driven: BullMQ for analyze/research/strategize/review, Render Workflows for the per-asset generation fan-out, an HTTP-triggered Docker service for Remotion compositing, Redis pub/sub for the SSE stream that powers the dashboard's live progress feed.
 
-Partial failure is first-class. The workflow parent reads `status='queued'` asset rows, fans out to five child tasks via `Promise.allSettled`, and enqueues a single review job after every child settles. A failed video render doesn't block the eight succeeded text assets behind it.
+Partial failure is first-class. The workflow parent reads `status='queued'` asset rows, fans out to five child tasks via `Promise.allSettled`, and enqueues a single review job after every child settles. A failed video render doesn't block the text assets behind it. A stuck review (lost BullMQ job, worker restart, Redis hiccup) gets auto-rescued by the cron job.
 
 ---
 
@@ -173,7 +185,7 @@ The migration shipped in four PRs you can read top-to-bottom: [`6eca706`](https:
 
 **The dedicated Pika worker** exists because click-to-avatar-in-meeting latency must stay under 100ms regardless of what else is running. A heavy analysis job on the shared instance would contend with a Python subprocess spawn for the Node event loop. Same `apps/worker` workspace, different `dist/` entry point — process isolation without code duplication. Full rationale in [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md).
 
-**The cron service** handles periodic work that doesn't belong in request handlers or job queues: trending signal ingestion every 6 hours, nightly feedback insight aggregation, and a fallback webhook poller.
+**The cron service** runs every 6 hours and handles periodic work that doesn't belong in request handlers or job queues: GitHub commit polling for repos without webhooks, trending signal ingestion, feedback insight aggregation, stuck-asset rescue, and stale-data cleanup.
 
 ### Why Postgres AND Redis?
 
@@ -324,7 +336,7 @@ To exercise the workflow service locally, run `render workflows dev -- npm run d
 ```
 renderlaunchkit/
 ├── render.yaml                       # Blueprint — provisions 8 of 9 services
-├── docker-compose.yml                # Local Postgres + Redis
+├── docker-compose.yml                # Local Postgres + Redis + MinIO
 ├── package.json                      # Workspace root
 ├── seed.ts                           # Demo data
 ├── migrations/                       # Hand-written SQL migrations
@@ -352,9 +364,8 @@ renderlaunchkit/
 
 ## Further reading
 
-- [`docs/first-30-minutes.md`](docs/first-30-minutes.md) — self-paced walkthrough for new contributors
+- [`docs/first-30-minutes.md`](docs/first-30-minutes.md) — self-paced walkthrough of the codebase
 - [`CLAUDE.md`](CLAUDE.md) — engineering invariants (TypeScript strict flags, Zod boundaries, env modules, workflows architecture, cost tracking, code review chain)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution rules
 - [ADR-001](docs/adrs/ADR-001-render-workflows-for-asset-pipeline.md) — Render Workflows for asset generation
 - [ADR-002](docs/adrs/ADR-002-minio-for-rendered-video-storage.md) — MinIO on Render for video storage
 - [ADR-003](docs/adrs/ADR-003-dedicated-pika-worker-for-subprocess-isolation.md) — Dedicated Pika worker

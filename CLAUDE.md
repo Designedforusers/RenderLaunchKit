@@ -6,7 +6,7 @@ Project context for [Claude Code](https://claude.com/claude-code) sessions. Star
 
 ## What this repo is
 
-LaunchKit is an AI-powered go-to-market teammate. Pipeline: `GitHub URL → Analyze → Research → Strategize → Generate (parallel) → Review → Done`. One TypeScript monorepo, eight Render services. Public showcase for Render — every PR is graded on engineering discipline.
+LaunchKit is an AI-powered go-to-market teammate. Pipeline: `GitHub URL → Analyze → Research → Strategize → Generate (parallel) → Review → Done`. One TypeScript monorepo, nine Render services. Public showcase for Render — every PR is graded on engineering discipline.
 
 ```
 apps/web/                  → Hono API server + static dashboard hosting
@@ -103,5 +103,4 @@ Dashboard: `http://localhost:5173` — API: `http://localhost:3000`
 ## Reference docs
 
 - `README.md` — architecture overview and deploy runbook
-- `CONTRIBUTING.md` — contribution rules and review workflow
 - `docs/cost-tracking.md` — AsyncLocalStorage cost tracking design

@@ -30,10 +30,10 @@ is the supplement — a self-paced tour of the repo, not a duplicate.
 git clone <fork-url>
 cd renderlaunchkit
 npm install              # also installs lefthook git hooks
-docker compose up -d     # local Postgres + Redis
 cp .env.example .env     # fill in at least ANTHROPIC_API_KEY
-npm run db:push          # apply the Drizzle schema
-npm run seed             # demo project + insights
+npm run setup:local      # boots local Postgres + Redis + MinIO,
+                         # waits on the ports declared in .env,
+                         # applies SQL migrations, seeds demo data
 npm run dev              # web, worker, cron, dashboard concurrently
 ```
 
