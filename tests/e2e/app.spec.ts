@@ -18,7 +18,7 @@ test('@smoke /app renders project list shell and url form', async ({ page }) => 
   // accessible name, so we rely on the placeholder attribute
   // which is stable.
   await expect(
-    page.locator('input[placeholder*="github.com" i]').first()
+    page.locator('input[placeholder*="github repo" i]').first()
   ).toBeVisible();
 });
 
@@ -28,7 +28,7 @@ test('@smoke /app?repo=<url> pre-fills the repository form', async ({ page }) =>
 
   // The RepositoryUrlForm's `initialUrl` prop seeds the input's
   // value on mount — Playwright reads the current DOM value.
-  const input = page.locator('input[placeholder*="github.com" i]').first();
+  const input = page.locator('input[placeholder*="github repo" i]').first();
   await expect(input).toBeVisible();
   await expect(input).toHaveValue(repoUrl);
 });
