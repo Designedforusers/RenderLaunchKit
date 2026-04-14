@@ -4,6 +4,15 @@
 // Constructs a minimal Hono app with the auth middleware wired in,
 // so these tests need no database or Redis connection.
 
+// The auth middleware reads `env.API_KEY`, which triggers the lazy
+// env proxy to validate the whole web env schema — including
+// DATABASE_URL. That field is `z.string().min(1)` with no default,
+// so without a dummy value the first `env.API_KEY` access throws
+// and the test file fails to run in CI (where DATABASE_URL is
+// unset). Matches the pattern already used by every other test
+// that imports web-process modules.
+process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/launchkit_test';
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
