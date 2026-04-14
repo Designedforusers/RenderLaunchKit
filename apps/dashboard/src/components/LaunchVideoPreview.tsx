@@ -43,7 +43,7 @@ export function LaunchVideoPreview({
           controls
           poster={thumbnailUrl}
           className="w-full aspect-video"
-          preload="auto"
+          preload="metadata"
           onError={onError}
           onLoadedData={onLoadedData}
         >

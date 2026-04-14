@@ -127,13 +127,21 @@ const analysisWorker = new Worker(
         })
         .where(eq(schema.jobs.bullmqJobId, job.id ?? ''));
 
-      // Update project status to failed
-      await db
-        .update(schema.projects)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(schema.projects.id, baseData.projectId));
+      // The launch pipeline (analyze → research → strategize) owns
+      // `project.status`. A filter-webhook failure runs against an
+      // already-launched project; flipping its status to `failed` and
+      // publishing a launch-pipeline error would erase the outcome
+      // banner and light up the progress UI for a concern the
+      // dashboard does not surface here. The `jobs` row update above
+      // still records the failure durably.
+      if (job.name !== JOB_NAMES.FILTER_WEBHOOK) {
+        await db
+          .update(schema.projects)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(schema.projects.id, baseData.projectId));
 
-      await projectProgressPublisher.error(baseData.projectId, job.name, error.message);
+        await projectProgressPublisher.error(baseData.projectId, job.name, error.message);
+      }
 
       throw err;
     }

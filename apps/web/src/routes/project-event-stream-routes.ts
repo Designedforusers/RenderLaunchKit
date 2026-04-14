@@ -64,6 +64,10 @@ projectEventStreamRoutes.get('/:id/events', (c) => {
         subscribeErr instanceof Error ? subscribeErr.message : String(subscribeErr)
       );
       alive = false;
+      // `onAbort` only fires on a client-initiated disconnect, so a
+      // server-side return here would leak the heartbeat timer on
+      // every subscribe failure. Clear it explicitly.
+      clearInterval(heartbeat);
       subscriber.disconnect();
       return;
     }
