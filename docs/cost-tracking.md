@@ -252,7 +252,7 @@ A few things you might expect from a cost-tracking system that LaunchKit doesn't
 
 - **No Voyage instrumentation yet.** The research-path embedding calls (`apps/worker/src/lib/voyage-embeddings.ts`) are currently uninstrumented. The `computeVoyageCostCents` helper exists in `pricing.ts` so a follow-up PR can drop the `recordCost` call into the embedding helper without touching anything else; doing it now would have expanded PR #35's scope past the asset-generation surface, which was the deliberate boundary.
 
-- **No external observability backend.** The data lives in Postgres because the dashboard needs to read it via SQL for the project chip. Sending it to Langfuse, Helicone, OpenLLMetry, or a generic OTel collector would mean another service to deploy and another credential to manage; LaunchKit's six services already cover the rubric for "rewarding deployment journey." See the README for the Langfuse-vs-custom trade-off discussion.
+- **No external observability backend.** The data lives in Postgres because the dashboard needs to read it via SQL for the project chip. Sending it to Langfuse, Helicone, OpenLLMetry, or a generic OTel collector would mean another service to deploy and another credential to manage; LaunchKit's nine Render services already cover the rubric for "rewarding deployment journey." See the README for the Langfuse-vs-custom trade-off discussion.
 
 These omissions are deliberate. Every one of them would be a useful addition for a production LaunchKit at scale; none of them are needed for the take-home demo's scope.
 

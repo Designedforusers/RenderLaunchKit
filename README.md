@@ -81,9 +81,9 @@ Fork → Blueprint → fill API keys → deploy. About 10 minutes to a working d
 ### Step 1 — Create the Blueprint
 
 1. [dashboard.render.com](https://dashboard.render.com/) → **New +** → **Blueprint**
-2. Connect your fork. Render reads `render.yaml` and provisions seven services.
+2. Connect your fork. Render reads `render.yaml` and provisions eight resources (seven services plus the Postgres database).
 3. Fill in the secrets prompt with the full showcase keys: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `FAL_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and `WORLD_LABS_API_KEY`. Leave `RENDER_API_KEY` and `RENDER_WORKFLOW_SLUG` blank for now.
-4. Click **Apply**. Wait until all seven services turn green. The web service runs DB migrations on its `preDeployCommand` automatically.
+4. Click **Apply**. Wait until all eight resources turn green. The web service runs DB migrations on its `preDeployCommand` automatically.
 
 ### Step 2 — Create the workflow service
 
