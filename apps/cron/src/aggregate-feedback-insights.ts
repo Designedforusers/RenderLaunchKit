@@ -634,11 +634,21 @@ async function clusterEditFeedback(): Promise<number> {
     // via pgvector cosine distance. Restricting the neighbor pool
     // to the same cell keeps cross-cell noise out of the clusters.
     const cellIds = cellRows.map((r) => r.feedbackId);
+    // Drizzle's sql template expands a JS array into a parenthesised
+    // list of individual params ($1, $2, ...), so `ANY(${cellIds}::uuid[])`
+    // would compile to `ANY(($1, $2)::uuid[])` — a record cast, not an
+    // array cast, which Postgres rejects. Build an explicit ARRAY[...]
+    // literal with each id individually cast to uuid to keep the query
+    // parameterised.
+    const cellIdArray = sql`ARRAY[${sql.join(
+      cellIds.map((id) => sql`${id}::uuid`),
+      sql`, `
+    )}]`;
     const neighborResults = await database.execute(sql`
       WITH cell AS (
         SELECT id, edit_embedding
         FROM asset_feedback_events
-        WHERE id = ANY(${cellIds}::uuid[])
+        WHERE id = ANY(${cellIdArray})
       )
       SELECT
         a.id AS feedback_id,
