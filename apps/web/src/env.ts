@@ -48,7 +48,7 @@ const envSchema = z.object({
   // ── CORS ──────────────────────────────────────────────────────
   // Comma-separated list of allowed origins for CORS. When unset,
   // defaults to localhost dev origins. In production, set to the
-  // deployed Render hostname (e.g. `https://launchkit.onrender.com`).
+  // deployed Render hostname (e.g. `https://launchkit-web.onrender.com`).
   CORS_ORIGIN: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
 

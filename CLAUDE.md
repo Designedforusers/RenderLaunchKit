@@ -16,6 +16,7 @@ apps/workflows/            → Render Workflows asset generation tasks
 apps/cron/                 → Scheduled jobs (feedback aggregation, trending)
 packages/shared/           → Drizzle schema, Zod schemas, shared types
 packages/asset-generators/ → Provider clients (Claude, fal.ai, ElevenLabs, World Labs)
+packages/video/            → Remotion compositions + renderer factory
 ```
 
 ## Verification commands
