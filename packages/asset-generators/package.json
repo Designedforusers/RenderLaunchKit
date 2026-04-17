@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.85.0",
-    "@aws-sdk/client-s3": "^3.1029.0",
+    "@aws-sdk/client-s3": "^3.1032.0",
     "@fal-ai/client": "^1.2.0",
     "@launchkit/shared": "*",
     "@launchkit/video": "*",
